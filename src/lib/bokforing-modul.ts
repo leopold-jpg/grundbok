@@ -32,6 +32,10 @@ export function byggBokforingsProposal(input: {
   forslag: Forslag;
   motor: "anthropic" | "fallback";
   motorDetalj: string;
+  /** Deterministiskt id (uuid v5 av job_id) när workern bygger — idempotens. */
+  id?: string;
+  /** Sätts av runtime-lagret (t.ex. "worker-lokal@0.2") — skiljer körningar i beslutsloggen. */
+  agentRuntime?: string;
 }): Proposal {
   const { forslag } = input;
 
@@ -48,7 +52,7 @@ export function byggBokforingsProposal(input: {
 
   const utanHash: Omit<Proposal, "hash"> = {
     contract_version: "0.2.0",
-    id: randomUUID(),
+    id: input.id ?? randomUUID(),
     tenant_id: input.tenantId,
     module: "bokforing",
     kind: "journal_entry",
@@ -64,6 +68,7 @@ export function byggBokforingsProposal(input: {
     legal,
     confidence: bokforingsKonfidens(input.motor, forslag),
     provenance: {
+      ...(input.agentRuntime ? { agent_runtime: input.agentRuntime } : {}),
       model: input.motor === "anthropic" ? input.motorDetalj : "fallback:deterministisk",
       prompt_hash: sha256Hex(
         `grundbok-bokforing@${BOKFORING_MODULE_VERSION}|` +

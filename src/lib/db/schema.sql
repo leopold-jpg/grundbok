@@ -143,6 +143,21 @@ CREATE TABLE IF NOT EXISTS agents (
 -- WP8 absorberar WP4-tabellen (lokal dev — ingen data att migrera).
 DROP TABLE IF EXISTS agent_keys;
 
+-- Data plane-kön (WP9, ADR-0003). Lokalt en tabell med pgmq-semantik
+-- (visibility timeout + archive) bakom interfacet i src/lib/queue.ts —
+-- i Supabase byts implementationen mot pgmq utan att worker-koden rörs.
+-- Inga app-grants och ingen RLS: kön är service-vägens interna dataplan;
+-- meddelandet bär tenant_id och payload_ref är en storage-URI, aldrig
+-- rå underlagsdata.
+CREATE TABLE IF NOT EXISTS agent_jobs (
+  msg_id      bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  message     jsonb NOT NULL,
+  enqueued_at timestamptz NOT NULL DEFAULT now(),
+  vt          timestamptz NOT NULL DEFAULT now(),
+  read_ct     integer NOT NULL DEFAULT 0,
+  archived_at timestamptz
+);
+
 -- WP3-rivningen: v1:s suggestions/approvals ersätts helt av
 -- proposals/decisions — en väg in, en sanning (ADR-0002). Idempotent
 -- uppgradering av databaser skapade före v0.2.
