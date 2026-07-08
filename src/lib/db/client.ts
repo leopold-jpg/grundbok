@@ -1,5 +1,5 @@
 import { PGlite } from "@electric-sql/pglite";
-import { readFileSync, readdirSync } from "node:fs";
+import { mkdirSync, readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 
 // PGlite = riktig Postgres in-process (WASM). Demon kör den mot .data/
@@ -54,10 +54,15 @@ const globalForDb = globalThis as unknown as { __grundbokDb?: Promise<PGlite> };
 export function getDb(): Promise<PGlite> {
   if (!globalForDb.__grundbokDb) {
     globalForDb.__grundbokDb = (async () => {
+      mkdirSync(DATA_DIR, { recursive: true });
       const db = new PGlite(DATA_DIR);
       await migrate(db);
       return db;
-    })();
+    })().catch((err) => {
+      // Cacha aldrig en misslyckad init — nästa anrop får försöka igen.
+      globalForDb.__grundbokDb = undefined;
+      throw err;
+    });
   }
   return globalForDb.__grundbokDb;
 }

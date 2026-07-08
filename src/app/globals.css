@@ -1,0 +1,255 @@
+@import "../../design.tokens.css";
+
+/* grundbok — UI på Gesso-grammatiken med studio-skinnet.
+   Allt färg/typografi/avstånd går via tokens; inga hårdkodade värden
+   utöver layoutmått. */
+
+:root {
+  --font-sans: var(--font-app-sans), "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-serif: var(--font-app-serif), "Instrument Serif", Georgia, serif;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-sans);
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+main {
+  max-width: 980px;
+  margin: 0 auto;
+  padding: var(--sp-8) var(--sp-5) var(--sp-20);
+}
+
+.topbar {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--sp-4);
+  padding: var(--sp-5) 0 var(--sp-4);
+  border-bottom: 1px solid var(--border);
+  margin-bottom: var(--sp-8);
+  flex-wrap: wrap;
+}
+
+.wordmark {
+  font-family: var(--font-serif);
+  font-size: 34px;
+  letter-spacing: var(--tracking-tight);
+}
+.wordmark em { color: var(--accent); font-style: italic; }
+
+.topbar-meta {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  flex-wrap: wrap;
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  padding: 3px 10px;
+  border-radius: var(--r-pill);
+  border: 1px solid var(--border);
+  background: var(--bg-elev);
+  color: var(--fg-muted);
+  white-space: nowrap;
+}
+.badge .dot { width: 7px; height: 7px; border-radius: 50%; }
+.badge.live .dot { background: var(--success); }
+.badge.mock .dot { background: var(--warning); }
+
+select, input[type="date"], textarea {
+  font-family: var(--font-sans);
+  font-size: 14px;
+  color: var(--fg);
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  padding: var(--sp-2) var(--sp-3);
+}
+textarea {
+  width: 100%;
+  min-height: 210px;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 1.55;
+  resize: vertical;
+}
+select:focus, input:focus, textarea:focus { outline: 2px solid var(--ring); outline-offset: 1px; }
+
+.steg {
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  background: var(--bg-elev);
+  padding: var(--sp-6);
+  margin-bottom: var(--sp-6);
+}
+.steg[data-inaktiv="true"] { opacity: 0.45; pointer-events: none; }
+
+.steg-rubrik {
+  display: flex;
+  align-items: baseline;
+  gap: var(--sp-3);
+  margin: 0 0 var(--sp-4);
+}
+.steg-nr {
+  font-family: var(--font-serif);
+  font-size: 22px;
+  color: var(--accent);
+  min-width: 1.2em;
+}
+.steg-titel {
+  font-family: var(--font-serif);
+  font-size: 22px;
+  letter-spacing: var(--tracking-snug);
+}
+.steg-not { font-size: 13px; color: var(--fg-subtle); margin-left: auto; text-align: right; }
+
+.knapprad { display: flex; gap: var(--sp-2); flex-wrap: wrap; margin-bottom: var(--sp-3); }
+
+button {
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 500;
+  border-radius: var(--r-md);
+  border: 1px solid var(--border);
+  background: var(--bg-elev);
+  color: var(--fg);
+  padding: var(--sp-2) var(--sp-4);
+  cursor: pointer;
+  transition: background var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out);
+}
+button:hover:not(:disabled) { background: var(--bg-tint); border-color: var(--border-strong); }
+button:disabled { color: var(--fg-disabled); cursor: not-allowed; }
+
+button.primar {
+  background: var(--brand);
+  border-color: var(--brand);
+  color: var(--brand-fg);
+}
+button.primar:hover:not(:disabled) { background: var(--brand-hover); border-color: var(--brand-hover); }
+
+/* Godkännande-knappen — demons juridiska poäng. Accent, stor, ensam i sitt slag. */
+button.godkann {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-fg);
+  font-size: 15px;
+  font-weight: 600;
+  padding: var(--sp-3) var(--sp-6);
+  box-shadow: var(--shadow-sm);
+}
+button.godkann:hover:not(:disabled) { background: var(--accent-hover); border-color: var(--accent-hover); }
+
+.falt-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: var(--sp-3) var(--sp-5);
+  margin-bottom: var(--sp-4);
+}
+.falt { border-top: 1px solid var(--divider); padding-top: var(--sp-2); }
+.falt dt { font-size: 11px; letter-spacing: var(--tracking-wide); text-transform: uppercase; color: var(--fg-subtle); margin-bottom: 2px; }
+.falt dd { margin: 0; font-size: 14px; }
+.falt dd.tal { font-family: var(--font-mono); }
+
+table.rader { width: 100%; border-collapse: collapse; margin: var(--sp-3) 0; }
+table.rader th {
+  text-align: left;
+  font-size: 11px;
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
+  color: var(--table-header-fg, var(--fg-subtle));
+  font-weight: 500;
+  padding: var(--sp-2) var(--sp-3);
+  border-bottom: 1px solid var(--border-strong);
+}
+table.rader td { padding: var(--sp-2) var(--sp-3); border-bottom: 1px solid var(--divider); font-size: 14px; }
+table.rader td.tal { font-family: var(--font-mono); text-align: right; white-space: nowrap; }
+table.rader th.tal { text-align: right; }
+table.rader tr:hover td { background: var(--table-row-hover, var(--bg-tint)); }
+
+.flagga {
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--warning);
+  border-radius: var(--r-sm);
+  background: var(--bg-sunken);
+  padding: var(--sp-2) var(--sp-3);
+  font-size: 13px;
+  margin: var(--sp-2) 0;
+}
+.flagga.info { border-left-color: var(--info); }
+
+.metarad { display: flex; gap: var(--sp-2); flex-wrap: wrap; margin-top: var(--sp-3); }
+.chip {
+  font-size: 11px;
+  font-family: var(--font-mono);
+  padding: 2px 8px;
+  border-radius: var(--r-pill);
+  background: var(--bg-sunken);
+  border: 1px solid var(--border);
+  color: var(--fg-muted);
+}
+
+.bokford {
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--success);
+  border-radius: var(--r-md);
+  padding: var(--sp-4);
+  background: var(--bg-elev);
+}
+.bokford .stor { font-family: var(--font-serif); font-size: 20px; }
+
+.huvudbok-rubrik {
+  font-family: var(--font-serif);
+  font-size: 26px;
+  margin: var(--sp-10) 0 var(--sp-2);
+}
+.huvudbok-not { color: var(--fg-muted); font-size: 13px; margin-bottom: var(--sp-4); }
+
+.verifikation {
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--bg-elev);
+  padding: var(--sp-4);
+  margin-bottom: var(--sp-3);
+}
+.verifikation .huvud { display: flex; align-items: baseline; gap: var(--sp-3); flex-wrap: wrap; }
+.verifikation .nr { font-family: var(--font-serif); font-size: 18px; }
+.verifikation .beskr { color: var(--fg-muted); }
+.verifikation .huvud .hoger { margin-left: auto; display: flex; gap: var(--sp-2); }
+.rattelse-tag { color: var(--accent); font-size: 12px; }
+
+.dberror {
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  background: var(--bg-sunken);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--danger);
+  border-radius: var(--r-sm);
+  padding: var(--sp-3);
+  margin-top: var(--sp-3);
+  white-space: pre-wrap;
+}
+
+.fel { color: var(--danger); font-size: 13px; margin-top: var(--sp-2); }
+.tyst { color: var(--fg-subtle); font-size: 13px; }
+.laddar { color: var(--fg-subtle); font-size: 13px; font-style: italic; }
+
+footer {
+  margin-top: var(--sp-16);
+  padding-top: var(--sp-4);
+  border-top: 1px solid var(--border);
+  font-size: 12.5px;
+  color: var(--fg-subtle);
+}
+footer a { color: var(--fg-muted); }
