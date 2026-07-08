@@ -1,0 +1,20 @@
+{
+  "agent": "radgivning",
+  "beskrivning": "Rådgivningsexperten — läsande specialist. Deterministisk RAG över skills-biblioteket (BAS-kontoplan, ML 2023:200, BFN:s allmänna råd) plus tenant-scopade kontosaldofrågor. Producerar advisory_answer-förslag med lagrum och konfidens genom förslagskontraktet (ADR-0002) — aldrig ledger-effekt. Kod: src/modules/radgivning/.",
+  "sida": "klient",
+  "skills": ["se/moms", "se/bas-kontering", "se/periodisering"],
+  "capabilities": [
+    { "capability": "besvara_fraga", "risk": "low", "requires_approval": false, "not": "Svaret citerar alltid lagrum ur kunskapsbasen; frågor utan stöd i korpusen eskaleras till konsult i stället för att gissas." },
+    { "capability": "lasa_kontosaldo", "risk": "low", "requires_approval": false, "not": "Scope ledger:read, tenant-scopat via RLS — kan aldrig läsa en annan tenants huvudbok." },
+    { "capability": "registrera_verifikation", "risk": "critical", "hard_blocked": true, "not": "Modulen är läsande: den producerar aldrig ledger-verkande förslag, och kärnan bokför aldrig ett advisory_answer (lines är tomt per kontrakt)." },
+    { "capability": "betalning", "risk": "critical", "hard_blocked": true }
+  ],
+  "module_manifest": {
+    "id": "radgivning",
+    "version": "0.2.0",
+    "produces": ["advisory_answer"],
+    "requires_scopes": ["proposals:write", "ledger:read"],
+    "human_oversight_default": false,
+    "not": "human_oversight_default är false därför att modulen är läsande: advisory_answer har lines: [] per kontrakt och kan aldrig ge en ledger-skrivning — det finns ingen bokföringseffekt för en människa att godkänna. Tillsyn finns ändå: varje svar loggas som förslag+beslut med lagrum, konfidens och provenance, och policyns min_confidence (seedad 0.5) skickar lågkonfidenssvar till konsultens kö."
+  }
+}
