@@ -100,4 +100,7 @@ export interface ModuleManifest {
   produces: ProposalKind[];
   requires_scopes: ("proposals:write" | "ledger:read" | "documents:read")[];
   human_oversight_default: boolean; // AI Act: default true, policy kan lätta
+  /** Stripe-förberedelse (WP10): prisreferens för self-service-köp av
+   *  agenten. null tills billing finns — ingen Stripe-integration i v0.2. */
+  price_ref?: string | null;
 }

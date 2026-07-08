@@ -51,12 +51,12 @@ type Policy = {
   tillatna_kinds: string[];
 };
 
-type NyckelRad = {
+type AgentVy = {
   id: string;
   module: string;
   namn: string;
   scopes: string[];
-  active: boolean;
+  status: "active" | "paused" | "canceled";
   created_at: string;
 };
 
@@ -234,51 +234,51 @@ export default function AdminSida() {
     });
   }
 
-  // ---- Agentnycklar (OpenClaw-gränsen: rotation = skapa ny + revokera) ----
-  const [nycklar, setNycklar] = useState<NyckelRad[]>([]);
+  // ---- Agenter (WP10: provisionering på en sekund; ADR-0003) ----
+  const [agenter, setAgenter] = useState<AgentVy[]>([]);
   const [nyNamn, setNyNamn] = useState("");
   const [nyModul, setNyModul] = useState("bokforing");
   const [nyScopes, setNyScopes] = useState<string[]>(["proposals:write"]);
   const [visadKlartext, setVisadKlartext] = useState<{ namn: string; nyckel: string } | null>(null);
 
-  const laddaNycklar = useCallback(async (t: string) => {
-    const r = await fetch(`/api/admin/nycklar?tenant=${t}`);
-    setNycklar(await r.json());
+  const laddaAgenter = useCallback(async (t: string) => {
+    const r = await fetch(`/api/agents?tenant=${t}`);
+    setAgenter(await r.json());
   }, []);
 
   useEffect(() => {
     setVisadKlartext(null);
-    laddaNycklar(tenant);
-  }, [tenant, laddaNycklar]);
+    laddaAgenter(tenant);
+  }, [tenant, laddaAgenter]);
 
-  async function skapaNyckel() {
+  async function skapaAgent() {
     if (!nyNamn.trim()) return;
     setFel("");
     try {
-      const r = await post<{ id: string; nyckel: string }>("/api/admin/nycklar", {
+      const r = await post<{ agent_id: string; nyckel: string }>("/api/agents", {
         tenant_id: tenant,
         module: nyModul,
+        display_name: nyNamn.trim(),
         scopes: nyScopes,
-        namn: nyNamn.trim(),
       });
       // Klartexten finns bara i detta svar — endast hashen är lagrad.
       setVisadKlartext({ namn: nyNamn.trim(), nyckel: r.nyckel });
       setNyNamn("");
-      await laddaNycklar(tenant);
+      await laddaAgenter(tenant);
     } catch (e) {
       setFel(e instanceof Error ? e.message : String(e));
     }
   }
 
-  async function revokera(keyId: string) {
+  async function sattStatus(agentId: string, metod: "DELETE" | "PATCH", status?: "paused" | "active") {
     setFel("");
     try {
-      await fetch("/api/admin/nycklar", {
-        method: "PATCH",
+      await fetch(`/api/agents/${agentId}`, {
+        method: metod,
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ tenant_id: tenant, key_id: keyId }),
+        body: JSON.stringify({ tenant_id: tenant, status }),
       });
-      await laddaNycklar(tenant);
+      await laddaAgenter(tenant);
     } catch (e) {
       setFel(e instanceof Error ? e.message : String(e));
     }
@@ -516,13 +516,13 @@ export default function AdminSida() {
         })}
       </section>
 
-      {/* Agentnycklar */}
+      {/* Agenter */}
       <section className="steg">
         <div className="steg-rubrik">
-          <span className="steg-titel">Agentnycklar</span>
+          <span className="steg-titel">Agenter</span>
           <span className="steg-not">
-            en nyckel per agent hos kund — kan skapa förslag för sin tenant/modul, aldrig
-            bokföra · rotation = skapa ny + revokera gammal
+            en agent är en rad, inte en maskin (ADR-0003) — provisionering är en insert;
+            nyckeln kan föreslå, aldrig bokföra · rotation = skapa ny + avsluta gammal
           </span>
         </div>
 
@@ -563,18 +563,18 @@ export default function AdminSida() {
               </label>
             </span>
           ))}
-          <button className="primar" onClick={skapaNyckel} disabled={!nyNamn.trim() || nyScopes.length === 0}>
-            Skapa nyckel
+          <button className="primar" onClick={skapaAgent} disabled={!nyNamn.trim() || nyScopes.length === 0}>
+            Provisionera agent
           </button>
         </div>
 
-        {nycklar.length === 0 ? (
-          <p className="tyst">Inga agentnycklar för den här tenanten.</p>
+        {agenter.length === 0 ? (
+          <p className="tyst">Inga agenter för den här tenanten.</p>
         ) : (
           <table className="rader">
             <thead>
               <tr>
-                <th>Namn</th>
+                <th>Agent</th>
                 <th>Modul</th>
                 <th>Scopes</th>
                 <th>Skapad</th>
@@ -583,16 +583,26 @@ export default function AdminSida() {
               </tr>
             </thead>
             <tbody>
-              {nycklar.map((n) => (
-                <tr key={n.id}>
-                  <td>{n.namn}</td>
-                  <td>{n.module}</td>
-                  <td>{n.scopes.map((s) => <span key={s} className="chip">{s}</span>)}</td>
-                  <td className="tal">{tid(n.created_at)}</td>
-                  <td>{n.active ? "aktiv" : <span className="tyst">revokerad</span>}</td>
+              {agenter.map((a) => (
+                <tr key={a.id}>
+                  <td>{a.namn}</td>
+                  <td>{a.module}</td>
+                  <td>{a.scopes.map((s) => <span key={s} className="chip">{s}</span>)}</td>
+                  <td className="tal">{tid(a.created_at)}</td>
                   <td>
-                    {n.active && (
-                      <button onClick={() => revokera(n.id)}>Revokera</button>
+                    {a.status === "active" && "aktiv"}
+                    {a.status === "paused" && <span className="tyst">pausad</span>}
+                    {a.status === "canceled" && <span className="tyst">avslutad</span>}
+                  </td>
+                  <td style={{ whiteSpace: "nowrap" }}>
+                    {a.status === "active" && (
+                      <button onClick={() => sattStatus(a.id, "PATCH", "paused")}>Pausa</button>
+                    )}{" "}
+                    {a.status === "paused" && (
+                      <button onClick={() => sattStatus(a.id, "PATCH", "active")}>Återuppta</button>
+                    )}{" "}
+                    {a.status !== "canceled" && (
+                      <button onClick={() => sattStatus(a.id, "DELETE")}>Avsluta</button>
                     )}
                   </td>
                 </tr>
