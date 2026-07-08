@@ -84,3 +84,62 @@ CREATE TABLE IF NOT EXISTS audit_log (
   payload     jsonb NOT NULL DEFAULT '{}',
   created_at  timestamptz NOT NULL DEFAULT now()
 );
+
+-- ============================================================ v0.2 ====
+-- Förslagskontraktet (ADR-0002): alla moduler — interna som OpenClaw-
+-- agenter hos kund — skriver via proposals. Endast beslutsmotorn rör
+-- huvudboken.
+
+CREATE TABLE IF NOT EXISTS proposals (
+  -- id sätts av AGENTEN (uuid) och är idempotensnyckel: samma förslag
+  -- POST:at två gånger blir en dubblett-referens, aldrig två förslag.
+  id          uuid PRIMARY KEY,
+  tenant_id   text NOT NULL REFERENCES tenants(id),
+  module      text NOT NULL,
+  kind        text NOT NULL,
+  batch_id    text,
+  -- Hela kontraktsobjektet som det validerades. Kolumnerna ovan/nedan är
+  -- läs-/köoptimeringar; payload är sanningen och hash binder den.
+  payload     jsonb NOT NULL,
+  hash        text NOT NULL,
+  confidence  numeric NOT NULL,
+  summary     text NOT NULL,
+  status      text NOT NULL DEFAULT 'pending'
+              CHECK (status IN ('pending', 'auto_approved', 'approved', 'rejected')),
+  flaggor     jsonb NOT NULL DEFAULT '[]',
+  created_at  timestamptz NOT NULL DEFAULT now()
+);
+
+-- Besluten är append-only precis som verifikationerna: ett beslut kan
+-- aldrig ändras i efterhand, bara följas av nya förslag.
+CREATE TABLE IF NOT EXISTS decisions (
+  id                  uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id           text NOT NULL REFERENCES tenants(id),
+  proposal_id         uuid NOT NULL REFERENCES proposals(id),
+  -- Hash av EXAKT den payload beslutet avsåg — omräknad vid beslutet,
+  -- inte kopierad blint från proposals.hash.
+  proposal_hash       text NOT NULL,
+  outcome             text NOT NULL
+                      CHECK (outcome IN ('auto_approved', 'approved', 'rejected')),
+  decided_by          text NOT NULL,
+  decided_at          timestamptz NOT NULL DEFAULT now(),
+  verifikationsnummer integer,
+  reason              text
+);
+
+-- Autonominivån bor i KÄRNAN, aldrig i agenten (ADR-0002): per tenant
+-- och modul. Allt som inte matchar auto_approve hamnar i godkännandekön.
+CREATE TABLE IF NOT EXISTS autonomy_policies (
+  tenant_id              text NOT NULL REFERENCES tenants(id),
+  module                 text NOT NULL,
+  max_belopp_ore         bigint NOT NULL DEFAULT 0,
+  min_confidence         numeric NOT NULL DEFAULT 1,
+  kanda_motparter_endast boolean NOT NULL DEFAULT true,
+  tillatna_kinds         jsonb NOT NULL DEFAULT '[]',
+  updated_at             timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (tenant_id, module)
+);
+
+-- Verifikationen spårar vilket förslag (och därmed vilket beslut,
+-- vilken modell, vilken skill-version) som skapade den.
+ALTER TABLE verifications ADD COLUMN IF NOT EXISTS proposal_id uuid REFERENCES proposals(id);

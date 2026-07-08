@@ -14,14 +14,9 @@ function sqlFile(name: string): string {
 }
 
 export async function migrate(db: PGlite): Promise<void> {
-  const done = await db
-    .query<{ exists: boolean }>(
-      `SELECT EXISTS (
-         SELECT 1 FROM information_schema.tables WHERE table_name = 'tenants'
-       ) AS exists`,
-    )
-    .then((r) => r.rows[0]?.exists);
-  if (done) return;
+  // Alla tre filerna är idempotenta (IF NOT EXISTS / exception-guards /
+  // DROP TRIGGER IF EXISTS) — de körs vid varje uppstart så att nya
+  // tabeller och policyer landar utan att befintlig data nollställs.
   await db.exec(sqlFile("schema.sql"));
   await db.exec(sqlFile("rls.sql"));
   await db.exec(sqlFile("triggers.sql"));
@@ -37,6 +32,20 @@ async function seed(db: PGlite): Promise<void> {
       `INSERT INTO tenants (id, namn, mall) VALUES ($1, $2, $3)
        ON CONFLICT (id) DO NOTHING`,
       [config.tenant_id, config.namn, config.mall.id],
+    );
+
+    // Default-autonomipolicyer (ändras i adminkonsolens policy-editor):
+    // bokforing börjar helt manuell — dagens beteende bevaras tills
+    // konsulten aktivt lättar policyn. radgivning är läsande
+    // (advisory_answer, ingen ledger-effekt) och får auto-godkännas.
+    await db.query(
+      `INSERT INTO autonomy_policies
+         (tenant_id, module, max_belopp_ore, min_confidence, kanda_motparter_endast, tillatna_kinds)
+       VALUES
+         ($1, 'bokforing', 0, 1, true, '[]'),
+         ($1, 'radgivning', 0, 0.5, false, '["advisory_answer"]')
+       ON CONFLICT (tenant_id, module) DO NOTHING`,
+      [config.tenant_id],
     );
   }
 }
