@@ -72,8 +72,19 @@ kräva `status = 'active'`.
 - Tenant A:s jobb kan inte referera tenant B:s agent
 - Nyckel returneras aldrig i någon läs-endpoint (endast hash lagras)
 
+## WP11 — konsult-auth (dokumenterat icke-mål ikväll)
+
+Riktig konsultautentisering via Supabase Auth. `decided_by` måste vara en
+verifierad identitet — sessionsbunden, granskningsbar — innan första
+riktiga kund; hårdkodade `konsult@byran.se` duger bara i v0. Omfattar:
+inloggning för konsultytan (/admin + beslutsroutes), koppling
+konsult ↔ byrå ↔ tenants, och att beslutsmotorn vägrar beslut utan
+autentiserad principal. Tas i separat session; inget av WP8–WP10 får
+bygga bort möjligheten (decided_by är redan en fri identitetssträng i
+decisions-tabellen).
+
 ## Icke-mål
 
 Stripe-checkout, Inngest/Trigger.dev, e-post/foto-triggers, deploy till
-Vercel/Supabase-moln. Allt ska gå att köra lokalt; deploy tas i separat
-session när WP1–10 är gröna.
+Vercel/Supabase-moln, konsult-auth (WP11 ovan). Allt ska gå att köra
+lokalt; deploy tas i separat session när WP1–10 är gröna.

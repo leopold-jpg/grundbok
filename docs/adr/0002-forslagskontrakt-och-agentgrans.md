@@ -1,7 +1,7 @@
 # ADR-0002: Förslagskontrakt som enda skrivväg — agenter är klienter
 
 **Date**: 2026-07-08
-**Status**: proposed
+**Status**: accepted (genomförd i branchen modul-plattform, WP1–WP7)
 **Deciders**: Leopold, Love
 
 ## Context
