@@ -1,0 +1,30 @@
+{
+  "name": "grundbok",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Agentisk AI-bokföring på svenska villkor — vertikal skiva: kvitto → tolkning → BAS-kontering → godkännande → append-only ledger",
+  "license": "MIT",
+  "scripts": {
+    "dev": "next dev -p 3456",
+    "build": "next build",
+    "start": "next start -p 3456",
+    "test": "node --import tsx --test tests/*.test.ts",
+    "test:fallback": "GRUNDBOK_FORCE_FALLBACK=1 node --import tsx --test tests/fallback.test.ts"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.71.2",
+    "@electric-sql/pglite": "^0.3.14",
+    "next": "^16.1.0",
+    "react": "^19.2.3",
+    "react-dom": "^19.2.3",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "@types/node": "^24",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "tsx": "^4.20.0",
+    "typescript": "^5.9.0"
+  }
+}
