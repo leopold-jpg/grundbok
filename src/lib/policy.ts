@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { canonicalJson, sha256Hex } from "@/contracts/canonical";
 
 // Policy-motorn är deterministisk kod UTANFÖR LLM:en (ULTRAPLAN §3).
 // Mönstret lånar ClawKeepers evaluate-som-ren-funktion (MIT, se
@@ -6,22 +6,13 @@ import { createHash } from "node:crypto";
 // av exakt det förslag som godkändes (inte blind tillit till ett id),
 // och injection-mönstren är svenska + engelska.
 
-/** Kanonisk JSON: sorterade nycklar rekursivt → stabil hash. */
-export function canonicalJson(value: unknown): string {
-  if (value === null || typeof value !== "object") return JSON.stringify(value);
-  if (Array.isArray(value)) {
-    return `[${value.map(canonicalJson).join(",")}]`;
-  }
-  const obj = value as Record<string, unknown>;
-  const keys = Object.keys(obj).sort();
-  return `{${keys
-    .map((k) => `${JSON.stringify(k)}:${canonicalJson(obj[k])}`)
-    .join(",")}}`;
-}
+// Kanoniseringen bor i kontraktet (src/contracts/canonical.ts) — samma
+// funktion på agent- och kärnsida. Re-exporteras här för v1-anropare.
+export { canonicalJson } from "@/contracts/canonical";
 
 /** SHA-256 av kanonisk JSON — förslagets identitet i godkännandeflödet. */
 export function hashForslag(payload: unknown): string {
-  return createHash("sha256").update(canonicalJson(payload)).digest("hex");
+  return sha256Hex(canonicalJson(payload));
 }
 
 export type InjectionFynd = { monster: string; utdrag: string };
