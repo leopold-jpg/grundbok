@@ -24,9 +24,10 @@ async function agentPrincipal(
     scopes,
     namn: `smoke-${tenantId}-${scopes.join("+")}`,
   });
-  const principal = await verifieraAgentNyckel(db, `Bearer ${nyckel}`);
-  assert.ok(principal, "nyckeln ska verifiera");
-  return principal!;
+  const utfall = await verifieraAgentNyckel(db, `Bearer ${nyckel}`);
+  assert.equal(utfall.typ, "ok", "nyckeln ska verifiera");
+  if (utfall.typ !== "ok") throw new Error("förväntade ok");
+  return utfall.principal;
 }
 
 test("1. agentnyckel utan rätt scope nekas", async () => {

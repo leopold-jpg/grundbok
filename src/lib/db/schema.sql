@@ -114,22 +114,34 @@ CREATE TABLE IF NOT EXISTS autonomy_policies (
 -- vilken modell, vilken skill-version) som skapade den.
 ALTER TABLE verifications ADD COLUMN IF NOT EXISTS proposal_id uuid REFERENCES proposals(id);
 
--- Scopade API-nycklar för externa agenter (WP4, ADR-0002): en läckt
--- agentnyckel kan bara skapa förslag för SIN tenant och SIN modul —
--- aldrig bokföra. Nyckeln lagras enbart som sha256-hash; klartexten
--- visas en gång vid skapandet. revoke = active=false (raden inaktiveras,
--- historiken består).
-CREATE TABLE IF NOT EXISTS agent_keys (
-  id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  tenant_id   text NOT NULL REFERENCES tenants(id),
-  module      text NOT NULL,
-  namn        text NOT NULL,
-  scopes      jsonb NOT NULL DEFAULT '[]',
-  key_hash    text NOT NULL UNIQUE,
-  active      boolean NOT NULL DEFAULT true,
-  created_at  timestamptz NOT NULL DEFAULT now(),
-  revoked_at  timestamptz
+-- Control plane (WP8, ADR-0003): en agent är en RAD, inte en maskin.
+-- Ersätter/absorberar agent_keys från WP4. Provisionering = insert;
+-- avstängning = statusändring. Nyckeln lagras enbart som sha256-hash.
+-- AVVIKELSE från ADR-utkastets SQL: tenants.id är text i kärnan (inte
+-- uuid), och autonomy_policies har komposit-PK — den får därför ett
+-- stabilt uuid-id nedan som FK-mål för agents.policy_id.
+ALTER TABLE autonomy_policies ADD COLUMN IF NOT EXISTS id uuid NOT NULL DEFAULT gen_random_uuid();
+CREATE UNIQUE INDEX IF NOT EXISTS autonomy_policies_id_idx ON autonomy_policies (id);
+
+CREATE TABLE IF NOT EXISTS agents (
+  id             uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id      text NOT NULL REFERENCES tenants(id),
+  module         text NOT NULL,
+  display_name   text NOT NULL,
+  key_hash       text NOT NULL UNIQUE,
+  scopes         text[] NOT NULL,
+  policy_id      uuid REFERENCES autonomy_policies(id),
+  status         text NOT NULL DEFAULT 'active'
+                 CHECK (status IN ('active', 'paused', 'canceled')),
+  -- Per-tenant concurrency-tak i jobb-kön (ADR-0003: bullrig granne).
+  max_concurrency integer NOT NULL DEFAULT 2,
+  provisioned_by text NOT NULL,
+  created_at     timestamptz NOT NULL DEFAULT now(),
+  revoked_at     timestamptz
 );
+
+-- WP8 absorberar WP4-tabellen (lokal dev — ingen data att migrera).
+DROP TABLE IF EXISTS agent_keys;
 
 -- WP3-rivningen: v1:s suggestions/approvals ersätts helt av
 -- proposals/decisions — en väg in, en sanning (ADR-0002). Idempotent

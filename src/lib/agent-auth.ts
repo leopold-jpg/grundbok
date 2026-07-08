@@ -5,9 +5,10 @@ import { withTenant } from "./db/tenant";
 import { auditera } from "./ledger";
 import type { Principal, Scope } from "./decisions";
 
-// Scopade agentnycklar (WP4, ADR-0002). En OpenClaw-agent hos kund kör
-// stateless: ingen DB-åtkomst, ingen hemlighet utöver sin nyckel — och
-// nyckeln kan bara skapa förslag för sin tenant/modul, aldrig bokföra.
+// Auth mot control plane-tabellen agents (WP8, ADR-0003): en agent är en
+// rad — nyckeln är radens legitimation. Skrivningar (skapa/pausa/avsluta)
+// går via kärnans service-väg (superuser-anslutningen), aldrig app-rollen;
+// appen har enbart tenant-scopad läsning via RLS.
 
 const NYCKELPREFIX = "gk_";
 
@@ -17,6 +18,18 @@ export type NyAgentNyckel = {
   nyckel: string;
 };
 
+export type AgentStatus = "active" | "paused" | "canceled";
+
+/**
+ * Verifieringsutfall — porten skiljer på okänd nyckel (401) och en känd
+ * agent som är pausad/avslutad (403): kunden ska se skillnad på "fel
+ * nyckel" och "din agent är avstängd".
+ */
+export type NyckelUtfall =
+  | { typ: "ok"; principal: Principal; agentId: string }
+  | { typ: "inaktiv"; status: AgentStatus; agentId: string }
+  | { typ: "okand" };
+
 export async function skapaAgentNyckel(
   db: PGlite,
   input: {
@@ -24,25 +37,38 @@ export async function skapaAgentNyckel(
     module: ModuleId;
     scopes: Scope[];
     namn: string;
+    provisionedBy?: string;
+    policyId?: string | null;
   },
 ): Promise<NyAgentNyckel> {
   const nyckel = NYCKELPREFIX + randomBytes(24).toString("base64url");
   const keyHash = sha256Hex(nyckel);
 
-  const id = await withTenant(db, input.tenantId, async (tx) => {
-    const r = await tx.query<{ id: string }>(
-      `INSERT INTO agent_keys (tenant_id, module, namn, scopes, key_hash)
-       VALUES ($1, $2, $3, $4, $5) RETURNING id`,
-      [input.tenantId, input.module, input.namn, JSON.stringify(input.scopes), keyHash],
-    );
-    await auditera(tx, input.tenantId, "agentnyckel_skapad", {
-      keyId: r.rows[0].id,
+  // Service-vägen: skrivning till agents sker aldrig via app-rollen.
+  const r = await db.query<{ id: string }>(
+    `INSERT INTO agents (tenant_id, module, display_name, key_hash, scopes, policy_id, provisioned_by)
+     VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`,
+    [
+      input.tenantId,
+      input.module,
+      input.namn,
+      keyHash,
+      input.scopes,
+      input.policyId ?? null,
+      input.provisionedBy ?? "admin-ui",
+    ],
+  );
+  const id = r.rows[0].id;
+
+  await withTenant(db, input.tenantId, (tx) =>
+    auditera(tx, input.tenantId, "agent_provisionerad", {
+      agentId: id,
       module: input.module,
       scopes: input.scopes,
-      namn: input.namn,
-    });
-    return r.rows[0].id;
-  });
+      displayName: input.namn,
+      provisionedBy: input.provisionedBy ?? "admin-ui",
+    }),
+  );
 
   return { id, nyckel };
 }
@@ -50,71 +76,114 @@ export async function skapaAgentNyckel(
 /**
  * Bearer-autentisering för POST /api/proposals. Uppslaget sker FÖRE
  * tenant-kontexten finns (det är nyckeln som ger oss tenanten) och körs
- * därför utanför withTenant — auth-lagret är kärnkod; RLS skyddar all
- * dataåtkomst som följer efter att principalen etablerats.
+ * därför på service-vägen — RLS skyddar all dataåtkomst som följer efter
+ * att principalen etablerats.
  */
 export async function verifieraAgentNyckel(
   db: PGlite,
   authorizationHeader: string | null,
-): Promise<Principal | null> {
+): Promise<NyckelUtfall> {
   const bearer = authorizationHeader?.match(/^Bearer\s+(\S+)$/)?.[1];
-  if (!bearer || !bearer.startsWith(NYCKELPREFIX)) return null;
+  if (!bearer || !bearer.startsWith(NYCKELPREFIX)) return { typ: "okand" };
 
   const r = await db.query<{
+    id: string;
     tenant_id: string;
     module: ModuleId;
     scopes: Scope[];
-    namn: string;
+    display_name: string;
+    status: AgentStatus;
   }>(
-    `SELECT tenant_id, module, scopes, namn
-     FROM agent_keys WHERE key_hash = $1 AND active = true`,
+    `SELECT id, tenant_id, module, scopes, display_name, status
+     FROM agents WHERE key_hash = $1`,
     [sha256Hex(bearer)],
   );
   const rad = r.rows[0];
-  if (!rad) return null;
+  if (!rad) return { typ: "okand" };
+  if (rad.status !== "active") {
+    return { typ: "inaktiv", status: rad.status, agentId: rad.id };
+  }
 
   return {
-    typ: "agent_nyckel",
-    tenant_id: rad.tenant_id,
-    module: rad.module,
-    scopes: rad.scopes,
-    namn: `nyckel:${rad.namn}`,
+    typ: "ok",
+    agentId: rad.id,
+    principal: {
+      typ: "agent_nyckel",
+      tenant_id: rad.tenant_id,
+      module: rad.module,
+      scopes: rad.scopes,
+      namn: `agent:${rad.display_name}`,
+    },
   };
 }
 
-/** Revoke = raden inaktiveras (aldrig radering — historiken består). */
+/** Statusändring — aldrig hård delete: beslutshistoriken refererar agenten. */
+export async function sattAgentStatus(
+  db: PGlite,
+  tenantId: string,
+  agentId: string,
+  status: AgentStatus,
+): Promise<void> {
+  await db.query(
+    `UPDATE agents SET status = $1, revoked_at = CASE WHEN $1 = 'canceled' THEN now() ELSE revoked_at END
+     WHERE id = $2 AND tenant_id = $3`,
+    [status, agentId, tenantId],
+  );
+  await withTenant(db, tenantId, (tx) =>
+    auditera(tx, tenantId, "agent_statusandrad", { agentId, status }),
+  );
+}
+
+/** Bakåtkompatibelt namn: revoke = canceled (raden inaktiveras, består). */
 export async function revokeraAgentNyckel(
   db: PGlite,
   tenantId: string,
-  keyId: string,
+  agentId: string,
 ): Promise<void> {
-  await withTenant(db, tenantId, async (tx) => {
-    await tx.query(
-      `UPDATE agent_keys SET active = false, revoked_at = now() WHERE id = $1`,
-      [keyId],
-    );
-    await auditera(tx, tenantId, "agentnyckel_revokerad", { keyId });
-  });
+  await sattAgentStatus(db, tenantId, agentId, "canceled");
 }
 
+export type AgentRad = {
+  id: string;
+  module: string;
+  namn: string;
+  scopes: Scope[];
+  status: AgentStatus;
+  active: boolean;
+  max_concurrency: number;
+  provisioned_by: string;
+  created_at: string;
+};
+
+/** Tenant-scopad läsning via RLS — innehåller ALDRIG nyckel eller hash. */
 export async function listaAgentNycklar(
   db: PGlite,
   tenantId: string,
-): Promise<
-  { id: string; module: string; namn: string; scopes: Scope[]; active: boolean; created_at: string }[]
-> {
+): Promise<AgentRad[]> {
   return withTenant(db, tenantId, async (tx) => {
     const r = await tx.query<{
       id: string;
       module: string;
-      namn: string;
+      display_name: string;
       scopes: Scope[];
-      active: boolean;
+      status: AgentStatus;
+      max_concurrency: number;
+      provisioned_by: string;
       created_at: string;
     }>(
-      `SELECT id, module, namn, scopes, active, created_at
-       FROM agent_keys ORDER BY created_at DESC`,
+      `SELECT id, module, display_name, scopes, status, max_concurrency, provisioned_by, created_at
+       FROM agents ORDER BY created_at DESC`,
     );
-    return r.rows.map((rad) => ({ ...rad, created_at: String(rad.created_at) }));
+    return r.rows.map((rad) => ({
+      id: rad.id,
+      module: rad.module,
+      namn: rad.display_name,
+      scopes: rad.scopes,
+      status: rad.status,
+      active: rad.status === "active",
+      max_concurrency: Number(rad.max_concurrency),
+      provisioned_by: rad.provisioned_by,
+      created_at: String(rad.created_at),
+    }));
   });
 }

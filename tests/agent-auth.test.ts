@@ -23,39 +23,42 @@ test("skapad nyckel verifierar till rätt principal; hash lagras, aldrig klartex
   });
   assert.match(nyckel, /^gk_/);
 
-  const principal = await verifieraAgentNyckel(db, `Bearer ${nyckel}`);
-  assert.ok(principal);
-  assert.equal(principal!.typ, "agent_nyckel");
-  assert.equal(principal!.tenant_id, "kund_a");
-  assert.equal(principal!.module, "bokforing");
-  assert.deepEqual(principal!.scopes, ["proposals:write"]);
+  const utfall = await verifieraAgentNyckel(db, `Bearer ${nyckel}`);
+  assert.equal(utfall.typ, "ok");
+  if (utfall.typ !== "ok") return;
+  assert.equal(utfall.principal.typ, "agent_nyckel");
+  assert.equal(utfall.principal.tenant_id, "kund_a");
+  assert.equal(utfall.principal.module, "bokforing");
+  assert.deepEqual(utfall.principal.scopes, ["proposals:write"]);
 
   // Klartexten finns ingenstans i databasen.
   const rad = await db.query<{ key_hash: string }>(
-    `SELECT key_hash FROM agent_keys WHERE id = $1`,
+    `SELECT key_hash FROM agents WHERE id = $1`,
     [id],
   );
   assert.notEqual(rad.rows[0].key_hash, nyckel);
   assert.doesNotMatch(rad.rows[0].key_hash, /^gk_/);
 });
 
-test("okänd, trasig eller saknad nyckel → null", async () => {
-  assert.equal(await verifieraAgentNyckel(db, "Bearer gk_finnsinte123"), null);
-  assert.equal(await verifieraAgentNyckel(db, "Bearer helfel"), null);
-  assert.equal(await verifieraAgentNyckel(db, null), null);
-  assert.equal(await verifieraAgentNyckel(db, "Basic gk_x"), null);
+test("okänd, trasig eller saknad nyckel → okand", async () => {
+  assert.equal((await verifieraAgentNyckel(db, "Bearer gk_finnsinte123")).typ, "okand");
+  assert.equal((await verifieraAgentNyckel(db, "Bearer helfel")).typ, "okand");
+  assert.equal((await verifieraAgentNyckel(db, null)).typ, "okand");
+  assert.equal((await verifieraAgentNyckel(db, "Basic gk_x")).typ, "okand");
 });
 
-test("revokerad nyckel slutar fungera omedelbart", async () => {
+test("revokerad agent blir inaktiv (403-fallet), inte okänd", async () => {
   const { id, nyckel } = await skapaAgentNyckel(db, {
     tenantId: "kund_a",
     module: "bokforing",
     scopes: ["proposals:write"],
     namn: "ska-revokeras",
   });
-  assert.ok(await verifieraAgentNyckel(db, `Bearer ${nyckel}`));
+  assert.equal((await verifieraAgentNyckel(db, `Bearer ${nyckel}`)).typ, "ok");
   await revokeraAgentNyckel(db, "kund_a", id);
-  assert.equal(await verifieraAgentNyckel(db, `Bearer ${nyckel}`), null);
+  const efter = await verifieraAgentNyckel(db, `Bearer ${nyckel}`);
+  assert.equal(efter.typ, "inaktiv");
+  if (efter.typ === "inaktiv") assert.equal(efter.status, "canceled");
 });
 
 test("nyckel utan proposals:write nekas i porten", async () => {
@@ -65,8 +68,9 @@ test("nyckel utan proposals:write nekas i porten", async () => {
     scopes: ["ledger:read"],
     namn: "laesande-nyckel",
   });
-  const principal = (await verifieraAgentNyckel(db, `Bearer ${nyckel}`))!;
-  const r = await handleProposal(db, principal, exempelProposal());
+  const utfall = await verifieraAgentNyckel(db, `Bearer ${nyckel}`);
+  if (utfall.typ !== "ok") throw new Error("förväntade ok");
+  const r = await handleProposal(db, utfall.principal, exempelProposal());
   assert.equal(r.status, "avvisad_vid_porten");
   if (r.status !== "avvisad_vid_porten") return;
   assert.equal(r.http, 403);
@@ -80,8 +84,9 @@ test("tenant A:s nyckel kan inte skapa förslag för tenant B", async () => {
     scopes: ["proposals:write"],
     namn: "kund-a-agent",
   });
-  const principal = (await verifieraAgentNyckel(db, `Bearer ${nyckel}`))!;
-  const r = await handleProposal(db, principal, exempelProposal({ tenant_id: "kund_b" }));
+  const utfall = await verifieraAgentNyckel(db, `Bearer ${nyckel}`);
+  if (utfall.typ !== "ok") throw new Error("förväntade ok");
+  const r = await handleProposal(db, utfall.principal, exempelProposal({ tenant_id: "kund_b" }));
   assert.equal(r.status, "avvisad_vid_porten");
   if (r.status !== "avvisad_vid_porten") return;
   assert.equal(r.http, 403);
@@ -94,10 +99,11 @@ test("nyckelns modul måste matcha förslagets modul", async () => {
     scopes: ["proposals:write"],
     namn: "bokforingsagent",
   });
-  const principal = (await verifieraAgentNyckel(db, `Bearer ${nyckel}`))!;
+  const utfall = await verifieraAgentNyckel(db, `Bearer ${nyckel}`);
+  if (utfall.typ !== "ok") throw new Error("förväntade ok");
   const r = await handleProposal(
     db,
-    principal,
+    utfall.principal,
     exempelProposal({ module: "radgivning", kind: "advisory_answer", lines: [] }),
   );
   assert.equal(r.status, "avvisad_vid_porten");
@@ -112,8 +118,9 @@ test("giltig nyckel + giltigt förslag går igenom porten", async () => {
     scopes: ["proposals:write"],
     namn: "riktig-agent",
   });
-  const principal = (await verifieraAgentNyckel(db, `Bearer ${nyckel}`))!;
-  const r = await handleProposal(db, principal, exempelProposal());
+  const utfall = await verifieraAgentNyckel(db, `Bearer ${nyckel}`);
+  if (utfall.typ !== "ok") throw new Error("förväntade ok");
+  const r = await handleProposal(db, utfall.principal, exempelProposal());
   // Default-policyn auto-godkänner inget → kön.
   assert.equal(r.status, "pending");
 });

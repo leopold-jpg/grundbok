@@ -31,8 +31,10 @@ GRANT SELECT, INSERT           ON proposals         TO grundbok_app;
 GRANT UPDATE (status, flaggor) ON proposals         TO grundbok_app;
 GRANT SELECT, INSERT           ON decisions         TO grundbok_app;
 GRANT SELECT, INSERT, UPDATE   ON autonomy_policies TO grundbok_app; -- policy-editorn i adminkonsolen
-GRANT SELECT, INSERT             ON agent_keys        TO grundbok_app;
-GRANT UPDATE (active, revoked_at) ON agent_keys       TO grundbok_app; -- revoke, aldrig radering
+-- agents (WP8): tenant-scopad LÄSNING för appen; all skrivning går via
+-- kärnans service-väg (superuser-anslutningen utanför withTenant — den
+-- lokala motsvarigheten till Supabase service role).
+GRANT SELECT ON agents TO grundbok_app;
 
 -- RLS på varje kunddatabärande tabell: rad synlig/skrivbar ⇔ rätt tenant_id.
 -- current_setting(..., true) returnerar NULL om osatt → policyn nekar allt.
@@ -41,7 +43,7 @@ DECLARE t text;
 BEGIN
   FOREACH t IN ARRAY ARRAY[
     'documents', 'verifications', 'verification_rows', 'audit_log',
-    'proposals', 'decisions', 'autonomy_policies', 'agent_keys'
+    'proposals', 'decisions', 'autonomy_policies', 'agents'
   ] LOOP
     EXECUTE format('ALTER TABLE %I ENABLE ROW LEVEL SECURITY', t);
     EXECUTE format('ALTER TABLE %I FORCE ROW LEVEL SECURITY', t);
