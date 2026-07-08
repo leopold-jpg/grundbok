@@ -114,6 +114,23 @@ CREATE TABLE IF NOT EXISTS autonomy_policies (
 -- vilken modell, vilken skill-version) som skapade den.
 ALTER TABLE verifications ADD COLUMN IF NOT EXISTS proposal_id uuid REFERENCES proposals(id);
 
+-- Scopade API-nycklar för externa agenter (WP4, ADR-0002): en läckt
+-- agentnyckel kan bara skapa förslag för SIN tenant och SIN modul —
+-- aldrig bokföra. Nyckeln lagras enbart som sha256-hash; klartexten
+-- visas en gång vid skapandet. revoke = active=false (raden inaktiveras,
+-- historiken består).
+CREATE TABLE IF NOT EXISTS agent_keys (
+  id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id   text NOT NULL REFERENCES tenants(id),
+  module      text NOT NULL,
+  namn        text NOT NULL,
+  scopes      jsonb NOT NULL DEFAULT '[]',
+  key_hash    text NOT NULL UNIQUE,
+  active      boolean NOT NULL DEFAULT true,
+  created_at  timestamptz NOT NULL DEFAULT now(),
+  revoked_at  timestamptz
+);
+
 -- WP3-rivningen: v1:s suggestions/approvals ersätts helt av
 -- proposals/decisions — en väg in, en sanning (ADR-0002). Idempotent
 -- uppgradering av databaser skapade före v0.2.
