@@ -50,7 +50,15 @@ export function bestamMoms(
   }
 
   const key = rules.kategorialias[kategori] ?? kategori;
-  const def = rules.kategorier[key] ?? rules.kategorier["standard"];
+  const def = rules.kategorier[key];
+  if (!def) {
+    // SKILL.md: omodellerade kategorier eskaleras, gissas aldrig.
+    // (Extraktionsschemat enum-låser kategorierna, så hit når man bara
+    // om rules.json och schemat glidit isär — det ska smälla, inte gissas.)
+    throw new Error(
+      `Kategori "${kategori}" är inte modellerad i se/moms rules.json — eskalera till konsult`,
+    );
+  }
   const period = def.satser.find(
     (p) =>
       (p.from === null || affarshandelsedatum >= p.from) &&
