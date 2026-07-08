@@ -17,35 +17,6 @@ CREATE TABLE IF NOT EXISTS documents (
   created_at  timestamptz NOT NULL DEFAULT now()
 );
 
-CREATE TABLE IF NOT EXISTS suggestions (
-  id             uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  tenant_id      text NOT NULL REFERENCES tenants(id),
-  document_id    uuid REFERENCES documents(id),
-  -- Hela förslaget: tolkade fält, konteringsrader, momsbeslut, lagrum
-  payload        jsonb NOT NULL,
-  -- SHA-256 av kanonisk JSON av payload. Godkännandet binds till denna —
-  -- ändras förslaget efter godkännande är godkännandet ogiltigt (ULTRAPLAN §3).
-  hash           text NOT NULL,
-  engine         text NOT NULL CHECK (engine IN ('anthropic', 'fallback')),
-  skill_versions jsonb NOT NULL DEFAULT '{}',
-  flaggor        jsonb NOT NULL DEFAULT '[]',
-  status         text NOT NULL DEFAULT 'vantar'
-                 CHECK (status IN ('vantar', 'godkand', 'avvisad', 'bokford')),
-  created_at     timestamptz NOT NULL DEFAULT now()
-);
-
-CREATE TABLE IF NOT EXISTS approvals (
-  id              uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  tenant_id       text NOT NULL REFERENCES tenants(id),
-  suggestion_id   uuid NOT NULL REFERENCES suggestions(id),
-  beslut          text NOT NULL CHECK (beslut IN ('godkand', 'avvisad')),
-  -- Hashen av EXAKT det förslag konsulten såg när beslutet fattades
-  suggestion_hash text NOT NULL,
-  godkand_av      text NOT NULL,
-  kommentar       text,
-  created_at      timestamptz NOT NULL DEFAULT now()
-);
-
 -- Verifikationstabellens kolumner ÄR lagkravens fält (BFL 5 kap. 7 §):
 -- sammanställningsdatum, affärshändelsedatum, vad, belopp (via rader),
 -- motpart, underlagshänvisning, verifikationsnummer.
@@ -53,7 +24,6 @@ CREATE TABLE IF NOT EXISTS verifications (
   id                   uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   tenant_id            text NOT NULL REFERENCES tenants(id),
   nummer               integer NOT NULL,
-  suggestion_id        uuid REFERENCES suggestions(id),
   affarshandelsedatum  date NOT NULL,
   sammanstalld_at      timestamptz NOT NULL DEFAULT now(),
   beskrivning          text NOT NULL,
@@ -143,3 +113,10 @@ CREATE TABLE IF NOT EXISTS autonomy_policies (
 -- Verifikationen spårar vilket förslag (och därmed vilket beslut,
 -- vilken modell, vilken skill-version) som skapade den.
 ALTER TABLE verifications ADD COLUMN IF NOT EXISTS proposal_id uuid REFERENCES proposals(id);
+
+-- WP3-rivningen: v1:s suggestions/approvals ersätts helt av
+-- proposals/decisions — en väg in, en sanning (ADR-0002). Idempotent
+-- uppgradering av databaser skapade före v0.2.
+ALTER TABLE IF EXISTS verifications DROP COLUMN IF EXISTS suggestion_id;
+DROP TABLE IF EXISTS approvals;
+DROP TABLE IF EXISTS suggestions;

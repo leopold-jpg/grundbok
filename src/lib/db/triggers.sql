@@ -19,8 +19,7 @@ DO $$
 DECLARE t text;
 BEGIN
   FOREACH t IN ARRAY ARRAY[
-    'verifications', 'verification_rows', 'approvals', 'audit_log',
-    'decisions'
+    'verifications', 'verification_rows', 'audit_log', 'decisions'
   ] LOOP
     EXECUTE format('DROP TRIGGER IF EXISTS enforce_append_only ON %I', t);
     EXECUTE format($f$

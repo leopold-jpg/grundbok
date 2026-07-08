@@ -21,9 +21,6 @@ GRANT USAGE ON SCHEMA public TO grundbok_app;
 -- ingen UPDATE/DELETE på räkenskapsinformation eller beslut.
 GRANT SELECT                 ON tenants           TO grundbok_app;
 GRANT SELECT, INSERT         ON documents         TO grundbok_app;
-GRANT SELECT, INSERT         ON suggestions       TO grundbok_app;
-GRANT UPDATE (status)        ON suggestions       TO grundbok_app; -- endast statusfältet
-GRANT SELECT, INSERT         ON approvals         TO grundbok_app;
 GRANT SELECT, INSERT         ON verifications     TO grundbok_app;
 GRANT SELECT, INSERT         ON verification_rows TO grundbok_app;
 GRANT SELECT, INSERT         ON audit_log         TO grundbok_app;
@@ -41,8 +38,7 @@ DO $$
 DECLARE t text;
 BEGIN
   FOREACH t IN ARRAY ARRAY[
-    'documents', 'suggestions', 'approvals',
-    'verifications', 'verification_rows', 'audit_log',
+    'documents', 'verifications', 'verification_rows', 'audit_log',
     'proposals', 'decisions', 'autonomy_policies'
   ] LOOP
     EXECUTE format('ALTER TABLE %I ENABLE ROW LEVEL SECURITY', t);
