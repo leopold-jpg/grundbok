@@ -1,0 +1,11 @@
+{
+  "mall_id": "cafe",
+  "version": "1.0.0",
+  "beskrivning": "Branschmall: café. Livsmedelsinköp (OBS tillfälligt 6 % moms 2026-04-01–2027-12-31), servering 12 %, kontantkassa + kort.",
+  "skills": {
+    "se/moms": { "version": "^1.0", "config": { "period": "kvartal", "omvand_bygg": false } },
+    "se/bas-kontering": { "version": "^1.0", "config": { "beloppsgrans_flagga_sek": 10000 } },
+    "se/periodisering": { "version": "^0.1", "config": { "periodiseringsgrans_sek": 5000 } }
+  },
+  "approval": { "auto_godkann": false, "beloppsgrans_flagga_sek": 10000 }
+}

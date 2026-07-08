@@ -1,0 +1,12 @@
+{
+  "agent": "konsult",
+  "beskrivning": "Konsultagenten — byråns sida. Granskningskö, avvikelseflaggning, godkännande. Samma skills-bibliotek som bokföringsagenten; skillnaden är behörigheter, inte kod (ULTRAPLAN §5).",
+  "sida": "konsult",
+  "skills": ["se/moms", "se/bas-kontering"],
+  "capabilities": [
+    { "capability": "granska_forslag", "risk": "low", "requires_approval": false },
+    { "capability": "godkanna_forslag", "risk": "high", "requires_approval": false, "not": "Godkännandet ÄR den mänskliga handlingen — det binds till konsultens identitet och en hash av exakt det förslag som godkändes." },
+    { "capability": "registrera_verifikation", "risk": "critical", "requires_approval": true, "approval_binds_hash": true, "allowed_roles": ["konsult"] },
+    { "capability": "betalning", "risk": "critical", "hard_blocked": true }
+  ]
+}

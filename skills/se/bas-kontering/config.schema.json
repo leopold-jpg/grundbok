@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "grundbok:skills/se/bas-kontering/config",
+  "title": "Kundparametrar för se/bas-kontering",
+  "description": "Vad en kundinstans får konfigurera i konteringsskillen: kontoöverstyrningar och flaggtrösklar. Invarianterna i rules.json är inte konfigurerbara.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "konto_overrides": {
+      "description": "Kundspecifika kontoval per kategori, t.ex. { \"livsmedel\": \"4000\" }. Nyckel = kategori ur rules.json, värde = fyrsiffrigt BAS-konto.",
+      "type": "object",
+      "additionalProperties": { "type": "string", "pattern": "^[1-8][0-9]{3}$" }
+    },
+    "beloppsgrans_flagga_sek": {
+      "description": "Bruttobelopp (SEK) över vilket förslag alltid flaggas för extra granskning.",
+      "type": "number",
+      "minimum": 0
+    }
+  }
+}

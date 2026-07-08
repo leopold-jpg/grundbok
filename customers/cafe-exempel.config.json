@@ -1,0 +1,16 @@
+{
+  "schema_version": "1.0.0",
+  "tenant_id": "kund_a",
+  "namn": "Café Exempel AB",
+  "mall": { "id": "cafe", "version": "1.0.0" },
+  "rakenskapsar": "2026-01-01/2026-12-31",
+  "skills": {
+    "se/moms": { "version": "^1.0", "config": { "period": "kvartal", "omvand_bygg": false } },
+    "se/bas-kontering": { "version": "^1.0", "config": { "beloppsgrans_flagga_sek": 10000 } },
+    "se/periodisering": { "version": "^0.1", "config": { "periodiseringsgrans_sek": 5000 } }
+  },
+  "approval": { "auto_godkann": false, "beloppsgrans_flagga_sek": 10000 },
+  "integrationer": {
+    "bokforing": { "typ": "fortnox_mock", "secret_ref": "fortnox/kund_a" }
+  }
+}

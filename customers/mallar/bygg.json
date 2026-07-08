@@ -1,0 +1,11 @@
+{
+  "mall_id": "bygg",
+  "version": "1.0.0",
+  "beskrivning": "Branschmall: byggföretag. Omvänd betalningsskyldighet för köpta byggtjänster (ML 16 kap. 13 §), konton 2614/2647/4425, projektredovisning (framtida).",
+  "skills": {
+    "se/moms": { "version": "^1.0", "config": { "period": "manad", "omvand_bygg": true } },
+    "se/bas-kontering": { "version": "^1.0", "config": { "beloppsgrans_flagga_sek": 50000 } },
+    "se/periodisering": { "version": "^0.1", "config": { "periodiseringsgrans_sek": 5000 } }
+  },
+  "approval": { "auto_godkann": false, "beloppsgrans_flagga_sek": 50000 }
+}

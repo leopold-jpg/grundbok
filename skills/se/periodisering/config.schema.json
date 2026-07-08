@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "grundbok:skills/se/periodisering/config",
+  "title": "Kundparametrar för se/periodisering",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "periodiseringsgrans_sek": {
+      "description": "Belopp (SEK) under vilket poster inte periodiseras. K2-praxis: 5 000 kr.",
+      "type": "number",
+      "minimum": 0,
+      "default": 5000
+    }
+  }
+}

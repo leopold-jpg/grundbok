@@ -1,0 +1,16 @@
+{
+  "schema_version": "1.0.0",
+  "tenant_id": "kund_b",
+  "namn": "Bygg Exempel AB",
+  "mall": { "id": "bygg", "version": "1.0.0" },
+  "rakenskapsar": "2026-01-01/2026-12-31",
+  "skills": {
+    "se/moms": { "version": "^1.0", "config": { "period": "manad", "omvand_bygg": true } },
+    "se/bas-kontering": { "version": "^1.0", "config": { "beloppsgrans_flagga_sek": 50000 } },
+    "se/periodisering": { "version": "^0.1", "config": { "periodiseringsgrans_sek": 5000 } }
+  },
+  "approval": { "auto_godkann": false, "beloppsgrans_flagga_sek": 50000 },
+  "integrationer": {
+    "bokforing": { "typ": "fortnox_mock", "secret_ref": "fortnox/kund_b" }
+  }
+}

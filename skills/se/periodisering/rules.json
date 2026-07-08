@@ -1,0 +1,24 @@
+{
+  "skill": "se/periodisering",
+  "version": "0.1.0",
+  "beskrivning": "Periodisering av kostnader och intäkter. I den vertikala skivan visar denna skill mönstret (tre filer: SKILL.md + rules.json + config.schema.json) — den körs inte i huvudflödet.",
+  "verifierad_mot_primarkallor": "2026-07-08",
+  "regler": [
+    {
+      "id": "vasentlighetsgrans",
+      "regel": "Kostnader/intäkter under kundens periodiseringsgrans_sek periodiseras inte (väsentlighetsprincipen; K2 tillåter att poster under 5 000 kr inte periodiseras).",
+      "lagrum": "BFNAR 2016:10 (K2) punkt 2.4"
+    },
+    {
+      "id": "forutbetald_kostnad",
+      "regel": "Kostnad som avser kommande räkenskapsår bokförs på 1790 Övriga förutbetalda kostnader och upplupna intäkter, och löses upp linjärt över täckningsperioden.",
+      "konto": "1790"
+    },
+    {
+      "id": "upplupen_kostnad",
+      "regel": "Kostnad som hör till innevarande år men faktureras senare reserveras på 2990 Övriga upplupna kostnader och förutbetalda intäkter.",
+      "konto": "2990"
+    }
+  ],
+  "status_not": "Skillen är medvetet minimal — den finns för att visa att en femte, sjätte, sjunde skill är filer i biblioteket, inte nya kodprojekt."
+}

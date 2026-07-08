@@ -1,0 +1,36 @@
+{
+  "skill": "se/bas-kontering",
+  "version": "1.0.0",
+  "beskrivning": "Konteringsregler mot BAS-kontoplanen för leverantörsfakturor och kvitton. Maskinläsbar motsvarighet till SKILL.md — exekveras av den deterministiska regelmotorn.",
+  "kontoplan_standard": "BAS 2025 (officiell kontotabell, bas.se)",
+  "verifierad_mot_primarkallor": "2026-07-08",
+  "motkonton": {
+    "leverantorsfaktura": { "konto": "2440", "namn": "Leverantörsskulder" },
+    "direktbetalning": { "konto": "1930", "namn": "Företagskonto/checkkonto/affärskonto" }
+  },
+  "kostnadskonton": {
+    "livsmedel": {
+      "konto": "4010",
+      "namn": "Inköp material och varor",
+      "not": "4010 är de facto-standard i Fortnox/Visma; officiella BAS definierar 4000 'Inköp av varor från Sverige'. Konfigurerbart per kund."
+    },
+    "restaurang_catering": { "konto": "6072", "namn": "Representation, ej avdragsgill", "not": "Förenklad regel i skivan: extern representation. Avdragsrätten för representationsmoms är begränsad — flaggas alltid för konsultgranskning." },
+    "byggtjanst_omvand": { "konto": "4425", "namn": "Inköpta tjänster i Sverige, omvänd betalningsskyldighet, 25 %" },
+    "kontorsmaterial": { "konto": "6110", "namn": "Kontorsmateriel" },
+    "it_tjanster": { "konto": "6540", "namn": "IT-tjänster" },
+    "bocker_tidningar": { "konto": "6970", "namn": "Tidningar, tidskrifter och facklitteratur" },
+    "persontransport": { "konto": "5800", "namn": "Resekostnader" },
+    "hotell": { "konto": "5800", "namn": "Resekostnader (logi)" },
+    "kultur_idrott": { "konto": "6993", "namn": "Lämnade bidrag och gåvor / övrigt", "not": "Kontext­beroende — flaggas för konsult." },
+    "ovrigt": { "konto": "6991", "namn": "Övriga externa kostnader, avdragsgilla" }
+  },
+  "invarianter": [
+    { "id": "debet_kredit_balans", "regel": "Summan av debet ska exakt motsvara summan av kredit i varje verifikation." },
+    { "id": "netto_moms_brutto", "regel": "netto + moms = brutto (ören, heltalsaritmetik). Avvikelse > 1 öre blockerar förslaget." },
+    { "id": "verifikationens_innehall", "regel": "Förslag utan affärshändelsedatum, belopp, motpart eller beskrivning kan inte godkännas.", "lagrum": "BFL (1999:1078) 5 kap. 7 §" }
+  ],
+  "flaggor": [
+    { "id": "belopp_over_grans", "regel": "Brutto över kundens beloppsgrans_flagga_sek markeras för extra granskning." },
+    { "id": "momssats_avviker", "regel": "Om kvittots angivna momssats avviker från regelverkets sats för kategorin+datumet flaggas förslaget och regelverkets sats används aldrig tyst — konsulten avgör." }
+  ]
+}

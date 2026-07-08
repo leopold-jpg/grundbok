@@ -1,0 +1,75 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "grundbok:customer-config",
+  "title": "Kundinstans — grundbok",
+  "description": "Kontraktet mellan plattform, skills och konsult-UI. En kundinstans är en config-fil validerad mot detta schema — aldrig ett kodprojekt. Schemat är det första som låses (ULTRAPLAN §4). Secrets förekommer aldrig här: integrationer refererar nycklar med namn (secret_ref) och värdet hämtas ur kundmiljöns secret store.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "tenant_id", "namn", "mall", "rakenskapsar", "skills", "approval"],
+  "properties": {
+    "schema_version": {
+      "description": "Semver för detta schema. Vid malluppgradering gäller Dify-mönstret: MAJOR-skillnad kräver konsultgodkännande, MINOR varnar, PATCH går tyst.",
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$"
+    },
+    "tenant_id": {
+      "description": "Tenant-nyckeln. Varje rad kunden äger i databasen bär denna — RLS-policyerna binder radåtkomst till den.",
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]{1,62}$"
+    },
+    "namn": { "type": "string", "minLength": 1 },
+    "mall": {
+      "description": "Branschmall som instansen skapades från. Mallen är kundneutral; bindningen till tenant sker vid instansiering.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "version"],
+      "properties": {
+        "id": { "enum": ["cafe", "bygg", "konsultbyra"] },
+        "version": { "type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$" }
+      }
+    },
+    "rakenskapsar": {
+      "description": "ISO-intervall, t.ex. 2026-01-01/2026-12-31.",
+      "type": "string",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}/\\d{4}-\\d{2}-\\d{2}$"
+    },
+    "skills": {
+      "description": "Aktiverade skills med semver-krav. Nyckel = skill-id, värde = { version: semver-range, config: parametrar validerade mot skillens config.schema.json }.",
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["version"],
+        "properties": {
+          "version": { "type": "string" },
+          "config": { "type": "object" }
+        }
+      }
+    },
+    "approval": {
+      "description": "Godkännanderegler. auto_godkann kan aldrig vara true i v1 — fältet finns för att göra policyn synlig och diffbar, inte för att stängas av (ansvarsprincipen, ULTRAPLAN §6).",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["auto_godkann"],
+      "properties": {
+        "auto_godkann": { "const": false },
+        "beloppsgrans_flagga_sek": { "type": "number", "minimum": 0 }
+      }
+    },
+    "integrationer": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "bokforing": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["typ", "secret_ref"],
+          "properties": {
+            "typ": { "enum": ["fortnox_mock", "fortnox"] },
+            "secret_ref": { "type": "string", "description": "Namnreferens till nyckel i kundmiljöns secret store — aldrig själva värdet." }
+          }
+        }
+      }
+    }
+  }
+}

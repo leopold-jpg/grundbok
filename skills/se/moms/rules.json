@@ -1,0 +1,84 @@
+{
+  "skill": "se/moms",
+  "version": "1.0.0",
+  "beskrivning": "Svenska momssatser med giltighetsdatum, momskonton och omvänd betalningsskyldighet i byggsektorn. Maskinläsbar motsvarighet till SKILL.md — exekveras av den deterministiska regelmotorn.",
+  "verifierad_mot_primarkallor": "2026-07-08",
+  "kategorier": {
+    "standard": {
+      "label": "Generell skattesats",
+      "satser": [
+        { "from": null, "to": null, "sats": 25, "lagrum": "ML (2023:200) 9 kap. 2 §" }
+      ]
+    },
+    "livsmedel": {
+      "label": "Livsmedel",
+      "satser": [
+        { "from": null, "to": "2026-03-31", "sats": 12, "lagrum": "ML (2023:200) 9 kap." },
+        { "from": "2026-04-01", "to": "2027-12-31", "sats": 6, "lagrum": "Tillfällig sänkning, prop. 2025/26:55 (bet. 2025/26:SkU9)" },
+        { "from": "2028-01-01", "to": null, "sats": 12, "lagrum": "Återgång till ordinarie sats, ML (2023:200) 9 kap." }
+      ]
+    },
+    "restaurang_catering": {
+      "label": "Restaurang- och cateringtjänster",
+      "satser": [
+        { "from": null, "to": null, "sats": 12, "lagrum": "ML (2023:200) 9 kap." }
+      ]
+    },
+    "hotell": {
+      "label": "Hotell- och rumsuthyrning, camping",
+      "satser": [
+        { "from": null, "to": null, "sats": 12, "lagrum": "ML (2023:200) 9 kap." }
+      ]
+    },
+    "bocker_tidningar": {
+      "label": "Böcker, tidningar, e-publikationer",
+      "satser": [
+        { "from": null, "to": null, "sats": 6, "lagrum": "ML (2023:200) 9 kap." }
+      ]
+    },
+    "persontransport": {
+      "label": "Persontransporter (taxi, buss, tåg, inrikesflyg)",
+      "satser": [
+        { "from": null, "to": null, "sats": 6, "lagrum": "ML (2023:200) 9 kap." }
+      ]
+    },
+    "kultur_idrott": {
+      "label": "Kultur och idrott (entréer, utövande)",
+      "satser": [
+        { "from": null, "to": null, "sats": 6, "lagrum": "ML (2023:200) 9 kap." }
+      ]
+    }
+  },
+  "kategorialias": {
+    "kontorsmaterial": "standard",
+    "it_tjanster": "standard",
+    "byggtjanst": "standard",
+    "ovrigt": "standard"
+  },
+  "konton": {
+    "utgaende": { "25": "2611", "12": "2621", "6": "2631" },
+    "ingaende": "2641",
+    "omvand": { "utgaende_25": "2614", "ingaende": "2647" },
+    "not": "Kontonamn verifierade mot officiella BAS 2025-tabellen (bas.se). Ingående moms delas inte upp per sats i BAS — 2641 gäller alla satser. 2617 finns inte i officiella BAS (programvarukonvention)."
+  },
+  "omvand_betalningsskyldighet": {
+    "bygg": {
+      "lagrum": "ML (2023:200) 16 kap. 13 §",
+      "term": "omvänd betalningsskyldighet (lagens nuvarande term; tidigare 'omvänd skattskyldighet')",
+      "villkor": "Byggtjänster (mark- och grundarbeten, bygg- och anläggningsarbeten, bygginstallationer, slutbehandling av byggnader, uthyrning av bygg- och anläggningsmaskiner med förare, byggstädning, uthyrning av arbetskraft för dessa) där köparen är en beskattningsbar person som i sin verksamhet inte endast tillfälligt tillhandahåller sådana tjänster, eller en mellanman som vidareförsäljer till en sådan köpare.",
+      "sats": 25,
+      "kostnadskonto": "4425",
+      "deklarationsrutor": { "underlag": "24", "utgaende": "30", "ingaende": "48" },
+      "saljarens_intaktskonto": "3231",
+      "aktiveras_av_config": "omvand_bygg"
+    }
+  },
+  "deklarationsperioder": {
+    "lagrum": "SFL (2011:1244) 26 kap. 10–11 §§",
+    "regler": [
+      { "period": "manad", "villkor": "Huvudregel; obligatorisk över 40 mnkr beskattningsunderlag" },
+      { "period": "kvartal", "villkor": "Beskattningsunderlag högst 40 mnkr" },
+      { "period": "helar", "villkor": "Beskattningsunderlag högst 1 mnkr" }
+    ]
+  }
+}

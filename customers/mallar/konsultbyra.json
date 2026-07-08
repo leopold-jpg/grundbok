@@ -1,0 +1,11 @@
+{
+  "mall_id": "konsultbyra",
+  "version": "1.0.0",
+  "beskrivning": "Branschmall: konsultbyrå. 25 % tjänstemoms, periodisering av pågående uppdrag.",
+  "skills": {
+    "se/moms": { "version": "^1.0", "config": { "period": "kvartal", "omvand_bygg": false } },
+    "se/bas-kontering": { "version": "^1.0", "config": { "beloppsgrans_flagga_sek": 25000 } },
+    "se/periodisering": { "version": "^0.1", "config": { "periodiseringsgrans_sek": 5000 } }
+  },
+  "approval": { "auto_godkann": false, "beloppsgrans_flagga_sek": 25000 }
+}

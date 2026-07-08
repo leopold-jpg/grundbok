@@ -1,0 +1,12 @@
+{
+  "agent": "bokforing",
+  "beskrivning": "Bokföringsexperten — tunt orkestreringslager över skills-biblioteket. Tar emot dokument, tolkar, konterar och producerar FÖRSLAG. Detta manifest ÄR experten: en femte expert är en ny fil här, inte ett nytt kodprojekt (ULTRAPLAN §1).",
+  "sida": "klient",
+  "skills": ["se/moms", "se/bas-kontering", "se/periodisering"],
+  "capabilities": [
+    { "capability": "tolka_dokument", "risk": "low", "requires_approval": false },
+    { "capability": "foresla_kontering", "risk": "medium", "requires_approval": false },
+    { "capability": "registrera_verifikation", "risk": "critical", "requires_approval": true, "approval_binds_hash": true, "allowed_roles": ["konsult"] },
+    { "capability": "betalning", "risk": "critical", "hard_blocked": true, "not": "Betalningar existerar inte som handling i v1 — inte ens med godkännande." }
+  ]
+}

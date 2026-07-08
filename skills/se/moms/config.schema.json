@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "grundbok:skills/se/moms/config",
+  "title": "Kundparametrar för se/moms",
+  "description": "Vad en kundinstans får konfigurera i moms-skillen. Satserna och lagrummen i rules.json är INTE konfigurerbara — de är lag.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "period": {
+      "description": "Momsdeklarationsperiod. Valideras mot beskattningsunderlagsgränserna i SFL 26 kap. 10–11 §§.",
+      "enum": ["manad", "kvartal", "helar"]
+    },
+    "omvand_bygg": {
+      "description": "Kunden är ett byggföretag som köper byggtjänster med omvänd betalningsskyldighet (ML 16 kap. 13 §).",
+      "type": "boolean",
+      "default": false
+    }
+  },
+  "required": ["period"]
+}
