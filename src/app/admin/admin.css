@@ -1,0 +1,113 @@
+/* grundbok — adminkonsolen (WP6). Återanvänder globals.css-klasserna
+   (.steg, .steg-rubrik, .rader, .chip, .flagga, .godkann, .badge, .bokford,
+   .tyst, .fel); här ligger endast konsol-specifik layout. Allt via
+   Gesso-tokens (design.tokens.css) — inga hårdkodade färger. */
+
+.admin .wordmark-rad { display: flex; align-items: baseline; gap: var(--sp-3); }
+.admin .undertitel {
+  font-size: 12px;
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
+  color: var(--fg-subtle);
+}
+.admin .tillbaka { font-size: 13px; color: var(--fg-muted); text-decoration: none; }
+.admin .tillbaka:hover { color: var(--fg); text-decoration: underline; }
+
+/* Kö-kortet — ett förslag som väntar på mänskligt beslut. */
+.admin .ko-kort {
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--bg-elev);
+  padding: var(--sp-4);
+  margin-bottom: var(--sp-3);
+}
+.admin .ko-huvud { display: flex; align-items: baseline; gap: var(--sp-3); flex-wrap: wrap; }
+.admin .ko-summary { font-size: 15px; font-weight: 500; }
+.admin .ko-huvud .tid { margin-left: auto; }
+
+.admin .lagrum-lista {
+  margin: var(--sp-2) 0 0;
+  padding-left: var(--sp-5);
+  font-size: 13px;
+  color: var(--fg-muted);
+}
+
+.admin .diff-rubrik {
+  font-size: 11px;
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
+  color: var(--fg-subtle);
+  margin: var(--sp-3) 0 var(--sp-1);
+}
+.admin .diff-lista { margin: 0; padding-left: var(--sp-5); font-size: 13px; color: var(--fg-muted); }
+.admin .diff-lista li::marker { color: var(--warning); }
+.admin .diff-ok { margin: 0; font-size: 13px; color: var(--success); }
+
+.admin .beslutsrad,
+.admin .avvisa-rad {
+  display: flex;
+  gap: var(--sp-3);
+  align-items: center;
+  flex-wrap: wrap;
+  margin-top: var(--sp-4);
+}
+
+.admin input[type="text"],
+.admin input[type="number"] {
+  font-family: var(--font-sans);
+  font-size: 14px;
+  color: var(--fg);
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  padding: var(--sp-2) var(--sp-3);
+}
+.admin input[type="text"]:focus,
+.admin input[type="number"]:focus { outline: 2px solid var(--ring); outline-offset: 1px; }
+.admin input[type="checkbox"] { accent-color: var(--accent); }
+.admin .avvisa-rad input[type="text"] { flex: 1; min-width: 220px; }
+
+/* Policy-editorn — en form per modul. */
+.admin .policy-modul { border-top: 1px solid var(--divider); padding: var(--sp-5) 0; }
+.admin .policy-modul:first-of-type { border-top: none; padding-top: 0; }
+.admin .policy-namn { font-family: var(--font-serif); font-size: 19px; margin: 0 0 var(--sp-3); }
+.admin .policy-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: var(--sp-3) var(--sp-5);
+  margin-bottom: var(--sp-3);
+}
+.admin .policy-falt label {
+  display: block;
+  font-size: 11px;
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
+  color: var(--fg-subtle);
+  margin-bottom: var(--sp-1);
+}
+.admin .policy-falt input[type="number"] { width: 100%; }
+.admin .check-val { display: flex; align-items: center; gap: var(--sp-2); font-size: 13px; }
+.admin .kind-rad { display: flex; gap: var(--sp-2) var(--sp-4); flex-wrap: wrap; margin: var(--sp-2) 0 var(--sp-3); }
+.admin .kind-not { font-size: 12px; color: var(--fg-subtle); }
+.admin .sparat { font-size: 13px; color: var(--success); }
+
+/* Agentnycklar */
+.admin .nyckel-klartext {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  background: var(--bg-sunken);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  padding: var(--sp-2) var(--sp-3);
+  margin-top: var(--sp-2);
+  word-break: break-all;
+  user-select: all;
+}
+.admin .nyckel-skapa {
+  display: flex;
+  gap: var(--sp-2);
+  align-items: center;
+  flex-wrap: wrap;
+  margin-bottom: var(--sp-4);
+}
+.admin .nyckel-skapa input[type="text"] { min-width: 260px; }
