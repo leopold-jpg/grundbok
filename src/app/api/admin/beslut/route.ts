@@ -1,46 +1,55 @@
 import { NextResponse } from "next/server";
 import { getDb } from "@/lib/db/client";
 import { decideProposal } from "@/lib/decisions";
+import { kravKonsult, kravTenantIByra } from "@/auth/session";
 
 export const runtime = "nodejs";
 
-// POST /api/admin/beslut — det mänskliga beslutet på ett köat förslag.
-// Hash-bindningen och avvisnings-motiveringen upprätthålls av
-// decideProposal; routen översätter bara fel till 422 { fel }.
+// WP11: attest kräver verifierad identitet — decided_by är den inloggade
+// konsultens user-id, aldrig en sträng ur requesten. Hash-bindningen och
+// avvisnings-motiveringen upprätthålls av decideProposal. (Kön flyttar
+// till /byra i WP13; identitetsgaten gäller redan nu.)
 export async function POST(req: Request) {
+  const db = await getDb();
+  const krav = await kravKonsult(db, req);
+  if ("http" in krav) return NextResponse.json({ fel: krav.fel }, { status: krav.http });
+
   const body = (await req.json().catch(() => null)) as {
     tenant_id?: unknown;
     proposal_id?: unknown;
     outcome?: unknown;
-    decided_by?: unknown;
     reason?: unknown;
   } | null;
   if (!body) return NextResponse.json({ fel: "ogiltig JSON" }, { status: 400 });
 
-  const { tenant_id, proposal_id, outcome, decided_by, reason } = body;
+  const { tenant_id, proposal_id, outcome, reason } = body;
   if (
     typeof tenant_id !== "string" ||
     typeof proposal_id !== "string" ||
-    typeof decided_by !== "string" ||
     !tenant_id ||
     !proposal_id ||
-    !decided_by ||
     (outcome !== "approved" && outcome !== "rejected") ||
     (reason !== undefined && typeof reason !== "string")
   ) {
     return NextResponse.json(
-      { fel: "tenant_id, proposal_id, decided_by och outcome ('approved'|'rejected') krävs" },
+      { fel: "tenant_id, proposal_id och outcome ('approved'|'rejected') krävs" },
       { status: 400 },
     );
   }
 
+  if (!(await kravTenantIByra(db, krav.session, tenant_id))) {
+    return NextResponse.json(
+      { fel: "klientbolaget tillhör inte din byrå" },
+      { status: 403 },
+    );
+  }
+
   try {
-    const db = await getDb();
     const resultat = await decideProposal(db, {
       tenantId: tenant_id,
       proposalId: proposal_id,
       outcome,
-      decidedBy: decided_by,
+      decidedBy: krav.session.user.id,
       reason,
     });
     return NextResponse.json(resultat);

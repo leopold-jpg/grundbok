@@ -1,6 +1,7 @@
 import { PGlite } from "@electric-sql/pglite";
 import { mkdirSync, readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
+import { hashLosenord } from "@/auth/pglite-auth";
 
 // PGlite = riktig Postgres in-process (WASM). Demon kör den mot .data/
 // (gitignorerad); testerna skapar in-memory-instanser via createDb().
@@ -21,6 +22,43 @@ export async function migrate(db: PGlite): Promise<void> {
   await db.exec(sqlFile("rls.sql"));
   await db.exec(sqlFile("triggers.sql"));
   await seed(db);
+  await seedAuth(db);
+}
+
+/** WP11: dev-seed för auth — idempotent. En byrå (Byrån Exempel AB) som
+ *  förvaltar kund_a/kund_b, två konsulter och en operator (Leopold).
+ *  Alla dev-konton använder lösenordet "grundbok-dev" — lokal auth byts
+ *  mot Supabase Auth vid deploy (S4) bakom samma AuthAdapter. */
+async function seedAuth(db: PGlite): Promise<void> {
+  const byra = await db.query<{ id: string }>(
+    `INSERT INTO byraer (namn) VALUES ('Byrån Exempel AB')
+     ON CONFLICT (namn) DO UPDATE SET namn = EXCLUDED.namn
+     RETURNING id`,
+  );
+  const byraId = byra.rows[0].id;
+  await db.query(`UPDATE tenants SET byra_id = $1 WHERE byra_id IS NULL`, [byraId]);
+
+  const anvandare: { email: string; name: string; operator: boolean; konsult: boolean }[] = [
+    { email: "leopold@otiva.se", name: "Leopold Seifert", operator: true, konsult: false },
+    { email: "konsult.ett@byran-exempel.se", name: "Konsult Ett Exempel", operator: false, konsult: true },
+    { email: "konsult.tva@byran-exempel.se", name: "Konsult Två Exempel", operator: false, konsult: true },
+  ];
+  for (const u of anvandare) {
+    const rad = await db.query<{ id: string }>(
+      `INSERT INTO users (email, name, password_hash, is_operator)
+       VALUES ($1, $2, $3, $4)
+       ON CONFLICT (email) DO UPDATE SET email = EXCLUDED.email
+       RETURNING id`,
+      [u.email, u.name, hashLosenord("grundbok-dev"), u.operator],
+    );
+    if (u.konsult) {
+      await db.query(
+        `INSERT INTO memberships (user_id, byra_id, role) VALUES ($1, $2, 'konsult')
+         ON CONFLICT (user_id, byra_id) DO NOTHING`,
+        [rad.rows[0].id, byraId],
+      );
+    }
+  }
 }
 
 async function seed(db: PGlite): Promise<void> {
