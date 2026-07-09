@@ -50,6 +50,11 @@ async function post<T>(url: string, body: unknown, metod = "POST"): Promise<T> {
     headers: { "content-type": "application/json" },
     body: JSON.stringify(body),
   });
+  if (r.status === 401) {
+    // Utgången session mitt i driften: tillbaka till inloggningen.
+    window.location.href = "/login?next=/operator";
+    throw new Error("sessionen har gått ut — du skickas till inloggningen");
+  }
   const data = await r.json();
   if (!r.ok) {
     const fel = (data as { fel?: string | string[] }).fel;

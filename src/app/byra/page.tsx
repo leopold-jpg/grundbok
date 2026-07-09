@@ -142,6 +142,12 @@ async function post<T>(url: string, body: unknown): Promise<T> {
     headers: { "content-type": "application/json" },
     body: JSON.stringify(body),
   });
+  if (r.status === 401) {
+    // Utloggad mitt i arbetet (t.ex. utgången session under en attest):
+    // tillbaka till inloggningen i stället för ett fel i marginalen.
+    window.location.href = "/login?next=/byra";
+    throw new Error("sessionen har gått ut — du skickas till inloggningen");
+  }
   const data = await r.json();
   if (!r.ok) {
     const fel = (data as { fel?: string | string[] }).fel;
@@ -1121,7 +1127,12 @@ function KlientSektion({
             append-only — fel rättas med rättelsepost, aldrig genom ändring (BFL 5:5)
           </span>
         </div>
-        {verifikationer.length === 0 && <p className="tyst">Inga verifikationer ännu.</p>}
+        {verifikationer.length === 0 && (
+          <p className="tyst">
+            Inga verifikationer ännu för {klient.namn} — ta in det första underlaget
+            under fliken Underlag in, eller vänta in att något attesteras.
+          </p>
+        )}
         {verifikationer.map((v) => (
           <div key={v.id} className="verifikation">
             <div className="huvud">

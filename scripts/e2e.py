@@ -394,6 +394,18 @@ kontroll("loggen: attesten bär konsultens namn (verifierad identitet)",
 kontroll("loggen: OpenClaw-körningen särskiljd",
          any(l.get("agent_runtime") == "openclaw@0.1-e2e" for l in logg))
 
+# ================================== 7. utloggad mitt i attest ====
+
+tva = logga_in("konsult.tva@byran-exempel.se")
+st, _, _ = anropa("POST", "/api/auth/logout", {}, cookie=tva)
+kontroll("logout dödar sessionen server-side", st == 200)
+st, svar, _ = anropa("POST", "/api/beslut", {
+    "tenant_id": "kund_a", "proposal_id": f_juli["proposal_id"], "beslut": "godkand",
+}, cookie=tva)
+kontroll("utloggad mitt i attest: död cookie → 401", st == 401, str(svar))
+st, svar, _ = anropa("GET", "/api/byra/ko?klient=alla", cookie=tva)
+kontroll("död cookie i kön → 401", st == 401, str(svar))
+
 # Sammanfattning
 ok = sum(1 for _, g, _ in resultat if g)
 print(f"\n{ok}/{len(resultat)} kontroller gröna (motor: {motor})")

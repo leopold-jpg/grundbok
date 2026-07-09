@@ -143,6 +143,7 @@
   background: var(--bg-elev);
   padding: var(--sp-4);
   margin-bottom: var(--sp-3);
+  overflow-x: auto; /* kontoraderna får skrolla i telefon, inte spränga kortet */
 }
 .byra .verifikation .huvud { display: flex; align-items: baseline; gap: var(--sp-3); flex-wrap: wrap; }
 .byra .verifikation .nr { font-family: var(--font-serif); font-size: 18px; }
