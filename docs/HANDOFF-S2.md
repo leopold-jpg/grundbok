@@ -1,116 +1,80 @@
-# HANDOFF — S2 (ytor + auth), avbruten efter WP11
+# S2 KLAR
 
-*Skriven 2026-07-09 när sessionens kontext tog slut. Nästa session: läs denna,
-KICKOFF-YTOR.md och docs/GRUNDBOK-MASTERPLAN.md — fortsätt från WP12.*
+*Skriven 2026-07-09 vid passets slut. Hela S2 (WP11–WP15) plus demo/dokumentation
+och polering är genomförd, verifierad och pushad. PR #2 är öppen mot main —
+INTE mergad (enligt instruktion).*
 
-## Exakt läge
+## Läget
 
-Branch **`ytor`** (från main, PR #1 mergad). Commits i ordning:
+Branch **`ytor`**, PR **#2**: *v0.3: ytor — auth, publik sajt, byråns arbetsyta,
+operatörskonsol* (github.com/leopold-jpg/grundbok/pull/2).
 
-1. `ci:` — GitHub Actions (npm test + npm run build på varje PR mot main,
-   bygget med GRUNDBOK_FORCE_FALLBACK=1). Committad FÖRST per instruktion.
-2. `docs:` — masterplanen till docs/, KICKOFF-YTOR.md incheckad.
-3. `WP11:` — **komplett, inte partiell** (ingen "del 1" behövdes):
-   **103/103 tester, produktionsbygget grönt** vid avlämning.
+**Verifiering vid avlämning:**
+- `npm test` — **116/116** gröna (kontrakt, beslutsmotor, RLS/append-only, auth,
+  leads, byra, operator, ytor-smoke + hela v0.2-sviten)
+- `npm run build` — grönt (med `GRUNDBOK_FORCE_FALLBACK=1`, samma som CI)
+- `python3 scripts/e2e.py` mot färsk dev-databas — **54/54** gröna,
+  motor: **anthropic** (live-AI-vägen verifierad)
 
-### WP11 — klart i sin helhet
+## Commits i passet (efter WP11/handoff från förra sessionen)
 
-- **Schema (additivt i src/lib/db — undantag avstämt med Leopold):**
-  `byraer` (byrå-nivå ÖVER tenants), `tenants.byra_id`, `users` (scrypt),
-  `memberships` (konsult per byrå), `sessions` (sha256-hashade tokens, 12 h).
-  Auth-tabellerna är service-vägens plan: inga app-grants, ingen RLS —
-  byrå-scopningen upprätthålls i src/auth/ och ska smoke-testas i WP15.
-- **src/auth/**: `adapter.ts` (AuthAdapter-interface — Supabase-bytet vid
-  deploy är en adapterswap, samma mönster som Ko), `pglite-auth.ts`
-  (login/logout/session), `session.ts` (kravKonsult, kravOperator,
-  tenantsForSession, kravTenantIByra = byrå-vakten, SESSION_COOKIE).
-- **middleware.ts** (repo-rot): /byra/* och /operator/* utan cookie →
-  /login. OBS: edge kan inte nå PGlite — middlewaren kollar BARA att
-  cookien finns; riktig verifiering sker server-side i varje route.
-- **/login** + /api/auth/{login,logout,session}.
-- **decided_by = user-id:** /api/beslut, /api/admin/beslut och
-  /api/rattelse kräver konsult-session, tar identiteten ur sessionen och
-  vaktar tenant-mot-byrå. **Avsiktlig konsekvens:** gamla demo-UI:t
-  (page.tsx) och v0-admin kan inte längre attestera — de ersätts i
-  WP12/WP13. scripts/e2e.py är därför RÖD tills WP15 skriver om den med
-  login-flöde (unit-sviten är grön; e2e körs mot dev-server).
-- **Dev-seed** (idempotent i client.ts): Byrån Exempel AB förvaltar
-  kund_a + kund_b; konsult.ett@/konsult.tva@byran-exempel.se
-  ("Konsult Ett/Två Exempel" — avstämt fiktiva); operator Leopold Seifert
-  <leopold@otiva.se>. Alla dev-lösenord: `grundbok-dev`.
+1. `docs:` kundappen som fjärde yta + S3 utökad (nya masterplanen → docs/)
+2. `WP12:` publik sajt — hero, attestkö-mock, moduler (kundappen som kommande),
+   kontaktbox → `leads`
+3. `WP13:` byråns arbetsyta — attestkö/intag/chatt/beslutslogg/klientvy +
+   **fix: middleware.ts flyttad till src/** (i repo-roten ignorerades den tyst
+   av Next pga src/-katalogen — redirecten utan cookie fungerade aldrig förrän nu)
+4. `WP14:` operatörskonsolen — policy_mallar, aggregat-översikt, rotation som
+   ETT flöde, hälsa; v0-admin riven (/admin → redirect /operator; gamla
+   demo-API:erna tolka/forslag/verifikationer/radgivning/exempel/status/
+   demo-tamper/tenants/admin-* borttagna)
+5. `WP15:` gräns-smoke (tests/ytor-smoke.test.ts med en andra byrå) + e2e
+   omskriven med login-flöde → **PR #2 öppnad här**
+6. `docs:` DEMO.md = Mats-demon (exakta klick + curl med verifierade
+   statuskoder 422/403/401), README med fyra ytor + arkitekturbild i text,
+   ADR-0003 → accepted
+7. `polering:` 401 mitt i flöde → /login?next=…, mobiloverflow på
+   verifikationskort, vänligare tomma tillstånd, e2e-smoke för
+   utloggad-mitt-i-attest
 
-### Kända fel / granskningspunkter
+## Designbeslut som gäller (bekräftade i kod)
 
-- `src/app/api/admin/beslut/route.ts` skrevs om via skript efter ett
-  Write-verktygsfel ("File has not been read yet"). Omskrivningen är
-  test- och byggverifierad, men ögna filen i nästa session.
-- `next-env.d.ts` får en autogenererad diff av Next vid dev-körning —
-  harmlös, incheckad i handoff-commiten för rent träd.
-- Två parallella agenter startades för WP12 (publik sajt) och WP14
-  (operatörskonsolen) i worktrees under `.claude/worktrees/` (gitignorerade,
-  syns via `git worktree list`). **Båda dog** (API-avbrott resp. stall)
-  — deras eventuella delarbete är OINTEGRERAT och OCOMMITTAT. Granska
-  eller släng worktrees; utgå från spec-texterna nedan i stället.
+1. **Kärnan fryst** — src/lib + src/contracts orörda hela passet (enda
+   undantag, avstämt: additiv DDL i src/lib/db/schema.sql för leads +
+   policy_mallar). All ytlogik bor i **src/ytor/** (leads/byra/operator).
+2. **Attest bor hos byrån, drift hos operatören.** Operatörens vyer är
+   aggregat — bolagsoversikt() läser aldrig proposals.payload; smoke-testat
+   både i enhetstest och e2e ("Kaffebönor" får inte förekomma i svaret).
+3. **Attest-språk** i /byra ("att attestera", "attesterad", "policybeslut"),
+   aldrig "proposals". Policy-trösklarna formuleras "bokför själv upp till
+   X kr för kända motparter" och mappar rakt på kärnans fält; bocken styr
+   journal_entry/advisory_answer i tillatna_kinds. Correction auto-godkänns
+   aldrig (hård regel i motorn, orörd).
+4. **CSS-scoping per yta**: publik.css/.publik, byra.css/.byra,
+   operator.css/.operator; globals.css fryst. Gesso/studio bär allt.
+5. **decided_by = user-id ur sessionen** överallt; beslutsloggen slår upp
+   namnet, policy-beslut märks separat. provisioned_by = operator:<user-id>.
+6. **Upphovsman är Leopold Seifert** — inga påhittade namn/uppgifter;
+   exempeldata i Exempel-stilen.
 
-## Designbeslut nästa session MÅSTE respektera
+## Kända noteringar (inga blockerare)
 
-1. **Kärnan fryst:** src/lib + src/contracts ändras inte. Enda undantag
-   (avstämt): additiva tillägg i src/lib/db/ (schema/rls/seed). Ny ytlogik
-   läggs i **src/ytor/** (ny yta), inte i src/lib.
-2. **CSS-scoping:** globals.css är fryst. Varje yta får egen scopad fil
-   enligt admin.css-mönstret: publik.css/`.publik`, byra.css/`.byra`,
-   operator.css/`.operator`. Studio-skinnet (DESIGN.md, tokens) bär allt.
-3. **Upphovsman är Leopold Seifert** — hitta aldrig på namn, siffror,
-   citat eller påståenden. Fiktiva exempel i repots Exempel-stil är OK
-   (avstämt). LICENSE rättades på main efter ett tidigare namnfel.
-4. Schema-DDL från delpaket: append-only i schema.sql med tydlig
-   WP-kommentar; nya tabeller för auth/leads/mallar är service-vägens
-   plan (inga app-grants) om de inte är tenant-data.
-5. Attest-språk i byråns UI ("att attestera", "attesterad"), aldrig
-   "proposals". Operatören ser ALDRIG förslags-innehåll — bara aggregat
-   (masterplanens regel: attest bor hos byrån, drift hos operatören).
+- Byggvarningen "Encountered unexpected file in NFT list" är befintlig sedan
+  S1 (skills.ts läser rules.json från disk) — bygget är grönt, inget nytt.
+- scripts/e2e.py förutsätter FÄRSK dev-databas (`rm -rf .data`), står i
+  skriptets docstring och i DEMO.md:s pre-flight. Andra körningen mot samma
+  databas blir röd med flit (policyn är då öppnad → auto-bokföring).
+- Dev-servern måste startas om efter schemaändringar (PGlite migrerar vid
+  uppstart, singleton-cache).
+- ADR-0003 bär "Deciders: Leopold, Love" ur originalfilen — orörd.
 
-## Återstående paket (spec i KICKOFF-YTOR.md)
+## Nästa steg (utanför S2 — starta ny session mot masterplanen)
 
-- **WP12 — publik sajt (/):** ersätt page.tsx (demoflödet flyttar till
-  /byra, gamla finns i git-historiken). Hero/så-funkar-det med statisk
-  attestkö-mock (exakta belopp ur src/lib/exempel.ts), moduler ärligt
-  märkta, kontaktbox → ny tabell `leads` (service-väg, DDL append) via
-  src/ytor/leads.ts + POST /api/leads, sidfot (GitHub-länk + AI Act-
-  mening + /login-länk). Mobil först.
-- **WP13 — byråns arbetsyta (/byra):** planerad arkitektur (opåbörjad,
-  inga filer skrivna): src/ytor/byra.ts (attestKo per tenant/'alla' via
-  src/lib/admin.ts-hjälparna, beslutsLogg med namn-uppslag av decided_by
-  mot users, klientVy) + /api/byra/* (klienter, ko, intag/tolka,
-  intag/forslag, chatt, logg, klient/verifikationer, klient/agenter
-  läsvy, klient/policy trösklar) — ALLA med kravKonsult + kravTenantIByra.
-  UI: klientväljare (+ "alla klienter" för kö/logg), attestkön (flytta
-  admin-JSX:en, byt språk), underlag-intag (gamla page.tsx-flödet inkl.
-  datumväxlarknapparna), chatten (svaraPaFraga, historik i
-  sessionStorage per user räcker), beslutslogg, klientvy (verifikationer
-  + rättelse, agenter läsvy, policy: "bokför själv upp till X kr för
-  kända motparter"). Befintliga /api/beslut och /api/rattelse (WP11-
-  gatade) återanvänds för attest/rättelse.
-- **WP14 — operatörskonsolen (/operator):** ny tabell policy_mallar
-  (DDL append + seed av "Bygg — försiktig"/"Restaurang — standard" i
-  schema.sql), src/ytor/operator.ts (bolagsoversikt = AGGREGAT, mallar-
-  CRUD, halsa via agent_jobs, provisioneraMedMall → provisionAgent),
-  /api/operator/* med kravOperator, OCH operator-gata befintliga
-  /api/agents + /api/agents/[id]. UI: bolag → agenter (provisionera med
-  mallval, nyckel visas en gång, rotation som ETT flöde), mallar, hälsa.
-  Därefter rivning: /admin → redirect /operator; gamla demo-API:er
-  (/api/tolka, /api/forslag, /api/verifikationer, /api/radgivning,
-  /api/exempel, /api/status, /api/demo/tamper) och /api/admin/* rivs när
-  /byra tagit över (kön/loggen bor då i /byra).
-- **WP15 — gräns-smoke:** byrå A ser aldrig byrå B (URL-manipulation),
-  operator nekas förslags-INNEHÅLL, oinloggad → redirect (publik +
-  /api/proposals med nyckel opåverkade), decided_by alltid riktigt
-  user-id (attest utan session omöjlig). Skriv också om **scripts/e2e.py**
-  (bevarad hit från sessionens scratchpad) mot de nya ytorna med
-  login-flöde, och kör den mot dev-servern innan push.
-
-## Regler för resten av S2 (oförändrade)
-
-Committa per paket, npm test grönt mellan varje, pusha när allt är grönt,
-öppna PR mot main, **merga inte**. Stanna och fråga Leopold om något i
-kärnan verkar behöva röras.
+- **Granska + merga PR #2** (CI kör test + build på PR:en).
+- **S3 — intag + kundkanal**: /api/intake, mejladress per klient, kundappen
+  (PWA). TODO-markörer finns där intaget kopplas in
+  (src/app/api/byra/intag/tolka/route.ts).
+- **S4 — deploy**: Supabase Auth bakom befintliga AuthAdapter-interfacet,
+  pgmq bakom Ko-interfacet, Vercel.
+- **S5 — mallar + Stripe**: policy_mallar är byggda som grunden;
+  provisionAgent är Stripe-förberedd (provisioned_by bär källan).
