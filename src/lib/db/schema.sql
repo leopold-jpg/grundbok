@@ -205,3 +205,15 @@ CREATE TABLE IF NOT EXISTS sessions (
   created_at timestamptz NOT NULL DEFAULT now(),
   expires_at timestamptz NOT NULL
 );
+
+-- Publika sajtens kontaktbox (WP12, KICKOFF-YTOR). Leads är operatörens
+-- data — aldrig tenant-data: service-vägens plan, inga app-grants, ingen
+-- RLS (samma princip som auth-tabellerna ovan). Ingen mejlintegration nu.
+CREATE TABLE IF NOT EXISTS leads (
+  id         uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  namn       text NOT NULL,
+  byra       text NOT NULL,
+  email      text NOT NULL,
+  meddelande text,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
