@@ -10,7 +10,8 @@
     "build": "next build",
     "start": "next start -p 3456",
     "test": "node --import tsx --test tests/*.test.ts",
-    "test:fallback": "GRUNDBOK_FORCE_FALLBACK=1 node --import tsx --test tests/fallback.test.ts"
+    "test:fallback": "GRUNDBOK_FORCE_FALLBACK=1 node --import tsx --test tests/fallback.test.ts",
+    "worker": "tsx src/workers/cron.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.110.0",

@@ -30,8 +30,12 @@ type Rad = { konto: string; kontonamn: string; debet_ore: number; kredit_ore: nu
 type Flagga = { id: string; niva: string; text: string };
 
 type ForslagSvar = {
-  suggestion_id: string;
+  proposal_id: string;
+  status: "pending" | "auto_approved";
   hash: string;
+  confidence: number;
+  missade_villkor: string[];
+  verifikation: { id: string; nummer: number; extern_ref: string } | null;
   forslag: {
     rader: Rad[];
     affarshandelsedatum: string;
@@ -145,9 +149,15 @@ export default function Sida() {
         document_id: t.document_id,
         extraktion: t.extraktion,
         engine: t.motor,
+        engine_detalj: t.motor_detalj,
         affarshandelsedatum: nyttDatum,
       });
       setForslag(f);
+      if (f.status === "auto_approved" && f.verifikation) {
+        // Autonomipolicyn godkände — beslutet är policyns, loggat i beslutsmotorn.
+        setBokford({ status: "bokford", verifikation: f.verifikation });
+        await laddaHuvudbok(tenant);
+      }
     } catch (e) {
       setForslag(null);
       setFel(e instanceof Error ? e.message : String(e));
@@ -158,14 +168,22 @@ export default function Sida() {
 
   async function fattaBeslut(beslut: "godkand" | "avvisad") {
     if (!forslag) return;
+    let reason: string | undefined;
+    if (beslut === "avvisad") {
+      // Beslutsmotorn kräver motivering vid avvisning — den blir del av
+      // det append-only-beslutet.
+      reason = window.prompt("Motivering för avvisningen (obligatorisk):") ?? undefined;
+      if (!reason?.trim()) return;
+    }
     setBeslutar(true);
     setFel("");
     try {
       const r = await post<Bokford>("/api/beslut", {
         tenant_id: tenant,
-        suggestion_id: forslag.suggestion_id,
+        proposal_id: forslag.proposal_id,
         beslut,
         godkand_av: "konsult@byran.se",
+        reason,
       });
       setBokford(r);
       await laddaHuvudbok(tenant);
@@ -198,6 +216,7 @@ export default function Sida() {
           grund<em>bok</em>
         </div>
         <div className="topbar-meta">
+          <a href="/admin" className="badge" style={{ textDecoration: "none" }}>adminkonsol →</a>
           <span className={`badge ${motorBadge === "anthropic" ? "live" : "mock"}`}>
             <span className="dot" />
             {motorBadge === "anthropic" ? `live-AI · ${status?.modell}` : "mock-läge (deterministisk fallback)"}
@@ -361,9 +380,17 @@ export default function Sida() {
                 <span key={skill} className="chip">{skill}@{version}</span>
               ))}
               <span className="chip">hash {forslag.hash.slice(0, 12)}…</span>
+              <span className="chip">konfidens {forslag.confidence.toFixed(2)}</span>
+              <span className="chip">{forslag.status === "auto_approved" ? "auto-godkänd av policy" : "i godkännandekön"}</span>
             </div>
 
-            {!bokford && (
+            {forslag.status === "pending" && forslag.missade_villkor.length > 0 && (
+              <p className="tyst" style={{ marginTop: "var(--sp-2)" }}>
+                Utanför autonomipolicyn: {forslag.missade_villkor.join(" · ")}
+              </p>
+            )}
+
+            {!bokford && forslag.status === "pending" && (
               <div style={{ display: "flex", gap: "var(--sp-3)", alignItems: "center", marginTop: "var(--sp-5)", flexWrap: "wrap" }}>
                 <button className="godkann" onClick={() => fattaBeslut("godkand")} disabled={beslutar || konterar}>
                   {beslutar ? "Bokför …" : "Godkänn och bokför"}

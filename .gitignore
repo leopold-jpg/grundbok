@@ -6,3 +6,6 @@ node_modules/
 !.env.example
 *.log
 .DS_Store
+
+# Claude Code-arbetsyta (agent-worktrees m.m.)
+.claude/
