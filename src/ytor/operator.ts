@@ -1,6 +1,8 @@
+import { randomBytes } from "node:crypto";
 import type { PGlite } from "@electric-sql/pglite";
-import type { ModuleId, ProposalKind } from "@/contracts";
-import { provisionAgent, avslutaAgent, type ProvisioneradAgent } from "@/lib/provisioning";
+import { sha256Hex, type ModuleId, type ProposalKind } from "@/contracts";
+import { provisionAgent, type ProvisioneradAgent } from "@/lib/provisioning";
+import { auditera } from "@/lib/ledger";
 import { PgliteKo } from "@/lib/queue";
 import type { Scope } from "@/lib/decisions";
 
@@ -174,40 +176,75 @@ export async function provisioneraMedMall(
 }
 
 /** Nyckelrotation som ETT flöde: ny agent med samma konfiguration skapas
- *  och den gamla avslutas i samma anrop — det finns inget mellanläge där
- *  båda saknas. Klartextnyckeln returneras EN gång. */
+ *  och den gamla avslutas i EN databastransaktion — misslyckas något
+ *  rullas allt tillbaka och varken ny agent eller nyckel finns (Bugbot
+ *  PR #2, hög). provisionAgent/avslutaAgent kan inte återanvändas här:
+ *  de öppnar egna withTenant-transaktioner (nästlad transaktion), så
+ *  stegen görs inline med samma SQL och audit-händelser som kärnans
+ *  agent-auth.ts. Klartextnyckeln returneras EN gång. */
 export async function roteraNyckel(
   db: PGlite,
   tenantId: string,
   agentId: string,
   provisionedBy: string,
 ): Promise<ProvisioneradAgent & { ersatte: string }> {
-  const gammal = await db.query<{
-    module: ModuleId;
-    display_name: string;
-    scopes: Scope[];
-    status: string;
-  }>(
-    `SELECT module, display_name, scopes, status FROM agents
-     WHERE id = $1 AND tenant_id = $2`,
-    [agentId, tenantId],
-  );
-  const a = gammal.rows[0];
-  if (!a) throw new Error("agenten finns inte");
-  if (a.status === "canceled") throw new Error("agenten är redan avslutad");
+  // Samma prefix som agent-auth.ts (NYCKELPREFIX är modulprivat i kärnan).
+  const nyckel = "gk_" + randomBytes(24).toString("base64url");
 
-  const ny = await provisionAgent(
-    db,
-    {
-      tenantId,
+  const nyttId = await db.transaction(async (tx) => {
+    const gammal = await tx.query<{
+      module: ModuleId;
+      display_name: string;
+      scopes: Scope[];
+      status: string;
+      policy_id: string | null;
+      max_concurrency: number;
+    }>(
+      `SELECT module, display_name, scopes, status, policy_id, max_concurrency
+       FROM agents WHERE id = $1 AND tenant_id = $2 FOR UPDATE`,
+      [agentId, tenantId],
+    );
+    const a = gammal.rows[0];
+    if (!a) throw new Error("agenten finns inte");
+    if (a.status === "canceled") throw new Error("agenten är redan avslutad");
+
+    const ny = await tx.query<{ id: string }>(
+      `INSERT INTO agents
+         (tenant_id, module, display_name, key_hash, scopes, policy_id, max_concurrency, provisioned_by)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id`,
+      [
+        tenantId,
+        a.module,
+        a.display_name,
+        sha256Hex(nyckel),
+        a.scopes,
+        a.policy_id,
+        a.max_concurrency,
+        provisionedBy,
+      ],
+    );
+    const id = ny.rows[0].id;
+
+    await tx.query(
+      `UPDATE agents SET status = 'canceled', revoked_at = now()
+       WHERE id = $1 AND tenant_id = $2`,
+      [agentId, tenantId],
+    );
+
+    // Samma två händelser som skapaAgentNyckel + sattAgentStatus skriver.
+    await auditera(tx, tenantId, "agent_provisionerad", {
+      agentId: id,
       module: a.module,
-      displayName: a.display_name,
       scopes: a.scopes,
-    },
-    provisionedBy,
-  );
-  await avslutaAgent(db, tenantId, agentId);
-  return { ...ny, ersatte: agentId };
+      displayName: a.display_name,
+      provisionedBy,
+    });
+    await auditera(tx, tenantId, "agent_statusandrad", { agentId, status: "canceled" });
+
+    return id;
+  });
+
+  return { agent_id: nyttId, nyckel, ersatte: agentId };
 }
 
 // --------------------------------------------------------------- hälsa

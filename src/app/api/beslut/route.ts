@@ -2,23 +2,22 @@ import { NextResponse } from "next/server";
 import { getDb } from "@/lib/db/client";
 import { decideProposal } from "@/lib/decisions";
 import { kravKonsult, kravTenantIByra } from "@/auth/session";
+import { valideraBeslutsInput } from "@/ytor/byra";
 
 export const runtime = "nodejs";
 
 // WP11: attest kräver en verifierad identitet — decided_by är den
 // inloggade konsultens user-id, aldrig en sträng ur requesten. Utan
-// session är attest omöjlig (WP15 smoke-testar detta).
+// session är attest omöjlig (WP15 smoke-testar detta). Inputen
+// valideras hårt: ett ogiltigt beslut ger 400, aldrig en avvisning.
 export async function POST(req: Request) {
   const db = await getDb();
   const krav = await kravKonsult(db, req);
   if ("http" in krav) return NextResponse.json({ fel: krav.fel }, { status: krav.http });
 
-  const { tenant_id, proposal_id, beslut, reason } = (await req.json()) as {
-    tenant_id: string;
-    proposal_id: string;
-    beslut: "godkand" | "avvisad";
-    reason?: string;
-  };
+  const input = valideraBeslutsInput(await req.json().catch(() => null));
+  if ("fel" in input) return NextResponse.json({ fel: input.fel }, { status: 400 });
+  const { tenant_id, proposal_id, beslut, reason } = input;
 
   if (!(await kravTenantIByra(db, krav.session, tenant_id))) {
     return NextResponse.json(

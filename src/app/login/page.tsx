@@ -2,6 +2,7 @@
 
 import { Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { sakerNext } from "@/auth/next-param";
 
 // Inloggning för byrå-konsulter och operatören (WP11). Lokal dev-auth —
 // Supabase Auth tar över bakom samma AuthAdapter vid deploy (S4).
@@ -26,8 +27,9 @@ function LoginForm() {
       });
       const data = await r.json();
       if (!r.ok) throw new Error(data.fel ?? `HTTP ${r.status}`);
-      const next = params.get("next");
-      router.push(next && next.startsWith("/") ? next : data.operator ? "/operator" : "/byra");
+      // Endast interna paths följs (open redirect, Bugbot PR #2).
+      const next = sakerNext(params.get("next"));
+      router.push(next ?? (data.operator ? "/operator" : "/byra"));
     } catch (err) {
       setFel(err instanceof Error ? err.message : String(err));
       setLoggarIn(false);

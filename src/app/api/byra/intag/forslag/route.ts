@@ -5,6 +5,7 @@ import { ExtraktionSchema } from "@/lib/extract/schema";
 import { byggBokforingsProposal } from "@/lib/bokforing-modul";
 import { handleProposal, type Principal } from "@/lib/decisions";
 import { kravKonsult, kravTenantIByra } from "@/auth/session";
+import { dokumentHorTillKlient } from "@/ytor/byra";
 
 export const runtime = "nodejs";
 
@@ -29,6 +30,11 @@ export async function POST(req: Request) {
   }
   if (!(await kravTenantIByra(db, krav.session, body.tenant_id))) {
     return NextResponse.json({ fel: "klientbolaget tillhör inte din byrå" }, { status: 403 });
+  }
+  // Bugbot PR #2: underlaget måste höra till klienten — annars kan
+  // förslagets provenance peka på en annan klients dokument.
+  if (!(await dokumentHorTillKlient(db, body.tenant_id, body.document_id))) {
+    return NextResponse.json({ fel: "underlaget hör inte till klienten" }, { status: 400 });
   }
 
   const parsed = ExtraktionSchema.safeParse(body.extraktion);

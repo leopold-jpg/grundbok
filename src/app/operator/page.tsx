@@ -44,6 +44,18 @@ type Halsa = { ko_djup: number; senaste_korning: string | null; omforsok_24h: nu
 const tid = (iso: string) =>
   new Date(iso).toLocaleString("sv-SE", { dateStyle: "short", timeStyle: "short" });
 
+// Bakgrundshämtningar: utgången session → inloggningen, inte tyst
+// gammal data (samma mönster som /byra, Bugbot PR #2).
+async function hamta<T>(url: string): Promise<T | null> {
+  const r = await fetch(url);
+  if (r.status === 401) {
+    window.location.href = "/login?next=/operator";
+    return null;
+  }
+  if (!r.ok) return null;
+  return (await r.json()) as T;
+}
+
 async function post<T>(url: string, body: unknown, metod = "POST"): Promise<T> {
   const r = await fetch(url, {
     method: metod,
@@ -96,9 +108,8 @@ export default function OperatorSida() {
   }, [router]);
 
   const laddaMallar = useCallback(async () => {
-    const r = await fetch("/api/operator/mallar");
-    if (!r.ok) return;
-    const m = (await r.json()) as PolicyMall[];
+    const m = await hamta<PolicyMall[]>("/api/operator/mallar");
+    if (!m) return;
     setMallar(m);
     setMallFormer((s) => {
       const nya: typeof s = { "": s[""] ?? { namn: "", belopp_kr: "0", konfidens: "1", kanda: true, auto: false } };
@@ -116,13 +127,13 @@ export default function OperatorSida() {
   }, []);
 
   const laddaHalsa = useCallback(async () => {
-    const r = await fetch("/api/operator/halsa");
-    if (r.ok) setHalsa(await r.json());
+    const h = await hamta<Halsa>("/api/operator/halsa");
+    if (h) setHalsa(h);
   }, []);
 
   const laddaAgenter = useCallback(async (tenant: string) => {
-    const r = await fetch(`/api/agents?tenant=${tenant}`);
-    if (r.ok) setAgenter(await r.json());
+    const a = await hamta<AgentVy[]>(`/api/agents?tenant=${tenant}`);
+    if (a) setAgenter(a);
   }, []);
 
   useEffect(() => {

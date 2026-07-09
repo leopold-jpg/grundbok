@@ -59,6 +59,11 @@ export class PgliteAuth implements AuthAdapter {
       byra_namn: string | null;
       role: string | null;
     }>(
+      // LIMIT 1 utan ORDER BY gav icke-deterministisk byrå för användare
+      // med flera memberships (Bugbot PR #2): äldsta membershipet vinner,
+      // byrå-namn som tiebreak om timestamps är identiska.
+      // TODO S3: byråväxlare vid login — konsulten VÄLJER byrå i stället
+      // för att alltid landa i den äldsta.
       `SELECT u.id, u.email, u.name, u.is_operator,
               m.byra_id, b.namn AS byra_namn, m.role
        FROM sessions s
@@ -66,6 +71,7 @@ export class PgliteAuth implements AuthAdapter {
        LEFT JOIN memberships m ON m.user_id = u.id
        LEFT JOIN byraer b ON b.id = m.byra_id
        WHERE s.token_hash = $1 AND s.expires_at > now()
+       ORDER BY m.created_at ASC NULLS LAST, b.namn ASC NULLS LAST
        LIMIT 1`,
       [sha256Hex(token)],
     );

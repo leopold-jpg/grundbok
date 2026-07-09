@@ -225,6 +225,18 @@ kontroll("bygg: facit 4425/2440/2614/2647 + rutor 24/30/48",
          and f_bygg["forslag"]["moms"].get("deklarationsrutor")
          == {"underlag": "24", "utgaende": "30", "ingaende": "48"}, str(brader))
 
+# Bugbot-fixarna: stavfel i beslut → 400 (aldrig avvisning), och en annan
+# klients underlag → 400 (t_bygg-dokumentet hör till kund_b, inte kund_a).
+st, svar, _ = anropa("POST", "/api/beslut", {
+    "tenant_id": "kund_a", "proposal_id": f_mars["proposal_id"], "beslut": "godkänd",
+}, cookie=konsult)
+kontroll("stavfel i beslut → 400, ingen avvisning loggas", st == 400, f"{st} {str(svar)[:120]}")
+st, svar, _ = anropa("POST", "/api/byra/intag/forslag", {
+    "tenant_id": "kund_a", "document_id": t_bygg["document_id"],
+    "extraktion": tolkning["extraktion"], "engine": motor,
+}, cookie=konsult)
+kontroll("annan klients underlag i intaget → 400", st == 400, f"{st} {str(svar)[:120]}")
+
 # Chatten — rådgivning med lagrum
 st, chatt, _ = anropa("POST", "/api/byra/chatt",
                       {"tenant_id": "kund_a", "fraga": "Vilket konto används för ingående moms?"},

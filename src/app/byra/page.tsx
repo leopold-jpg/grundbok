@@ -136,6 +136,20 @@ const kr = (ore: number) =>
 const tid = (iso: string) =>
   new Date(iso).toLocaleString("sv-SE", { dateStyle: "short", timeStyle: "short" });
 
+// Bakgrundshämtningar (kö, logg, klientvy): en utgången session får inte
+// lämna gammal data på skärmen — 401 skickar till inloggningen precis
+// som post() gör (Bugbot PR #2). Övriga fel returnerar null (anroparen
+// behåller/hanterar sitt tillstånd).
+async function hamta<T>(url: string): Promise<T | null> {
+  const r = await fetch(url);
+  if (r.status === 401) {
+    window.location.href = "/login?next=/byra";
+    return null;
+  }
+  if (!r.ok) return null;
+  return (await r.json()) as T;
+}
+
 async function post<T>(url: string, body: unknown): Promise<T> {
   const r = await fetch(url, {
     method: "POST",
@@ -907,13 +921,13 @@ function KlientSektion({
     setFel("");
     try {
       const [v, a, p] = await Promise.all([
-        fetch(`/api/byra/klient/verifikationer?klient=${klient.id}`).then((r) => r.json()),
-        fetch(`/api/byra/klient/agenter?klient=${klient.id}`).then((r) => r.json()),
-        fetch(`/api/byra/klient/policy?klient=${klient.id}`).then((r) => r.json()),
+        hamta<Verifikation[]>(`/api/byra/klient/verifikationer?klient=${klient.id}`),
+        hamta<AgentRad[]>(`/api/byra/klient/agenter?klient=${klient.id}`),
+        hamta<Policy[]>(`/api/byra/klient/policy?klient=${klient.id}`),
       ]);
       setVerifikationer(Array.isArray(v) ? v : []);
       setAgenter(Array.isArray(a) ? a : []);
-      const pol = Array.isArray(p) ? (p as Policy[]) : [];
+      const pol = Array.isArray(p) ? p : [];
       setPolicyer(pol);
       const nya: typeof former = {};
       for (const modul of ["bokforing", "radgivning"]) {
@@ -1189,13 +1203,13 @@ export default function ByraSida() {
   }, [router]);
 
   const laddaKo = useCallback(async (v: string) => {
-    const r = await fetch(`/api/byra/ko?klient=${v}`);
-    if (r.ok) setKo(await r.json());
+    const rader = await hamta<KoRad[]>(`/api/byra/ko?klient=${v}`);
+    if (rader) setKo(rader);
   }, []);
 
   const laddaLogg = useCallback(async (v: string) => {
-    const r = await fetch(`/api/byra/logg?klient=${v}&limit=50`);
-    if (r.ok) setLogg(await r.json());
+    const rader = await hamta<LoggRad[]>(`/api/byra/logg?klient=${v}&limit=50`);
+    if (rader) setLogg(rader);
   }, []);
 
   useEffect(() => {

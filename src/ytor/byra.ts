@@ -1,6 +1,7 @@
 import type { PGlite } from "@electric-sql/pglite";
 import type { Sessionsinfo } from "@/auth/adapter";
 import { tenantsForSession } from "@/auth/session";
+import { withTenant } from "@/lib/db/tenant";
 import { hamtaKo, hamtaBeslutslogg, type KoRad, type LoggRad } from "@/lib/admin";
 
 // Byråns arbetsyta (WP13) — ytlogik ovanpå kärnans läshjälpare. Allt är
@@ -85,6 +86,51 @@ export async function beslutsLogg(
         ? "autonomipolicyn"
         : (namn.get(r.decided_by) ?? r.decided_by),
     };
+  });
+}
+
+// Attest-inputen valideras FÖRE decideProposal (Bugbot PR #2): ett
+// stavfel i beslut ("godkänd") mappade tidigare till avvisning och blev
+// ett permanent felbeslut i den append-only-loggen. Nu: 400 i stället.
+export type BeslutsInput = {
+  tenant_id: string;
+  proposal_id: string;
+  beslut: "godkand" | "avvisad";
+  reason?: string;
+};
+
+export function valideraBeslutsInput(body: unknown): BeslutsInput | { fel: string } {
+  if (typeof body !== "object" || body === null) return { fel: "ogiltig JSON" };
+  const { tenant_id, proposal_id, beslut, reason } = body as Record<string, unknown>;
+  if (typeof tenant_id !== "string" || !tenant_id) return { fel: "tenant_id krävs" };
+  if (typeof proposal_id !== "string" || !proposal_id) return { fel: "proposal_id krävs" };
+  if (beslut !== "godkand" && beslut !== "avvisad") {
+    return { fel: "beslut måste vara 'godkand' eller 'avvisad'" };
+  }
+  if (reason !== undefined && typeof reason !== "string") {
+    return { fel: "motiveringen måste vara text" };
+  }
+  return { tenant_id, proposal_id, beslut, reason };
+}
+
+const DOKUMENT_UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** Hör underlaget till klienten? (Bugbot PR #2: intaget verifierade
+ *  aldrig att document_id tillhörde tenant_id — förslags-provenance
+ *  kunde peka på en annan klients underlag.) Uppslaget går genom
+ *  withTenant, så RLS avgör: en annan tenants dokument är osynligt. */
+export async function dokumentHorTillKlient(
+  db: PGlite,
+  tenantId: string,
+  documentId: string,
+): Promise<boolean> {
+  if (!DOKUMENT_UUID_RE.test(documentId)) return false;
+  return withTenant(db, tenantId, async (tx) => {
+    const r = await tx.query<{ finns: boolean }>(
+      `SELECT EXISTS (SELECT 1 FROM documents WHERE id = $1) AS finns`,
+      [documentId],
+    );
+    return Boolean(r.rows[0]?.finns);
   });
 }
 
