@@ -17,9 +17,24 @@ avvikelser sjunker över tid via policy. Allt spårbart, hash-bundet, AI Act-red
 | **Publik sajt** | Blivande kund | "Framtidens redovisning", produkt-preview, kontaktbox/väntelista | Riktig data |
 | **Byråns arbetsyta** | Byråns konsulter | Attestkö, chatbot (rådgivning + lagfrågor), mejl-intag, deras kunder, deras beslutslogg | Andra byråers data |
 | **Operatörskonsolen** | Leopold/Mats (grundare) | Bolag → agenter → status, provisionering, policys, hälsa, (senare: billing) | Kvitton, attest, kunddata |
+| **Kundappen** | Klientbolaget (byråns kund) | Fota/skicka in kvitton, kvittens & status, kundassistent-chatt, egen mejladress in | Konteringar, attestkön, andra bolag |
 
 Regeln som löser kvällens förvirring: **attest bor hos byrån, drift bor hos
 operatören.** Grundaren godkänner aldrig ett kvitto.
+
+Kundappens affärslogik: **byrån köper systemet — klienten får en
+kommunikationsväg.** Appen säljs aldrig till småbolag direkt; den är en
+förmån byrån ger sina klienter ("fota kvittona i vår app"), vilket gör
+varje vunnen byrå till distribution. Klienten bjuds in av sin byrå och
+ser bara sitt eget bolag. v1 är en PWA (hemskärmsapp utan App Store),
+riktig app senare om byråerna ber om det.
+
+Kundassistenten (chatten i appen) svarar ENDAST om kundens egna underlag
+och status ("har ni fått mitt kvitto?", "vad var fakturan från X i mars?")
+— aldrig redovisnings- eller skatteråd; det är byråns roll och relation.
+Fallback för rådgivningsfrågor: "vill du att jag skickar frågan till din
+revisor?" → ärende i byråns arbetsyta med underlaget länkat. Kundfrågor
+som idag kommer på sms/telefon samlas därmed i byråns kö.
 
 ## Lagren (nerifrån upp)
 
@@ -31,8 +46,10 @@ operatören.** Grundaren godkänner aldrig ett kvitto.
    pgmq-semantik, generisk worker (buildProposal = ren funktion, samma kod
    i moln och OpenClaw), provisionAgent (Stripe-förberedd).
 3. **Moduler** — bokforing ✅, radgivning ✅ (RAG, lagrum, konfidens),
-   loner ⬜ (trappa: rådgivare → kontering → aldrig egen beräkningsmotor,
-   integrera i stället), bokslut ⬜, skatt-juridik ⬜.
+   kundassistent ⬜ (kundappens chatt: egna underlag/status, aldrig råd,
+   eskalering till byrån — återanvänder rådgivningens maskineri med
+   snävare scopes), loner ⬜ (trappa: rådgivare → kontering → aldrig egen
+   beräkningsmotor, integrera i stället), bokslut ⬜, skatt-juridik ⬜.
 4. **Intag** ⬜ — mejladress per byrå (vidarebefordra faktura → förslag),
    foto/upload, chatbot-intag, POST /api/intake för externa botar (OpenClaw
    blir dum kurir: underlag in, inget mer).
@@ -50,7 +67,7 @@ operatören.** Grundaren godkänner aldrig ett kvitto.
 |---|---|---|---|
 | S1 | Modulplattform | Kärna + runtime + 2 moduler (WP0–WP10) | ✅ ikväll, PR #1 |
 | S2 | **Ytor + auth** | WP11–WP15: auth, publik sajt, byråns arbetsyta, bantad operatörskonsol | → KICKOFF-YTOR.md |
-| S3 | Intag | /api/intake, mejl-in (inbound webhook), foto, OpenClaw-skill (10 rader) | efter S2 |
+| S3 | Intag + kundkanal | /api/intake, mejladress per klient (inbound webhook), kundappen (PWA: fota kvitto, kvittens/status, kundassistent-chatt med eskalering till byrån), OpenClaw-skill | efter S2 |
 | S4 | Deploy | Supabase-moln (pgmq-adapter klar), Vercel, domän, env | efter S2/S3 |
 | S5 | Mallar + Stripe | branschpolicys, checkout → webhook → provisionAgent | inför försäljning |
 | S6+ | Moduler | loner steg 1–2, bokslut, skatt-juridik (fler källor på rådgivnings-RAG) | efter pilotfeedback |
