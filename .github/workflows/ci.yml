@@ -1,0 +1,24 @@
+# CI: varje PR mot main måste ha grön testsvit och grönt produktionsbygge.
+# Samma två kommandon som körs lokalt mellan varje arbetspaket.
+name: ci
+
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  test-och-bygg:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 26
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - run: npm run build
+        env:
+          # Bygget ska aldrig bero på nätet eller en riktig nyckel —
+          # tolkningen har en deterministisk fallback (samma schema).
+          GRUNDBOK_FORCE_FALLBACK: "1"
