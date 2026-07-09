@@ -1,0 +1,82 @@
+/* grundbok — operatörskonsolen (WP14). Scopad under .operator enligt
+   samma mönster som byra.css/publik.css. Grundarens vy: drift, aldrig
+   innehåll — här finns inga belopp, motparter eller summaries. */
+
+.operator .wordmark-rad { display: flex; align-items: baseline; gap: var(--sp-3); }
+.operator .undertitel {
+  font-size: 12px;
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
+  color: var(--fg-subtle);
+}
+
+.operator .halsa-rad { display: grid; gap: var(--sp-4); grid-template-columns: 1fr; }
+@media (min-width: 640px) { .operator .halsa-rad { grid-template-columns: 1fr 1fr 1fr; } }
+.operator .halsa-kort {
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--bg-elev);
+  padding: var(--sp-4);
+}
+.operator .halsa-kort .varde { font-family: var(--font-serif); font-size: 28px; }
+.operator .halsa-kort .etikett {
+  font-size: 11px;
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
+  color: var(--fg-subtle);
+}
+
+.operator tr[data-vald="true"] td { background: var(--bg-tint); }
+.operator table.rader tbody tr { cursor: pointer; }
+.operator table.rader tbody tr.ej-klickbar { cursor: default; }
+
+.operator input[type="text"],
+.operator input[type="number"] {
+  font-family: var(--font-sans);
+  font-size: 14px;
+  color: var(--fg);
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  padding: var(--sp-2) var(--sp-3);
+}
+.operator input[type="text"]:focus,
+.operator input[type="number"]:focus { outline: 2px solid var(--ring); outline-offset: 1px; }
+.operator input[type="checkbox"] { accent-color: var(--accent); }
+
+.operator .provisionera-rad {
+  display: flex;
+  gap: var(--sp-2);
+  align-items: center;
+  flex-wrap: wrap;
+  margin-bottom: var(--sp-4);
+}
+.operator .provisionera-rad input[type="text"] { min-width: 240px; }
+
+.operator .nyckel-klartext {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  background: var(--bg-sunken);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  padding: var(--sp-2) var(--sp-3);
+  margin-top: var(--sp-2);
+  word-break: break-all;
+  user-select: all;
+}
+.operator .nyckel-varning { font-size: 13px; color: var(--warning); }
+
+.operator .mall-rad {
+  display: flex;
+  gap: var(--sp-2) var(--sp-3);
+  align-items: center;
+  flex-wrap: wrap;
+  border-top: 1px solid var(--divider);
+  padding: var(--sp-3) 0;
+  font-size: 14px;
+}
+.operator .mall-rad:first-of-type { border-top: none; }
+.operator .mall-namn { font-weight: 500; min-width: 180px; }
+.operator .mall-rad input[type="number"] { width: 100px; }
+.operator .check-val { display: inline-flex; align-items: center; gap: var(--sp-2); font-size: 13px; }
+.operator .sparat { font-size: 13px; color: var(--success); }

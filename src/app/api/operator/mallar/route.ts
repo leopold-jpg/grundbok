@@ -1,27 +1,26 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getDb } from "@/lib/db/client";
-import { hamtaPolicyer } from "@/lib/admin";
-import { sparaPolicy } from "@/lib/decisions";
+import { kravOperator } from "@/auth/session";
+import { listaMallar, sparaMall } from "@/ytor/operator";
 import { MODULE_IDS, PROPOSAL_KINDS } from "@/contracts";
 
 export const runtime = "nodejs";
 
-// GET /api/admin/policy?tenant=… — tenantens autonomipolicyer.
-export async function GET(req: Request) {
-  const tenantId = new URL(req.url).searchParams.get("tenant");
-  if (!tenantId) return NextResponse.json({ fel: "tenant krävs" }, { status: 400 });
+// Policymallar (WP14) — operatörens namngivna startpolicys som väljs vid
+// provisionering. Samma rimlighetstak som tenant-policyn.
 
+export async function GET(req: Request) {
   const db = await getDb();
-  return NextResponse.json(await hamtaPolicyer(db, tenantId));
+  const krav = await kravOperator(db, req);
+  if ("http" in krav) return NextResponse.json({ fel: krav.fel }, { status: krav.http });
+
+  return NextResponse.json(await listaMallar(db));
 }
 
-// Rimlighetsvalidering: ören som icke-negativa heltal (tak 1 mdkr — en
-// felskriven policy ska inte kunna öppna obegränsad autonomi), konfidens
-// 0–1, kinds ur kontraktets lista. Correction-undantaget behöver inte
-// valideras här — det är en hård regel i evaluateAutonomy oavsett policy.
-const PolicyInput = z.object({
-  tenant_id: z.string().min(1),
+const MallInput = z.object({
+  id: z.string().uuid().optional(),
+  namn: z.string().min(1).max(100),
   module: z.enum(MODULE_IDS),
   max_belopp_ore: z
     .number()
@@ -33,12 +32,16 @@ const PolicyInput = z.object({
   tillatna_kinds: z.array(z.enum(PROPOSAL_KINDS)),
 });
 
-// POST /api/admin/policy — spara (upsert) en moduls autonomipolicy.
+// POST — skapa (utan id) eller redigera (med id) en mall.
 export async function POST(req: Request) {
+  const db = await getDb();
+  const krav = await kravOperator(db, req);
+  if ("http" in krav) return NextResponse.json({ fel: krav.fel }, { status: krav.http });
+
   const raw = await req.json().catch(() => null);
   if (!raw) return NextResponse.json({ fel: "ogiltig JSON" }, { status: 400 });
 
-  const parsed = PolicyInput.safeParse(raw);
+  const parsed = MallInput.safeParse(raw);
   if (!parsed.success) {
     return NextResponse.json(
       { fel: parsed.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`) },
@@ -47,9 +50,8 @@ export async function POST(req: Request) {
   }
 
   try {
-    const db = await getDb();
-    await sparaPolicy(db, parsed.data);
-    return NextResponse.json({ ok: true, policy: parsed.data });
+    const { id } = await sparaMall(db, parsed.data);
+    return NextResponse.json({ ok: true, id });
   } catch (err) {
     return NextResponse.json(
       { fel: err instanceof Error ? err.message : String(err) },

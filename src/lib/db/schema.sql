@@ -217,3 +217,28 @@ CREATE TABLE IF NOT EXISTS leads (
   meddelande text,
   created_at timestamptz NOT NULL DEFAULT now()
 );
+
+-- Operatörskonsolen (WP14): namngivna policymallar som väljs vid
+-- provisionering och KOPIERAS till tenantens autonomy_policies — mallen
+-- är operatörens data (service-vägens plan, inga app-grants), tenantens
+-- policyrad förblir kärnans enda sanning. Grund för branschmallar i S5.
+CREATE TABLE IF NOT EXISTS policy_mallar (
+  id                     uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  namn                   text NOT NULL UNIQUE,
+  module                 text NOT NULL,
+  max_belopp_ore         bigint NOT NULL CHECK (max_belopp_ore >= 0),
+  min_confidence         numeric NOT NULL CHECK (min_confidence BETWEEN 0 AND 1),
+  kanda_motparter_endast boolean NOT NULL,
+  tillatna_kinds         jsonb NOT NULL DEFAULT '[]',
+  created_at             timestamptz NOT NULL DEFAULT now()
+);
+
+-- Startmallar (redigerbara i konsolen): bygg är helt manuell (omvänd
+-- betalningsskyldighet ska alltid attesteras), restaurang auto-bokför
+-- rutinköp upp till 2 000 kr från kända motparter.
+INSERT INTO policy_mallar
+  (namn, module, max_belopp_ore, min_confidence, kanda_motparter_endast, tillatna_kinds)
+VALUES
+  ('Bygg — försiktig', 'bokforing', 0, 1, true, '[]'),
+  ('Restaurang — standard', 'bokforing', 200000, 0.85, true, '["journal_entry"]')
+ON CONFLICT (namn) DO NOTHING;
