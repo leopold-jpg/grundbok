@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { motion, useReducedMotion } from "framer-motion";
+import { motion } from "framer-motion";
 import KedjeScen from "./_publik/KedjeScen";
 import { fraunces, plexMono } from "./_publik/fonter";
 import "./publik.css";
@@ -65,8 +65,10 @@ function SektionHuvud({ nr, titel }: { nr: string; titel: string }) {
   );
 }
 
-// Scrolldrivet avslöjande — subtilt (fade/translate), en gång, av vid
-// prefers-reduced-motion. Kedje-hero:n är sajtens enda kontinuerliga
+// Scrolldrivet avslöjande — subtilt (fade/translate), en gång.
+// Servern och klienten renderar SAMMA träd (ingen hydration mismatch);
+// prefers-reduced-motion neutraliseras i CSS med !important-överstyrning
+// av framers inline-stilar. Kedje-hero:n är sajtens enda kontinuerliga
 // animation; allt annat är lugnt (DESIGN-BRIEF §Motion).
 function Reveal({
   children,
@@ -77,11 +79,10 @@ function Reveal({
   delay?: number;
   className?: string;
 }) {
-  const stilla = useReducedMotion();
-  if (stilla) return <div className={className}>{children}</div>;
   return (
     <motion.div
       className={className}
+      data-reveal
       initial={{ opacity: 0, y: 22 }}
       whileInView={{ opacity: 1, y: 0 }}
       viewport={{ once: true, margin: "-60px" }}
@@ -93,9 +94,9 @@ function Reveal({
 }
 
 // Kurvan som illustrerar att attesthögen krymper. Ren illustration —
-// inga påhittade siffror, därför inga skalstreck.
+// inga påhittade siffror, därför inga skalstreck. Reduced motion får
+// hela linjen direkt via CSS (stroke-dasharray-överstyrning).
 function AttestKurva() {
-  const stilla = useReducedMotion();
   return (
     <figure className="kurva" aria-label="Illustration: andelen som kräver attest sjunker över tid">
       <svg viewBox="0 0 560 150" role="presentation" focusable="false">
@@ -103,8 +104,8 @@ function AttestKurva() {
         <motion.path
           d="M 8 24 C 120 32, 200 64, 290 96 S 470 126, 552 131"
           className="kurva-linje"
-          initial={stilla ? undefined : { pathLength: 0 }}
-          whileInView={stilla ? undefined : { pathLength: 1 }}
+          initial={{ pathLength: 0 }}
+          whileInView={{ pathLength: 1 }}
           viewport={{ once: true, margin: "-80px" }}
           transition={{ duration: 1.4, ease: [0.22, 1, 0.36, 1] }}
         />
@@ -120,7 +121,7 @@ function AttestKurva() {
 const STEGEN: { rubrik: string; text: string; kanaler?: string[] }[] = [
   {
     rubrik: "Släpp in underlaget",
-    text: "Klistra in eller ladda upp kvitton och fakturor i dag — mejladress per klient och foto via kundappen är på väg. Varje kanal är bara en källa in.",
+    text: "Klistra in era kvitton och fakturor i dag — uppladdning, mejladress per klient och foto via kundappen är på väg. Varje kanal är bara en källa in.",
     kanaler: ["Mejl", "Foto", "API"],
   },
   {
@@ -342,7 +343,7 @@ function KontaktBox() {
         <button
           className="kontakt-skicka"
           type="submit"
-          disabled={skickar || !namn.trim() || !byra.trim() || !email.trim()}
+          disabled={skickar}
         >
           {skickar ? "Skickar …" : "Ställ er på väntelistan"}
         </button>
@@ -350,7 +351,11 @@ function KontaktBox() {
       <p className="tyst kontakt-not">
         Ingen väntelista med automatiska utskick: en människa läser och svarar.
       </p>
-      {fel && <p className="fel">{fel}</p>}
+      {fel && (
+        <p className="fel" role="alert">
+          {fel}
+        </p>
+      )}
     </div>
   );
 }

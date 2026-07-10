@@ -177,19 +177,29 @@ function Verifikation({ steg, statisk }: { steg: number; statisk?: boolean }) {
 
 export default function KedjeScen() {
   const stilla = useReducedMotion();
+  // Servern och första klientrenderingen visar alltid det frusna
+  // slutläget (samma träd → ingen hydration mismatch; innehållet syns
+  // utan JS). Loopen startar först efter montering, och bara för
+  // användare utan prefers-reduced-motion.
+  const [spelar, setSpelar] = useState(false);
+  const [pausad, setPausad] = useState(false);
   const [steg, setSteg] = useState(0);
   const [cykel, setCykel] = useState(0);
 
   useEffect(() => {
-    if (stilla) return;
+    if (!stilla) setSpelar(true);
+  }, [stilla]);
+
+  useEffect(() => {
+    if (!spelar || pausad) return;
     const timers = TIDSLINJE.map(([s, t]) => setTimeout(() => setSteg(s), t));
     return () => timers.forEach(clearTimeout);
-  }, [cykel, stilla]);
+  }, [cykel, spelar, pausad]);
 
   // Chrome throttlar timers i bakgrundsflikar — timer och animation
   // driver isär. Börja om från början när fliken blir synlig igen.
   useEffect(() => {
-    if (stilla) return;
+    if (!spelar || pausad) return;
     function synlighet() {
       if (!document.hidden) {
         setSteg(0);
@@ -198,7 +208,7 @@ export default function KedjeScen() {
     }
     document.addEventListener("visibilitychange", synlighet);
     return () => document.removeEventListener("visibilitychange", synlighet);
-  }, [stilla]);
+  }, [spelar, pausad]);
 
   useEffect(() => {
     if (steg !== 11) return;
@@ -209,9 +219,19 @@ export default function KedjeScen() {
     return () => clearTimeout(t);
   }, [steg]);
 
-  // Stilla läge (prefers-reduced-motion): hela kedjan i ett fruset
-  // slutläge — kvitto, färdig tolkning och stämplad verifikation.
-  if (stilla) {
+  function vaxlaPaus() {
+    if (pausad) {
+      // Återuppta från början — en halvfryst kedja är ingen berättelse.
+      setSteg(0);
+      setCykel((c) => c + 1);
+    }
+    setPausad(!pausad);
+  }
+
+  // Fruset slutläge: kvitto, färdig tolkning (ingen aktiv rad — ingen
+  // caret) och stämplad verifikation. Visas vid SSR, före montering och
+  // för prefers-reduced-motion.
+  if (!spelar) {
     return (
       <div className="scen" role="img" aria-label={SCEN_BESKRIVNING}>
         <div aria-hidden="true" className="scen-inre">
@@ -219,7 +239,7 @@ export default function KedjeScen() {
           <div className="scen-kropp">
             <div className="scen-flode" style={{ opacity: 0.15 }}>
               <Kvitto synligt />
-              <Tolkning steg={6} />
+              <Tolkning steg={7} />
               <AttestRad steg={8} />
             </div>
             <Verifikation steg={10} statisk />
@@ -232,30 +252,37 @@ export default function KedjeScen() {
   const visaVerifikation = steg >= 9 && steg < 11;
 
   return (
-    <div className="scen" role="img" aria-label={SCEN_BESKRIVNING}>
-      <div aria-hidden="true" className="scen-inre">
-        <ScenHuvud />
-        {/* Rubrikraden står kvar; bara kedjans innehåll tonas vid omstart. */}
-        <motion.div
-          className="scen-kropp"
-          initial={false}
-          animate={{ opacity: steg === 11 ? 0 : 1 }}
-          transition={{ duration: 0.6, ease: "easeInOut" }}
-        >
+    <>
+      <div className="scen" role="img" aria-label={SCEN_BESKRIVNING}>
+        <div aria-hidden="true" className="scen-inre">
+          <ScenHuvud />
+          {/* Rubrikraden står kvar; bara kedjans innehåll tonas vid omstart. */}
           <motion.div
-            className="scen-flode"
+            className="scen-kropp"
             initial={false}
-            animate={{ opacity: visaVerifikation ? 0.1 : 1 }}
-            transition={LUGN}
+            animate={{ opacity: steg === 11 ? 0 : 1 }}
+            transition={{ duration: 0.6, ease: "easeInOut" }}
           >
-            <Kvitto synligt={steg >= 1} />
-            <Tolkning steg={steg} />
-            <AttestRad steg={steg} />
+            <motion.div
+              className="scen-flode"
+              initial={false}
+              animate={{ opacity: visaVerifikation ? 0.1 : 1 }}
+              transition={LUGN}
+            >
+              <Kvitto synligt={steg >= 1} />
+              <Tolkning steg={steg} />
+              <AttestRad steg={steg} />
+            </motion.div>
+            <Verifikation steg={steg} />
           </motion.div>
-          <Verifikation steg={steg} />
-        </motion.div>
+        </div>
       </div>
-    </div>
+      {/* Pausmekanism (WCAG 2.2.2) — syskon till scenen, inte inuti
+          role="img", så skärmläsare når den. */}
+      <button type="button" className="scen-paus" onClick={vaxlaPaus}>
+        {pausad ? "Spela upp animationen" : "Pausa animationen"}
+      </button>
+    </>
   );
 }
 

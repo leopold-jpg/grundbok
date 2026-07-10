@@ -72,7 +72,11 @@ function LoginForm() {
           <button className="login-knapp" type="submit" disabled={loggarIn || !email || !password}>
             {loggarIn ? "Loggar in …" : "Logga in"}
           </button>
-          {fel && <p className="fel">{fel}</p>}
+          {fel && (
+            <p className="fel" role="alert">
+              {fel}
+            </p>
+          )}
         </form>
         <p className="tyst dev-not">
           Dev-läge: konsult.ett@byran-exempel.se eller leopold@otiva.se,

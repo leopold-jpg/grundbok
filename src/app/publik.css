@@ -14,11 +14,12 @@ main.publik {
   --papper-djup: #EFE7D6;
   --ink: #17110a;
   --ink-mjuk: #5d5343;
-  --ink-svag: #8e8371;
+  --ink-svag: #766a54; /* AA: 4,8:1 på papper */
   --linje: #e3dac7;
   --linje-stark: #c9bda2;
   --rost: var(--accent);
   --rost-djup: var(--accent-hover);
+  --rost-ljus: #cf8a64; /* smågradstext på mörkt: 6,7:1 */
   --morkt-bg: #17110a;
   --morkt-fg: #f3edde;
   --morkt-mjuk: #b3a78e;
@@ -213,6 +214,10 @@ main.publik {
 /* ============================== sidfot ================================ */
 
 .publik .sajt-fot {
+  /* Nollställer globals footer-regeln (margin + ljus linje) — foten är
+     ett eget mörkt block kant i kant med sektionen ovanför. */
+  margin-top: 0;
+  border-top: none;
   background: var(--morkt-bg);
   color: var(--morkt-mjuk);
   padding-block: var(--sp-12) var(--sp-8);
@@ -392,6 +397,26 @@ main.publik {
 .publik .scen-knapp[data-tryckt="true"] { background: var(--rost-djup); }
 .publik .scen-attest-not { font-size: 12px; color: var(--ink-svag); max-width: 24ch; }
 
+/* Pausmekanismen (WCAG 2.2.2) — stillsam, under scenkortet. */
+.publik .scen-paus {
+  position: absolute;
+  top: calc(100% + 18px);
+  right: 0;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-svag);
+  background: none;
+  border: none;
+  padding: var(--sp-1) 0;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.publik .scen-paus:hover { color: var(--ink); }
+.publik .scen-paus:focus-visible { outline: 2px solid var(--rost); outline-offset: 2px; }
+
 /* Verifikationen — slutet på kedjan, stämplad med hash. */
 .publik .scen-verifikation {
   position: absolute;
@@ -546,7 +571,7 @@ main.publik {
   color: var(--morkt-fg);
 }
 .publik .morkt .sektion-huvud { border-top-color: var(--morkt-linje); }
-.publik .morkt .lopnr { color: var(--rost); }
+.publik .morkt .lopnr { color: var(--rost-ljus); }
 
 .publik .fakta-grid {
   display: grid;
@@ -724,7 +749,8 @@ main.publik {
 .publik .kontakt textarea { min-height: 96px; resize: vertical; }
 .publik .kontakt input:focus,
 .publik .kontakt textarea:focus {
-  outline: none;
+  outline: 2px solid var(--rost);
+  outline-offset: 3px;
   border-bottom: 2px solid var(--rost);
   padding-bottom: calc(var(--sp-2) - 1px);
 }
@@ -764,3 +790,20 @@ main.publik {
 .publik section { padding-block: clamp(48px, 7vw, 96px); }
 .publik .fel { color: var(--danger); font-size: 13px; margin-top: var(--sp-2); }
 .publik .tyst { color: var(--ink-svag); font-size: 13px; }
+
+/* ========================= reduced motion ============================ */
+
+/* Samma DOM för alla (ingen hydration-gren); rörelsen stängs av här.
+   !important behövs för att vinna över framers inline-stilar. */
+@media (prefers-reduced-motion: reduce) {
+  .publik [data-reveal] {
+    opacity: 1 !important;
+    transform: none !important;
+    transition: none !important;
+  }
+  .publik .kurva-linje { stroke-dasharray: none !important; }
+  .publik .tolkrad[data-aktiv="true"] .tolk-varde::after {
+    animation: none;
+    opacity: 0;
+  }
+}

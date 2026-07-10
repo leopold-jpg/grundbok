@@ -31,7 +31,6 @@ main.login-sida {
 
 .login-sida h1 {
   font-family: var(--font-serif);
-  font-weight: 400;
   font-size: 30px;
   letter-spacing: var(--tracking-snug);
   margin: 0 0 var(--sp-6);
@@ -61,7 +60,8 @@ main.login-sida {
   padding: var(--sp-2) 2px;
 }
 .login-sida input:focus {
-  outline: none;
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
   border-bottom: 2px solid var(--accent);
   padding-bottom: calc(var(--sp-2) - 1px);
 }
