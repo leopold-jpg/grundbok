@@ -1,7 +1,7 @@
 # ADR-0003: Serverless multi-tenant runtime — en agent är en rad, inte en maskin
 
 **Date**: 2026-07-08
-**Status**: proposed
+**Status**: accepted *(genomförd i kod: WP8–WP10, PR #1 — agents-tabellen, kö med pgmq-semantik, generisk worker, provisionering)*
 **Deciders**: Leopold, Love
 
 ## Context

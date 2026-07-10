@@ -1,61 +1,65 @@
 import { NextResponse } from "next/server";
 import { getDb } from "@/lib/db/client";
-import { provisionAgent, listaAgenter } from "@/lib/provisioning";
+import { listaAgenter } from "@/lib/provisioning";
+import { provisioneraMedMall } from "@/ytor/operator";
 import { MODULE_IDS, SCOPES } from "@/contracts";
+import { kravOperator } from "@/auth/session";
 
 export const runtime = "nodejs";
 
-// Konsultytans agent-API (WP10). OBS: riktig konsult-auth är WP11
-// (dokumenterat icke-mål) — tills dess är detta, precis som /admin,
-// en obehörighetsskyddad yta endast för lokal körning.
+// Agent-API:t är operatörens (WP14): provisionering och drift bor hos
+// operatören — byrån har en läsvy via /api/byra/klient/agenter. Nyckel-
+// autentiserade agenter berörs inte (de går via /api/proposals).
 
 export async function GET(req: Request) {
+  const db = await getDb();
+  const krav = await kravOperator(db, req);
+  if ("http" in krav) return NextResponse.json({ fel: krav.fel }, { status: krav.http });
+
   const tenantId = new URL(req.url).searchParams.get("tenant");
   if (!tenantId) return NextResponse.json({ fel: "tenant krävs" }, { status: 400 });
-  const db = await getDb();
-  // Listan innehåller aldrig nyckel eller hash (smoke-test 4).
+  // Listan innehåller aldrig nyckel eller hash.
   return NextResponse.json(await listaAgenter(db, tenantId));
 }
 
 export async function POST(req: Request) {
+  const db = await getDb();
+  const krav = await kravOperator(db, req);
+  if ("http" in krav) return NextResponse.json({ fel: krav.fel }, { status: krav.http });
+
   const body = (await req.json().catch(() => null)) as {
     tenant_id?: string;
     module?: (typeof MODULE_IDS)[number];
+    /** Vald policymall — mallens värden kopieras till tenantens policy. */
+    mall_id?: string;
     display_name?: string;
     scopes?: (typeof SCOPES)[number][];
-    policy?: {
-      max_belopp_ore: number;
-      min_confidence: number;
-      kanda_motparter_endast: boolean;
-      tillatna_kinds: string[];
-    };
   } | null;
 
   if (
     !body?.tenant_id ||
-    !body.module ||
-    !MODULE_IDS.includes(body.module) ||
     !body.display_name?.trim() ||
+    (!body.module && !body.mall_id) ||
+    (body.module && !MODULE_IDS.includes(body.module)) ||
     (body.scopes && body.scopes.some((s) => !SCOPES.includes(s)))
   ) {
     return NextResponse.json(
-      { fel: "tenant_id, giltig module och display_name krävs" },
+      { fel: "tenant_id, display_name och module eller mall_id krävs" },
       { status: 400 },
     );
   }
 
-  const db = await getDb();
   try {
-    const ny = await provisionAgent(
+    const ny = await provisioneraMedMall(
       db,
       {
         tenantId: body.tenant_id,
-        module: body.module,
         displayName: body.display_name.trim(),
+        mallId: body.mall_id,
+        module: body.module,
         scopes: body.scopes,
-        policy: body.policy as never,
       },
-      "konsult:konsult@byran.se", // WP11: verifierad identitet
+      `operator:${krav.session.user.id}`,
     );
     // Klartextnyckeln finns bara i detta svar.
     return NextResponse.json(ny, { status: 201 });

@@ -1,27 +1,37 @@
 import { NextResponse } from "next/server";
 import { getDb } from "@/lib/db/client";
 import { decideProposal } from "@/lib/decisions";
+import { kravKonsult, kravTenantIByra } from "@/auth/session";
+import { valideraBeslutsInput } from "@/ytor/byra";
 
 export const runtime = "nodejs";
 
-// v0.2: UI:ts "Godkänn och bokför" ÄR en Decision i beslutsmotorn —
-// hash-bunden till förslagets payload, append-only i decisions-tabellen.
+// WP11: attest kräver en verifierad identitet — decided_by är den
+// inloggade konsultens user-id, aldrig en sträng ur requesten. Utan
+// session är attest omöjlig (WP15 smoke-testar detta). Inputen
+// valideras hårt: ett ogiltigt beslut ger 400, aldrig en avvisning.
 export async function POST(req: Request) {
-  const { tenant_id, proposal_id, beslut, godkand_av, reason } = (await req.json()) as {
-    tenant_id: string;
-    proposal_id: string;
-    beslut: "godkand" | "avvisad";
-    godkand_av: string;
-    reason?: string;
-  };
+  const db = await getDb();
+  const krav = await kravKonsult(db, req);
+  if ("http" in krav) return NextResponse.json({ fel: krav.fel }, { status: krav.http });
+
+  const input = valideraBeslutsInput(await req.json().catch(() => null));
+  if ("fel" in input) return NextResponse.json({ fel: input.fel }, { status: 400 });
+  const { tenant_id, proposal_id, beslut, reason } = input;
+
+  if (!(await kravTenantIByra(db, krav.session, tenant_id))) {
+    return NextResponse.json(
+      { fel: "klientbolaget tillhör inte din byrå" },
+      { status: 403 },
+    );
+  }
 
   try {
-    const db = await getDb();
     const utfall = await decideProposal(db, {
       tenantId: tenant_id,
       proposalId: proposal_id,
       outcome: beslut === "godkand" ? "approved" : "rejected",
-      decidedBy: godkand_av || "konsult@byran.se",
+      decidedBy: krav.session.user.id,
       reason,
     });
     if (utfall.outcome === "rejected") {

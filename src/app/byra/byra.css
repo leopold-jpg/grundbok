@@ -1,0 +1,158 @@
+/* grundbok — byråns arbetsyta (WP13). Scopad under .byra enligt samma
+   mönster som admin.css/publik.css. Återanvänder globals.css-klasserna
+   (.steg, .rader, .chip, .flagga, .godkann, .bokford, .tyst, .fel);
+   kö-kortet är flyttat från v0-admin, inte ombyggt. Allt via Gesso-tokens. */
+
+.byra .wordmark-rad { display: flex; align-items: baseline; gap: var(--sp-3); }
+.byra .undertitel {
+  font-size: 12px;
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
+  color: var(--fg-subtle);
+}
+
+/* Fliknavigering — arbetsytans rum. Skrollbar i mobil. */
+.byra .flikar {
+  display: flex;
+  gap: var(--sp-1);
+  border-bottom: 1px solid var(--border);
+  margin-bottom: var(--sp-6);
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+.byra .flik {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--fg-muted);
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  padding: var(--sp-2) var(--sp-3) var(--sp-3);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.byra .flik:hover:not(:disabled) { color: var(--fg); background: none; border-color: var(--border-strong); }
+.byra .flik[data-aktiv="true"] { color: var(--fg); border-bottom-color: var(--accent); }
+.byra .flik .antal {
+  font-size: 11px;
+  font-family: var(--font-mono);
+  padding: 1px 7px;
+  border-radius: var(--r-pill);
+  background: var(--accent);
+  color: var(--accent-fg);
+  margin-left: 6px;
+}
+
+/* Kö-kortet — flyttat från v0-admin. */
+.byra .ko-kort {
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--bg-elev);
+  padding: var(--sp-4);
+  margin-bottom: var(--sp-3);
+}
+.byra .ko-huvud { display: flex; align-items: baseline; gap: var(--sp-3); flex-wrap: wrap; }
+.byra .ko-summary { font-size: 15px; font-weight: 500; }
+.byra .ko-huvud .tid { margin-left: auto; }
+
+.byra .lagrum-lista {
+  margin: var(--sp-2) 0 0;
+  padding-left: var(--sp-5);
+  font-size: 13px;
+  color: var(--fg-muted);
+}
+
+.byra .diff-rubrik {
+  font-size: 11px;
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
+  color: var(--fg-subtle);
+  margin: var(--sp-3) 0 var(--sp-1);
+}
+.byra .diff-lista { margin: 0; padding-left: var(--sp-5); font-size: 13px; color: var(--fg-muted); }
+.byra .diff-lista li::marker { color: var(--warning); }
+.byra .diff-ok { margin: 0; font-size: 13px; color: var(--success); }
+
+.byra .beslutsrad,
+.byra .avvisa-rad {
+  display: flex;
+  gap: var(--sp-3);
+  align-items: center;
+  flex-wrap: wrap;
+  margin-top: var(--sp-4);
+}
+
+.byra input[type="text"],
+.byra input[type="number"] {
+  font-family: var(--font-sans);
+  font-size: 14px;
+  color: var(--fg);
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  padding: var(--sp-2) var(--sp-3);
+}
+.byra input[type="text"]:focus,
+.byra input[type="number"]:focus { outline: 2px solid var(--ring); outline-offset: 1px; }
+.byra input[type="checkbox"] { accent-color: var(--accent); }
+.byra .avvisa-rad input[type="text"] { flex: 1; min-width: 220px; }
+
+/* Chatten — konsultens rådgivningsfrågor. */
+.byra .chatt-historik { display: grid; gap: var(--sp-3); margin-bottom: var(--sp-4); }
+.byra .bubbla {
+  max-width: 85%;
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  padding: var(--sp-3) var(--sp-4);
+  font-size: 14px;
+  line-height: 1.55;
+}
+.byra .bubbla.konsult {
+  justify-self: end;
+  background: var(--bg-tint);
+}
+.byra .bubbla.agent { justify-self: start; background: var(--bg-elev); }
+.byra .bubbla .bubbla-meta {
+  display: flex;
+  gap: var(--sp-2);
+  flex-wrap: wrap;
+  margin-top: var(--sp-2);
+}
+.byra .chatt-rad { display: flex; gap: var(--sp-2); }
+.byra .chatt-rad input[type="text"] { flex: 1; min-width: 0; }
+
+/* Klientvyn */
+.byra .policy-enkel { border-top: 1px solid var(--divider); padding: var(--sp-4) 0; }
+.byra .policy-enkel:first-of-type { border-top: none; padding-top: 0; }
+.byra .policy-namn { font-family: var(--font-serif); font-size: 19px; margin: 0 0 var(--sp-2); }
+.byra .policy-rad {
+  display: flex;
+  gap: var(--sp-3) var(--sp-4);
+  align-items: center;
+  flex-wrap: wrap;
+  font-size: 14px;
+}
+.byra .policy-rad input[type="number"] { width: 110px; }
+.byra .check-val { display: inline-flex; align-items: center; gap: var(--sp-2); font-size: 13px; }
+.byra .sparat { font-size: 13px; color: var(--success); }
+
+.byra .verifikation {
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--bg-elev);
+  padding: var(--sp-4);
+  margin-bottom: var(--sp-3);
+  overflow-x: auto; /* kontoraderna får skrolla i telefon, inte spränga kortet */
+}
+.byra .verifikation .huvud { display: flex; align-items: baseline; gap: var(--sp-3); flex-wrap: wrap; }
+.byra .verifikation .nr { font-family: var(--font-serif); font-size: 18px; }
+.byra .verifikation .beskr { color: var(--fg-muted); }
+.byra .verifikation .huvud .hoger { margin-left: auto; display: flex; gap: var(--sp-2); }
+.byra .rattelse-tag { color: var(--accent); font-size: 12px; }
+
+/* Mobil: kö-kortets beslutsrad ska vara lätt att träffa. */
+@media (max-width: 600px) {
+  .byra .beslutsrad button.godkann { width: 100%; }
+  .byra .flikar { margin-inline: calc(-1 * var(--sp-5)); padding-inline: var(--sp-5); }
+}

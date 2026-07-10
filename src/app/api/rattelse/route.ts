@@ -5,6 +5,7 @@ import { withTenant } from "@/lib/db/tenant";
 import { isoDatum } from "@/lib/ledger";
 import { hashProposal, sha256Hex, type Proposal } from "@/contracts";
 import { handleProposal, decideProposal, type Principal } from "@/lib/decisions";
+import { kravKonsult, kravTenantIByra } from "@/auth/session";
 
 export const runtime = "nodejs";
 
@@ -13,15 +14,21 @@ export const runtime = "nodejs";
 // godkänns — här fattar konsulten beslutet direkt (rättelsen är konsultens
 // egen, mänskliga handling i UI:t), så förslaget godkänns i samma request.
 export async function POST(req: Request) {
-  const { tenant_id, verification_id, utford_av } = (await req.json()) as {
+  const db = await getDb();
+  // WP11: rättelser är konsultens handling — identiteten ur sessionen.
+  const krav = await kravKonsult(db, req);
+  if ("http" in krav) return NextResponse.json({ fel: krav.fel }, { status: krav.http });
+
+  const { tenant_id, verification_id } = (await req.json()) as {
     tenant_id: string;
     verification_id: string;
-    utford_av?: string;
   };
-  const konsult = utford_av || "konsult@byran.se";
+  if (!(await kravTenantIByra(db, krav.session, tenant_id))) {
+    return NextResponse.json({ fel: "klientbolaget tillhör inte din byrå" }, { status: 403 });
+  }
+  const konsult = krav.session.user.id;
 
   try {
-    const db = await getDb();
 
     const original = await withTenant(db, tenant_id, async (tx) => {
       const v = await tx.query<{

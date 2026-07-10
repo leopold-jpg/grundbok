@@ -164,3 +164,81 @@ CREATE TABLE IF NOT EXISTS agent_jobs (
 ALTER TABLE IF EXISTS verifications DROP COLUMN IF EXISTS suggestion_id;
 DROP TABLE IF EXISTS approvals;
 DROP TABLE IF EXISTS suggestions;
+
+-- ============================================================ S2 ====
+-- Auth och organisation (WP11, KICKOFF-YTOR): en byrå förvaltar flera
+-- klientbolag (tenants). Auth-tabellerna är service-vägens plan — inga
+-- app-grants, ingen RLS: uppslag sker innan tenant-kontexten finns
+-- (samma princip som agents-uppslaget), och byrå-scopningen upprätthålls
+-- i auth-lagret (src/auth/) + smoke-testas i WP15.
+
+CREATE TABLE IF NOT EXISTS byraer (
+  id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  namn        text NOT NULL UNIQUE,
+  created_at  timestamptz NOT NULL DEFAULT now()
+);
+
+ALTER TABLE tenants ADD COLUMN IF NOT EXISTS byra_id uuid REFERENCES byraer(id);
+
+CREATE TABLE IF NOT EXISTS users (
+  id            uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  email         text NOT NULL UNIQUE,
+  name          text NOT NULL,
+  -- Lokal dev-auth (scrypt). Vid deploy tar Supabase Auth över inloggningen
+  -- bakom samma AuthAdapter-interface — kolumnen blir då oanvänd.
+  password_hash text NOT NULL,
+  is_operator   boolean NOT NULL DEFAULT false,
+  created_at    timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS memberships (
+  user_id    uuid NOT NULL REFERENCES users(id),
+  byra_id    uuid NOT NULL REFERENCES byraer(id),
+  role       text NOT NULL DEFAULT 'konsult' CHECK (role IN ('konsult')),
+  created_at timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (user_id, byra_id)
+);
+
+CREATE TABLE IF NOT EXISTS sessions (
+  token_hash text PRIMARY KEY,
+  user_id    uuid NOT NULL REFERENCES users(id),
+  created_at timestamptz NOT NULL DEFAULT now(),
+  expires_at timestamptz NOT NULL
+);
+
+-- Publika sajtens kontaktbox (WP12, KICKOFF-YTOR). Leads är operatörens
+-- data — aldrig tenant-data: service-vägens plan, inga app-grants, ingen
+-- RLS (samma princip som auth-tabellerna ovan). Ingen mejlintegration nu.
+CREATE TABLE IF NOT EXISTS leads (
+  id         uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  namn       text NOT NULL,
+  byra       text NOT NULL,
+  email      text NOT NULL,
+  meddelande text,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+
+-- Operatörskonsolen (WP14): namngivna policymallar som väljs vid
+-- provisionering och KOPIERAS till tenantens autonomy_policies — mallen
+-- är operatörens data (service-vägens plan, inga app-grants), tenantens
+-- policyrad förblir kärnans enda sanning. Grund för branschmallar i S5.
+CREATE TABLE IF NOT EXISTS policy_mallar (
+  id                     uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  namn                   text NOT NULL UNIQUE,
+  module                 text NOT NULL,
+  max_belopp_ore         bigint NOT NULL CHECK (max_belopp_ore >= 0),
+  min_confidence         numeric NOT NULL CHECK (min_confidence BETWEEN 0 AND 1),
+  kanda_motparter_endast boolean NOT NULL,
+  tillatna_kinds         jsonb NOT NULL DEFAULT '[]',
+  created_at             timestamptz NOT NULL DEFAULT now()
+);
+
+-- Startmallar (redigerbara i konsolen): bygg är helt manuell (omvänd
+-- betalningsskyldighet ska alltid attesteras), restaurang auto-bokför
+-- rutinköp upp till 2 000 kr från kända motparter.
+INSERT INTO policy_mallar
+  (namn, module, max_belopp_ore, min_confidence, kanda_motparter_endast, tillatna_kinds)
+VALUES
+  ('Bygg — försiktig', 'bokforing', 0, 1, true, '[]'),
+  ('Restaurang — standard', 'bokforing', 200000, 0.85, true, '["journal_entry"]')
+ON CONFLICT (namn) DO NOTHING;
