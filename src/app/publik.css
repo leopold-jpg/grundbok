@@ -1,183 +1,240 @@
-/* grundbok — publika sajten (WP12). Scopad under .publik enligt samma
-   mönster som admin.css. Studio-skinnet bär allt, men här vågar vi mer:
-   stora serif-rubriker, mycket luft, EN accentfärg. Mobil först —
-   grid-brytpunkter ligger i media queries. */
+/* grundbok — publika sajten. Identitet: "papper som blivit levande"
+   (DESIGN-BRIEF v2). Scopad under .publik. Bygger på Gesso-tokens
+   (studio-skinnet); paletten här är briefens fördjupning av samma
+   familj: varmt papper som bas, djupt bläck, terracotta som ENDA
+   accent. Serif bär rubrikerna, grotesk brödtexten, monospace
+   siffror/konton/lagrum (kvitto-känslan). Mobil först. */
 
-.publik { max-width: 880px; }
+main.publik {
+  /* Fördjupad palett — scopade slots ovanpå studio-skinnet. Bläcket är
+     mörkare än --fg och pappret något djupare; accenten är exakt
+     skinnets terracotta. Mörka sektioner inverterar till bläck/cream. */
+  --papper: #F7F3EA;
+  --papper-elev: #FCFAF3;
+  --papper-djup: #EFE7D6;
+  --ink: #17110a;
+  --ink-mjuk: #5d5343;
+  --ink-svag: #8e8371;
+  --linje: #e3dac7;
+  --linje-stark: #c9bda2;
+  --rost: var(--accent);
+  --rost-djup: var(--accent-hover);
+  --morkt-bg: #17110a;
+  --morkt-fg: #f3edde;
+  --morkt-mjuk: #b3a78e;
+  --morkt-linje: rgba(243, 237, 222, 0.18);
+
+  /* Full bredd — sektionerna hanterar sina egna ytor; globals
+     main-måtten gäller inte här. */
+  max-width: none;
+  padding: 0;
+  background: var(--papper);
+  color: var(--ink);
+  font-size: 16px;
+}
+
+.publik .inre {
+  max-width: 1120px;
+  margin-inline: auto;
+  padding-inline: clamp(20px, 5vw, 56px);
+}
+
+/* ============================== typografi ============================== */
+
+.publik h1,
+.publik h2 {
+  font-family: var(--font-serif);
+  font-weight: 400;
+  letter-spacing: var(--tracking-tight);
+  margin: 0;
+}
+
+.publik .overline {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ink-svag);
+}
+
+/* Löpnumret — verifikationens formvärld som sektionsmarkör. */
+.publik .lopnr {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  color: var(--rost);
+}
+
+.publik .sektion-huvud {
+  display: flex;
+  align-items: baseline;
+  gap: var(--sp-4);
+  border-top: 1px solid var(--linje-stark);
+  padding-top: var(--sp-4);
+  margin-bottom: var(--sp-8);
+}
+.publik .sektion-huvud h2 {
+  font-size: clamp(32px, 5vw, 52px);
+  line-height: 1.06;
+  max-width: 18ch;
+}
+.publik .sektion-huvud .lopnr { min-width: 3ch; }
+
+/* ============================ primitiver ============================== */
+
+/* Perforeringen — kvittots avrivningskant som horisontell regel. */
+.publik .perforering {
+  height: 1px;
+  background-image: linear-gradient(
+    90deg,
+    var(--linje-stark) 0 7px,
+    transparent 7px 15px
+  );
+}
+
+/* Stämpeln — mono i ram, lätt vriden. Färgen sätts av sammanhanget. */
+.publik .stampel {
+  display: inline-block;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  border: 2px solid currentColor;
+  border-radius: 3px;
+  padding: 0.4em 0.9em;
+  transform: rotate(-4deg);
+}
+
+.publik .hash {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--ink-svag);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ============================== sajt-topp ============================== */
 
 .publik .sajt-topp {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: color-mix(in srgb, var(--papper) 88%, transparent);
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid var(--linje);
+}
+.publik .sajt-topp .inre {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
   gap: var(--sp-4);
-  padding: var(--sp-5) 0;
+  padding-block: var(--sp-3);
 }
-.publik .sajt-topp a { font-size: 14px; color: var(--fg-muted); text-decoration: none; }
-.publik .sajt-topp a:hover { color: var(--fg); text-decoration: underline; }
+.publik .sajt-topp .wordmark {
+  font-size: 26px;
+  color: var(--ink);
+  text-decoration: none;
+}
+.publik .sajt-topp .wordmark em { color: var(--rost); }
+.publik .sajt-topp nav {
+  display: flex;
+  align-items: baseline;
+  gap: var(--sp-5);
+}
+.publik .sajt-topp nav a {
+  font-size: 14px;
+  color: var(--ink-mjuk);
+  text-decoration: none;
+}
+.publik .sajt-topp nav a:hover { color: var(--ink); }
+.publik .sajt-topp nav a.topp-cta {
+  font-weight: 600;
+  color: var(--rost);
+}
 
-/* Hero — statement, inte mall. */
-.publik .hero { padding: var(--sp-16) 0 var(--sp-12); }
+/* ================================ hero ================================ */
+
+/* ASSET (genereras separat, DESIGN-BRIEF §Assets): hero-bakgrundstextur
+   papper/fiber läggs som background-image här — tills dess bär den
+   solida papperytan sektionen. */
+.publik .hero {
+  padding-block: clamp(56px, 9vw, 120px) clamp(48px, 7vw, 96px);
+}
+.publik .hero .inre {
+  display: grid;
+  gap: var(--sp-10);
+  align-items: center;
+}
+@media (min-width: 960px) {
+  .publik .hero .inre { grid-template-columns: minmax(0, 10fr) minmax(0, 11fr); }
+}
 .publik .hero h1 {
-  font-family: var(--font-serif);
-  font-weight: 400;
-  font-size: clamp(38px, 9vw, 64px);
-  line-height: 1.06;
-  letter-spacing: var(--tracking-tight);
-  margin: 0 0 var(--sp-5);
-  max-width: 15ch;
+  font-size: clamp(46px, 9vw, 88px);
+  line-height: 1.01;
+  margin: var(--sp-4) 0 var(--sp-5);
+  max-width: 13ch;
 }
-.publik .hero h1 em { color: var(--accent); font-style: italic; }
-.publik .hero p {
+.publik .hero h1 em { color: var(--rost); }
+.publik .hero .ingress {
   font-size: 17px;
-  line-height: 1.6;
-  color: var(--fg-muted);
-  max-width: 52ch;
-  margin: 0;
-}
-
-.publik section { margin-bottom: var(--sp-16); }
-.publik h2 {
-  font-family: var(--font-serif);
-  font-weight: 400;
-  font-size: 30px;
-  letter-spacing: var(--tracking-snug);
+  line-height: 1.65;
+  color: var(--ink-mjuk);
+  max-width: 46ch;
   margin: 0 0 var(--sp-6);
 }
 
-/* Så funkar det — tre steg. En kolumn i mobil, tre på bredd. */
-.publik .stegen { display: grid; gap: var(--sp-6); margin-bottom: var(--sp-8); }
-@media (min-width: 720px) { .publik .stegen { grid-template-columns: 1fr 1fr 1fr; } }
-.publik .steget { border-top: 1px solid var(--border-strong); padding-top: var(--sp-4); }
-.publik .steget .nr { font-family: var(--font-serif); font-size: 22px; color: var(--accent); }
-.publik .steget h3 { font-size: 16px; font-weight: 600; margin: var(--sp-2) 0; }
-.publik .steget p { font-size: 14px; color: var(--fg-muted); margin: 0; line-height: 1.55; }
-
-/* Den stiliserade attestkön — statisk komponent med exempeldata. */
-.publik .attest-mock {
-  border: 1px solid var(--border);
-  border-radius: var(--r-lg);
-  background: var(--bg-elev);
-  padding: var(--sp-5);
-  box-shadow: var(--shadow-sm);
-}
-.publik .attest-mock .mock-rubrik {
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  gap: var(--sp-3);
-  margin-bottom: var(--sp-4);
-}
-.publik .attest-mock .mock-titel { font-family: var(--font-serif); font-size: 19px; }
-.publik .attest-mock .mock-not {
-  font-size: 11px;
-  letter-spacing: var(--tracking-wide);
-  text-transform: uppercase;
-  color: var(--fg-subtle);
-}
-.publik .mock-rad {
-  display: flex;
-  align-items: center;
-  gap: var(--sp-3);
-  padding: var(--sp-3) 0;
-  border-top: 1px solid var(--divider);
-  flex-wrap: wrap;
-}
-.publik .mock-rad .motpart { font-weight: 500; font-size: 14px; }
-.publik .mock-rad .avser { color: var(--fg-muted); font-size: 13px; }
-.publik .mock-rad .belopp { font-family: var(--font-mono); font-size: 13px; margin-left: auto; }
-.publik .mock-rad .mock-knapp {
-  font-size: 12px;
-  font-weight: 600;
-  padding: 4px 12px;
-  border-radius: var(--r-pill);
-  background: var(--accent);
-  color: var(--accent-fg);
-  white-space: nowrap;
-}
-.publik .mock-rad .mock-auto {
-  font-size: 12px;
-  padding: 4px 12px;
-  border-radius: var(--r-pill);
-  border: 1px solid var(--border);
-  color: var(--fg-subtle);
-  white-space: nowrap;
-}
-.publik .mock-meta { display: flex; gap: var(--sp-2); flex-wrap: wrap; width: 100%; }
-
-/* Moduler — ärlig märkning: live eller kommande. */
-.publik .moduler { display: grid; gap: var(--sp-4); }
-@media (min-width: 720px) { .publik .moduler { grid-template-columns: 1fr 1fr 1fr; } }
-.publik .modul {
-  border: 1px solid var(--border);
-  border-radius: var(--r-md);
-  background: var(--bg-elev);
-  padding: var(--sp-4);
-}
-.publik .modul h3 { font-size: 15px; font-weight: 600; margin: 0 0 var(--sp-1); }
-.publik .modul p { font-size: 13px; color: var(--fg-muted); margin: var(--sp-2) 0 0; line-height: 1.5; }
-.publik .modul .status-live {
-  font-size: 11px;
-  letter-spacing: var(--tracking-wide);
-  text-transform: uppercase;
-  color: var(--success);
-}
-.publik .modul .status-kommande {
-  font-size: 11px;
-  letter-spacing: var(--tracking-wide);
-  text-transform: uppercase;
-  color: var(--fg-subtle);
-}
-
-/* Kontaktboxen — ska funka perfekt i telefon: en kolumn, stora tryckytor. */
-.publik .kontakt {
-  border: 1px solid var(--border-strong);
-  border-radius: var(--r-lg);
-  background: var(--bg-elev);
-  padding: var(--sp-6);
-}
-@media (min-width: 720px) { .publik .kontakt { padding: var(--sp-8); } }
-.publik .kontakt form { display: grid; gap: var(--sp-3); }
-@media (min-width: 720px) {
-  .publik .kontakt form { grid-template-columns: 1fr 1fr; }
-  .publik .kontakt form textarea,
-  .publik .kontakt form .kontakt-skicka { grid-column: 1 / -1; }
-}
-.publik .kontakt input,
-.publik .kontakt textarea {
-  font-family: var(--font-sans);
-  font-size: 16px; /* ≥16px hindrar iOS-zoom vid fokus */
-  color: var(--fg);
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: var(--r-md);
-  padding: var(--sp-3) var(--sp-4);
-  width: 100%;
-}
-.publik .kontakt textarea { min-height: 110px; resize: vertical; }
-.publik .kontakt .kontakt-skicka {
+.publik .cta {
+  display: inline-block;
   font-size: 16px;
   font-weight: 600;
-  padding: var(--sp-3) var(--sp-6);
-  border-radius: var(--r-md);
-  border: 1px solid var(--accent);
-  background: var(--accent);
   color: var(--accent-fg);
-  cursor: pointer;
+  background: var(--rost);
+  border: 1px solid var(--rost);
+  border-radius: var(--r-md);
+  padding: var(--sp-3) var(--sp-6);
+  text-decoration: none;
+  transition: background var(--dur-fast) var(--ease-out);
 }
-.publik .kontakt .kontakt-skicka:hover:not(:disabled) { background: var(--accent-hover); }
-.publik .kontakt .kontakt-skicka:disabled { opacity: 0.6; cursor: not-allowed; }
-.publik .tack {
-  font-family: var(--font-serif);
-  font-size: 22px;
-  margin: 0 0 var(--sp-2);
-}
+.publik .cta:hover { background: var(--rost-djup); border-color: var(--rost-djup); }
+
+/* ============================== sidfot ================================ */
 
 .publik .sajt-fot {
-  margin-top: var(--sp-16);
-  padding: var(--sp-6) 0 var(--sp-4);
-  border-top: 1px solid var(--border);
-  font-size: 13px;
-  color: var(--fg-subtle);
+  background: var(--morkt-bg);
+  color: var(--morkt-mjuk);
+  padding-block: var(--sp-12) var(--sp-8);
+  font-size: 14px;
   line-height: 1.7;
 }
-.publik .sajt-fot a { color: var(--fg-muted); }
+.publik .sajt-fot .wordmark {
+  font-size: 30px;
+  color: var(--morkt-fg);
+  margin-bottom: var(--sp-4);
+}
+.publik .sajt-fot .wordmark em { color: var(--rost); }
+.publik .sajt-fot p { max-width: 62ch; margin: 0 0 var(--sp-5); }
+.publik .sajt-fot nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2) var(--sp-6);
+  border-top: 1px solid var(--morkt-linje);
+  padding-top: var(--sp-5);
+}
+.publik .sajt-fot a { color: var(--morkt-fg); text-decoration: none; }
+.publik .sajt-fot a:hover { text-decoration: underline; }
+.publik .sajt-fot .upphov {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  color: var(--morkt-mjuk);
+  margin-left: auto;
+}
+
+/* ============================ sektionsytor ============================ */
+
+.publik section { padding-block: clamp(48px, 7vw, 96px); }
+.publik .fel { color: var(--danger); font-size: 13px; margin-top: var(--sp-2); }
+.publik .tyst { color: var(--ink-svag); font-size: 13px; }

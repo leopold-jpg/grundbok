@@ -3,9 +3,115 @@
 import { useState } from "react";
 import "./publik.css";
 
-// Publika sajten (WP12) — det blivande kunden ser. Ingen riktig data:
-// attestkön nedan är en statisk komponent med exempeldata ur samma
-// exempel som demon (src/lib/exempel.ts). Demoflödet bor i /byra.
+// Publika sajten — det blivande kunden ser (DESIGN-BRIEF v2: "papper
+// som blivit levande"). Ingen riktig data: scenen och exemplen använder
+// samma påhittade exempelbolag som demon (src/lib/exempel.ts).
+// Kontaktboxen POST:ar till befintliga leads-flödet.
+
+function SajtTopp() {
+  return (
+    <header className="sajt-topp">
+      <div className="inre">
+        <a className="wordmark" href="/">
+          grund<em>bok</em>
+        </a>
+        <nav>
+          <a href="/login">Logga in</a>
+          <a className="topp-cta" href="#vantelista">
+            Väntelistan
+          </a>
+        </nav>
+      </div>
+    </header>
+  );
+}
+
+function Hero() {
+  return (
+    <section className="hero">
+      <div className="inre">
+        <div>
+          <span className="overline">Agentisk redovisning · byggd på öppen kärna</span>
+          <h1>
+            Framtidens redovisning <em>attesterar sig själv</em>
+          </h1>
+          <p className="ingress">
+            Specialistagenter tolkar och konterar era underlag enligt gällande rätt,
+            med lagrum på varje förslag. Ingenting bokförs utan att en behörig
+            människa attesterat eller er egen policy uttryckligen tillåtit det —
+            ansvaret flyttar aldrig.
+          </p>
+          <a className="cta" href="#vantelista">
+            Ställ er på väntelistan
+          </a>
+        </div>
+        <div className="scen-yta">{/* Kedje-scenen monteras här (egen commit). */}</div>
+      </div>
+    </section>
+  );
+}
+
+function SektionHuvud({ nr, titel }: { nr: string; titel: string }) {
+  return (
+    <div className="sektion-huvud">
+      <span className="lopnr">{nr}</span>
+      <h2>{titel}</h2>
+    </div>
+  );
+}
+
+function SaFunkarDet() {
+  return (
+    <section id="sa-funkar-det">
+      <div className="inre">
+        <SektionHuvud nr="01" titel="Så funkar det" />
+      </div>
+    </section>
+  );
+}
+
+const MODULER: { namn: string; status: "live" | "kommande"; text: string }[] = [
+  {
+    namn: "Bokföring",
+    status: "live",
+    text: "Underlag in → tolkning, BAS-kontering och momssats med lagrum → förslag i attestkön. Momsreglerna är versionerade: satsen följer affärshändelsedatumet.",
+  },
+  {
+    namn: "Rådgivning",
+    status: "live",
+    text: "Frågor om konton, moms och lagrum — svar med källhänvisning och konfidens, aldrig utan.",
+  },
+  {
+    namn: "Kundappen",
+    status: "kommande",
+    text: "Era kunder fotar kvittot — det bokför sig självt. Byråns klienter följer status och ställer frågor i en egen app, en förmån byrån ger sina klienter.",
+  },
+  {
+    namn: "Löner",
+    status: "kommande",
+    text: "Stegvis: rådgivning först, kontering sen. Ingen egen beräkningsmotor — vi integrerar.",
+  },
+  {
+    namn: "Bokslut",
+    status: "kommande",
+    text: "Periodiseringar och avstämningar som förslag, samma attestväg som allt annat.",
+  },
+  {
+    namn: "Skatt & juridik",
+    status: "kommande",
+    text: "Fler rättskällor på samma rådgivningsgrund — alltid med lagrum.",
+  },
+];
+
+function Moduler() {
+  return (
+    <section id="moduler">
+      <div className="inre">
+        <SektionHuvud nr="03" titel="Moduler" />
+      </div>
+    </section>
+  );
+}
 
 function KontaktBox() {
   const [namn, setNamn] = useState("");
@@ -81,7 +187,7 @@ function KontaktBox() {
           type="submit"
           disabled={skickar || !namn.trim() || !byra.trim() || !email.trim()}
         >
-          {skickar ? "Skickar …" : "Jag vill veta mer"}
+          {skickar ? "Skickar …" : "Ställ er på väntelistan"}
         </button>
       </form>
       {fel && <p className="fel">{fel}</p>}
@@ -89,164 +195,49 @@ function KontaktBox() {
   );
 }
 
-// Statisk attestkö — exempeldata (samma påhittade bolag som demon),
-// aldrig riktig data på publika ytan.
-function AttestMock() {
+function Vantelista() {
   return (
-    <div className="attest-mock" aria-label="Exempel på attestkön">
-      <div className="mock-rubrik">
-        <span className="mock-titel">Att attestera</span>
-        <span className="mock-not">exempeldata</span>
+    <section id="vantelista">
+      <div className="inre">
+        <SektionHuvud nr="04" titel="Ställ er på väntelistan" />
+        <KontaktBox />
       </div>
-      <div className="mock-rad">
-        <div>
-          <div className="motpart">Kafferosteriet Exempel AB</div>
-          <div className="avser">Kaffebönor, mörkrost 20 kg · livsmedel 6 %</div>
-        </div>
-        <span className="belopp">1 060,00 kr</span>
-        <span className="mock-knapp">Attestera</span>
-        <div className="mock-meta">
-          <span className="chip">ML (2023:200) 9 kap.</span>
-          <span className="chip">konto 4010 · 2440</span>
-        </div>
-      </div>
-      <div className="mock-rad">
-        <div>
-          <div className="motpart">Underentreprenad Exempel AB</div>
-          <div className="avser">Byggtjänst · omvänd betalningsskyldighet</div>
-        </div>
-        <span className="belopp">10 000,00 kr</span>
-        <span className="mock-knapp">Attestera</span>
-        <div className="mock-meta">
-          <span className="chip">ML (2023:200) 16 kap. 13 §</span>
-          <span className="chip">utanför policy: ny motpart</span>
-        </div>
-      </div>
-      <div className="mock-rad">
-        <div>
-          <div className="motpart">Kontorsmaterial Exempel AB</div>
-          <div className="avser">Återkommande inköp · känd motpart</div>
-        </div>
-        <span className="belopp">312,50 kr</span>
-        <span className="mock-auto">bokförd av policy</span>
-      </div>
-    </div>
+    </section>
   );
 }
 
-const MODULER: { namn: string; status: "live" | "kommande"; text: string }[] = [
-  {
-    namn: "Bokföring",
-    status: "live",
-    text: "Underlag in → tolkning, BAS-kontering och momssats med lagrum → förslag i attestkön. Momsreglerna är versionerade: satsen följer affärshändelsedatumet.",
-  },
-  {
-    namn: "Rådgivning",
-    status: "live",
-    text: "Frågor om konton, moms och lagrum — svar med källhänvisning och konfidens, aldrig utan.",
-  },
-  {
-    namn: "Kundappen",
-    status: "kommande",
-    text: "Byråns klienter fotar kvitton, följer status och ställer frågor i en egen app — en förmån byrån ger sina klienter.",
-  },
-  {
-    namn: "Löner",
-    status: "kommande",
-    text: "Stegvis: rådgivning först, kontering sen. Ingen egen beräkningsmotor — vi integrerar.",
-  },
-  {
-    namn: "Bokslut",
-    status: "kommande",
-    text: "Periodiseringar och avstämningar som förslag, samma attestväg som allt annat.",
-  },
-  {
-    namn: "Skatt & juridik",
-    status: "kommande",
-    text: "Fler rättskällor på samma rådgivningsgrund — alltid med lagrum.",
-  },
-];
+function SajtFot() {
+  return (
+    <footer className="sajt-fot">
+      <div className="inre">
+        <div className="wordmark">
+          grund<em>bok</em>
+        </div>
+        <p>
+          Byggd på en öppen kärna. Varje förslag bär modell, promptversion,
+          konfidens och lagrum — spårbarheten AI-förordningen kräver är
+          arkitektur här, inte efterhandskonstruktion.
+        </p>
+        <nav>
+          <a href="https://github.com/leopold-jpg/grundbok">GitHub</a>
+          <a href="#vantelista">Kontakt — väntelistan</a>
+          <a href="/login">Logga in</a>
+          <span className="upphov">© 2026 Leopold Seifert</span>
+        </nav>
+      </div>
+    </footer>
+  );
+}
 
 export default function PublikSida() {
   return (
     <main className="publik">
-      <header className="sajt-topp">
-        <div className="wordmark">
-          grund<em>bok</em>
-        </div>
-        <a href="/login">Logga in</a>
-      </header>
-
-      <section className="hero">
-        <h1>
-          Framtidens redovisning sker <em>här</em>
-        </h1>
-        <p>
-          Specialistagenter tolkar och konterar era underlag enligt gällande rätt —
-          med lagrum på varje förslag. Ingenting bokförs utan att en behörig människa
-          attesterat eller att er egen policy uttryckligen tillåtit det. Ansvaret
-          flyttar aldrig.
-        </p>
-      </section>
-
-      <section>
-        <h2>Så funkar det</h2>
-        <div className="stegen">
-          <div className="steget">
-            <span className="nr">1.</span>
-            <h3>Släpp in underlaget</h3>
-            <p>
-              Klistra in eller ladda upp kvitton och fakturor. Mejladress per klient
-              och foto via kundappen är på väg — varje kanal är bara en källa in.
-            </p>
-          </div>
-          <div className="steget">
-            <span className="nr">2.</span>
-            <h3>Agenterna tolkar och konterar</h3>
-            <p>
-              Kontering, momssats och deklarationsrutor enligt BAS och gällande
-              momslag — varje förslag bär lagrum, konfidens och modellversion.
-            </p>
-          </div>
-          <div className="steget">
-            <span className="nr">3.</span>
-            <h3>Ni attesterar bara avvikelserna</h3>
-            <p>
-              Rutinhändelser inom er policy bokförs själva, loggade som policybeslut.
-              Kön krymper — kontrollen består.
-            </p>
-          </div>
-        </div>
-        <AttestMock />
-      </section>
-
-      <section>
-        <h2>Moduler</h2>
-        <div className="moduler">
-          {MODULER.map((m) => (
-            <div key={m.namn} className="modul">
-              <h3>{m.namn}</h3>
-              <span className={m.status === "live" ? "status-live" : "status-kommande"}>
-                {m.status === "live" ? "live" : "kommande"}
-              </span>
-              <p>{m.text}</p>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      <section>
-        <h2>Hör av er</h2>
-        <KontaktBox />
-      </section>
-
-      <footer className="sajt-fot">
-        Byggd på en öppen kärna —{" "}
-        <a href="https://github.com/leopold-jpg/grundbok">github.com/leopold-jpg/grundbok</a>.
-        Varje förslag bär modell, promptversion, konfidens och lagrum: spårbarheten
-        AI-förordningen kräver är arkitektur här, inte efterhandskonstruktion.{" "}
-        <a href="/login">Logga in</a> för byråns arbetsyta.
-      </footer>
+      <SajtTopp />
+      <Hero />
+      <SaFunkarDet />
+      <Moduler />
+      <Vantelista />
+      <SajtFot />
     </main>
   );
 }
