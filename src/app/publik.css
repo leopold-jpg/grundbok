@@ -24,6 +24,15 @@ main.publik {
   --morkt-mjuk: #b3a78e;
   --morkt-linje: rgba(243, 237, 222, 0.18);
 
+  /* Typografin (DESIGN-INSPO, prov i docs/design-referens/typografiprov/):
+     Fraunces bär displayen — didone-tyngd i storgrad via variabel vikt +
+     optisk storlek. IBM Plex Mono för kvitto-känslan. Variablerna sätts
+     av next/font i _publik/fonter.ts; skinnets serif är fallback. */
+  --font-serif: var(--font-publik-serif), var(--font-app-serif), Georgia, serif;
+  --font-mono: var(--font-publik-mono), ui-monospace, "SF Mono", Menlo, monospace;
+  --serifvikt-display: 560;
+  --serifvikt-rubrik: 520;
+
   /* Full bredd — sektionerna hanterar sina egna ytor; globals
      main-måtten gäller inte här. */
   max-width: none;
@@ -44,7 +53,7 @@ main.publik {
 .publik h1,
 .publik h2 {
   font-family: var(--font-serif);
-  font-weight: 400;
+  font-weight: var(--serifvikt-display);
   letter-spacing: var(--tracking-tight);
   margin: 0;
 }
@@ -134,6 +143,7 @@ main.publik {
   padding-block: var(--sp-3);
 }
 .publik .sajt-topp .wordmark {
+  font-weight: var(--serifvikt-display);
   font-size: 26px;
   color: var(--ink);
   text-decoration: none;
@@ -210,6 +220,7 @@ main.publik {
   line-height: 1.7;
 }
 .publik .sajt-fot .wordmark {
+  font-weight: var(--serifvikt-display);
   font-size: 30px;
   color: var(--morkt-fg);
   margin-bottom: var(--sp-4);
@@ -279,7 +290,7 @@ main.publik {
   border-bottom: 1px solid var(--linje);
   padding-bottom: var(--sp-3);
 }
-.publik .scen-titel { font-family: var(--font-serif); font-size: 19px; }
+.publik .scen-titel { font-family: var(--font-serif); font-weight: var(--serifvikt-rubrik); font-size: 19px; }
 .publik .scen-not {
   font-family: var(--font-mono);
   font-size: 10px;
@@ -407,7 +418,7 @@ main.publik {
   gap: var(--sp-3);
   margin-bottom: var(--sp-3);
 }
-.publik .ver-nr { font-family: var(--font-serif); font-size: 34px; }
+.publik .ver-nr { font-family: var(--font-serif); font-weight: var(--serifvikt-rubrik); font-size: 34px; }
 .publik .ver-beskr { font-size: 13px; color: var(--ink-mjuk); }
 .publik .ver-rader { margin-bottom: var(--sp-3); }
 .publik .ver-rad {
@@ -455,7 +466,7 @@ main.publik {
 }
 .publik .steget h3 {
   font-family: var(--font-serif);
-  font-weight: 400;
+  font-weight: var(--serifvikt-rubrik);
   font-size: clamp(24px, 3.4vw, 32px);
   letter-spacing: var(--tracking-snug);
   margin: 0 0 var(--sp-2);
@@ -499,6 +510,7 @@ main.publik {
 }
 .publik .krymper-rad {
   font-family: var(--font-serif);
+  font-weight: var(--serifvikt-rubrik);
   font-size: clamp(28px, 4.4vw, 44px);
   line-height: 1.12;
   letter-spacing: var(--tracking-tight);
@@ -563,7 +575,7 @@ main.publik {
 }
 .publik .faktaruta h3 {
   font-family: var(--font-serif);
-  font-weight: 400;
+  font-weight: var(--serifvikt-rubrik);
   font-size: clamp(22px, 3vw, 28px);
   letter-spacing: var(--tracking-snug);
   margin: 0 0 var(--sp-2);
@@ -586,6 +598,7 @@ main.publik {
 }
 .publik .oppen-karna p {
   font-family: var(--font-serif);
+  font-weight: var(--serifvikt-rubrik);
   font-size: clamp(20px, 2.6vw, 26px);
   margin: 0;
 }
@@ -629,7 +642,7 @@ main.publik {
 }
 .publik .modulrad h3 {
   font-family: var(--font-serif);
-  font-weight: 400;
+  font-weight: var(--serifvikt-rubrik);
   font-size: clamp(24px, 3.2vw, 30px);
   letter-spacing: var(--tracking-snug);
   margin: 0;
@@ -740,6 +753,7 @@ main.publik {
 .publik .kontakt .stampel { color: var(--rost); margin-bottom: var(--sp-4); }
 .publik .tack {
   font-family: var(--font-serif);
+  font-weight: var(--serifvikt-rubrik);
   font-size: clamp(26px, 4vw, 36px);
   letter-spacing: var(--tracking-snug);
   margin: 0 0 var(--sp-2);

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { motion, useReducedMotion } from "framer-motion";
 import KedjeScen from "./_publik/KedjeScen";
+import { fraunces, plexMono } from "./_publik/fonter";
 import "./publik.css";
 
 // Publika sajten — det blivande kunden ser (DESIGN-BRIEF v2: "papper
@@ -392,7 +393,7 @@ function SajtFot() {
 
 export default function PublikSida() {
   return (
-    <main className="publik">
+    <main className={`publik ${fraunces.variable} ${plexMono.variable}`}>
       <SajtTopp />
       <Hero />
       <SaFunkarDet />

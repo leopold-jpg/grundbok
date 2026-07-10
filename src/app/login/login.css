@@ -4,9 +4,18 @@
    scopad under .login-sida. Endast utseende — logiken orörd. */
 
 main.login-sida {
+  /* Samma typsnitt som publika ytan (fonter.ts); skinnets serif är
+     fallback. */
+  --font-serif: var(--font-publik-serif), var(--font-app-serif), Georgia, serif;
+  --font-mono: var(--font-publik-mono), ui-monospace, "SF Mono", Menlo, monospace;
+  --serifvikt-display: 560;
+
   max-width: 440px;
   padding-top: 10vh;
 }
+
+.login-sida .wordmark,
+.login-sida h1 { font-weight: var(--serifvikt-display); }
 
 .login-sida .wordmark { margin-bottom: var(--sp-6); }
 .login-sida .wordmark a { color: inherit; text-decoration: none; }
