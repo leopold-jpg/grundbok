@@ -85,7 +85,7 @@ main.publik {
 /* Perforeringen — kvittots avrivningskant som horisontell regel. */
 .publik .perforering {
   height: 1px;
-  background-image: linear-gradient(
+  background-image: repeating-linear-gradient(
     90deg,
     var(--linje-stark) 0 7px,
     transparent 7px 15px
