@@ -598,6 +598,60 @@ main.publik {
 }
 .publik .oppen-karna a:hover { color: #ffffff; }
 
+/* =============================== moduler =============================== */
+
+/* Huvudbokens formvärld: rader med löpnummer och tabellinjer, ärlig
+   märkning live/kommande — inga kort, inga påhittade features. */
+.publik .modul-lista { display: flex; flex-direction: column; }
+.publik .modulrad {
+  display: grid;
+  grid-template-columns: clamp(40px, 6vw, 64px) minmax(0, 1fr);
+  grid-template-areas:
+    "nr namnrad"
+    "nr text";
+  gap: var(--sp-1) var(--sp-4);
+  border-top: 1px solid var(--linje);
+  padding-block: var(--sp-5);
+}
+.publik .modul-nr {
+  grid-area: nr;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  color: var(--ink-svag);
+  padding-top: 9px;
+}
+.publik .modul-namnrad {
+  grid-area: namnrad;
+  display: flex;
+  align-items: baseline;
+  gap: var(--sp-4);
+}
+.publik .modulrad h3 {
+  font-family: var(--font-serif);
+  font-weight: 400;
+  font-size: clamp(24px, 3.2vw, 30px);
+  letter-spacing: var(--tracking-snug);
+  margin: 0;
+}
+.publik .modul-status {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ink-svag);
+  white-space: nowrap;
+}
+.publik .modul-status[data-live="true"] { color: var(--rost); font-weight: 700; }
+.publik .modulrad p {
+  grid-area: text;
+  font-size: 14.5px;
+  line-height: 1.6;
+  color: var(--ink-mjuk);
+  max-width: 62ch;
+  margin: 0;
+}
+
 /* ============================ sektionsytor ============================ */
 
 .publik section { padding-block: clamp(48px, 7vw, 96px); }

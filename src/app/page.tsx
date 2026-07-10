@@ -254,6 +254,20 @@ function Moduler() {
     <section id="moduler">
       <div className="inre">
         <SektionHuvud nr="03" titel="Moduler" />
+        <div className="modul-lista">
+          {MODULER.map((modul, i) => (
+            <Reveal key={modul.namn} className="modulrad" delay={i * 0.04}>
+              <span className="modul-nr">{String(i + 1).padStart(2, "0")}</span>
+              <div className="modul-namnrad">
+                <h3>{modul.namn}</h3>
+                <span className="modul-status" data-live={modul.status === "live"}>
+                  {modul.status === "live" ? "Live" : "Kommande"}
+                </span>
+              </div>
+              <p>{modul.text}</p>
+            </Reveal>
+          ))}
+        </div>
       </div>
     </section>
   );
