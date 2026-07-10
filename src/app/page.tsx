@@ -303,7 +303,8 @@ function KontaktBox() {
 
   if (skickad) {
     return (
-      <div className="kontakt">
+      <div className="kontakt" role="status">
+        <span className="stampel">Mottagen</span>
         <p className="tack">Tack — vi hör av oss.</p>
         <p className="tyst">
           Ingen väntelista med automatiska utskick: en människa läser och svarar.
@@ -314,34 +315,29 @@ function KontaktBox() {
 
   return (
     <div className="kontakt">
+      <div className="kontakt-topp">
+        <span>Väntelistan</span>
+        <span>№ —</span>
+      </div>
       <form onSubmit={skicka}>
-        <input
-          value={namn}
-          onChange={(e) => setNamn(e.target.value)}
-          placeholder="Ditt namn"
-          autoComplete="name"
-          required
-        />
-        <input
-          value={byra}
-          onChange={(e) => setByra(e.target.value)}
-          placeholder="Byrå eller bolag"
-          autoComplete="organization"
-          required
-        />
-        <input
-          type="email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          placeholder="E-post"
-          autoComplete="email"
-          required
-        />
-        <textarea
-          value={meddelande}
-          onChange={(e) => setMeddelande(e.target.value)}
-          placeholder="Vad vill ni lösa? (valfritt)"
-        />
+        <div className="falt-par">
+          <label>
+            <span className="falt-etikett">Namn</span>
+            <input value={namn} onChange={(e) => setNamn(e.target.value)} autoComplete="name" required />
+          </label>
+          <label>
+            <span className="falt-etikett">Byrå eller bolag</span>
+            <input value={byra} onChange={(e) => setByra(e.target.value)} autoComplete="organization" required />
+          </label>
+        </div>
+        <label>
+          <span className="falt-etikett">E-post</span>
+          <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" required />
+        </label>
+        <label>
+          <span className="falt-etikett">Vad vill ni lösa? (valfritt)</span>
+          <textarea value={meddelande} onChange={(e) => setMeddelande(e.target.value)} />
+        </label>
         <button
           className="kontakt-skicka"
           type="submit"
@@ -350,6 +346,9 @@ function KontaktBox() {
           {skickar ? "Skickar …" : "Ställ er på väntelistan"}
         </button>
       </form>
+      <p className="tyst kontakt-not">
+        Ingen väntelista med automatiska utskick: en människa läser och svarar.
+      </p>
       {fel && <p className="fel">{fel}</p>}
     </div>
   );
@@ -360,7 +359,9 @@ function Vantelista() {
     <section id="vantelista">
       <div className="inre">
         <SektionHuvud nr="04" titel="Ställ er på väntelistan" />
-        <KontaktBox />
+        <Reveal>
+          <KontaktBox />
+        </Reveal>
       </div>
     </section>
   );

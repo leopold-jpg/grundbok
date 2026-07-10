@@ -652,6 +652,99 @@ main.publik {
   margin: 0;
 }
 
+/* ============================= väntelistan ============================= */
+
+/* Konverteringen: en blankett man skriver under, inte ett formulär man
+   fyller i. Fälten är signaturlinjer; ≥16px text hindrar iOS-zoom. */
+.publik .kontakt {
+  position: relative;
+  max-width: 760px;
+  background: var(--papper-elev);
+  border: 1px solid var(--linje-stark);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-sm);
+  padding: var(--sp-6);
+}
+@media (min-width: 720px) { .publik .kontakt { padding: var(--sp-8); } }
+
+.publik .kontakt-topp {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ink-svag);
+  border-bottom: 1px solid var(--linje);
+  padding-bottom: var(--sp-3);
+  margin-bottom: var(--sp-6);
+}
+
+.publik .kontakt form { display: grid; gap: var(--sp-5); }
+.publik .falt-par { display: grid; gap: var(--sp-5); }
+@media (min-width: 720px) { .publik .falt-par { grid-template-columns: 1fr 1fr; } }
+
+.publik .kontakt label { display: block; }
+.publik .falt-etikett {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-svag);
+  margin-bottom: var(--sp-1);
+}
+.publik .kontakt input,
+.publik .kontakt textarea {
+  display: block;
+  width: 100%;
+  font-family: var(--font-sans);
+  font-size: 16px;
+  color: var(--ink);
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid var(--linje-stark);
+  border-radius: 0;
+  padding: var(--sp-2) 2px;
+}
+.publik .kontakt textarea { min-height: 96px; resize: vertical; }
+.publik .kontakt input:focus,
+.publik .kontakt textarea:focus {
+  outline: none;
+  border-bottom: 2px solid var(--rost);
+  padding-bottom: calc(var(--sp-2) - 1px);
+}
+
+.publik .kontakt-skicka {
+  justify-self: start;
+  font-family: var(--font-sans);
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--accent-fg);
+  background: var(--rost);
+  border: 1px solid var(--rost);
+  border-radius: var(--r-md);
+  padding: var(--sp-3) var(--sp-8);
+  cursor: pointer;
+  transition: background var(--dur-fast) var(--ease-out);
+  margin-top: var(--sp-2);
+}
+.publik .kontakt-skicka:hover:not(:disabled) { background: var(--rost-djup); }
+.publik .kontakt-skicka:disabled { opacity: 0.55; cursor: not-allowed; }
+@media (max-width: 600px) { .publik .kontakt-skicka { justify-self: stretch; width: 100%; } }
+
+.publik .kontakt-not { margin: var(--sp-4) 0 0; }
+
+/* Tack-vyn — kvittensen. */
+.publik .kontakt .stampel { color: var(--rost); margin-bottom: var(--sp-4); }
+.publik .tack {
+  font-family: var(--font-serif);
+  font-size: clamp(26px, 4vw, 36px);
+  letter-spacing: var(--tracking-snug);
+  margin: 0 0 var(--sp-2);
+}
+
 /* ============================ sektionsytor ============================ */
 
 .publik section { padding-block: clamp(48px, 7vw, 96px); }
