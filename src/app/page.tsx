@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import KedjeScen from "./_publik/KedjeScen";
 import "./publik.css";
 
 // Publika sajten — det blivande kunden ser (DESIGN-BRIEF v2: "papper
@@ -45,7 +46,9 @@ function Hero() {
             Ställ er på väntelistan
           </a>
         </div>
-        <div className="scen-yta">{/* Kedje-scenen monteras här (egen commit). */}</div>
+        <div className="scen-yta">
+          <KedjeScen />
+        </div>
       </div>
     </section>
   );
