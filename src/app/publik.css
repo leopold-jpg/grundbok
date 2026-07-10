@@ -527,6 +527,77 @@ main.publik {
   margin-top: var(--sp-2);
 }
 
+/* ======================= förtroende (inverterad) ====================== */
+
+.publik .morkt {
+  background: var(--morkt-bg);
+  color: var(--morkt-fg);
+}
+.publik .morkt .sektion-huvud { border-top-color: var(--morkt-linje); }
+.publik .morkt .lopnr { color: var(--rost); }
+
+.publik .fakta-grid {
+  display: grid;
+  gap: var(--sp-4);
+  margin-bottom: var(--sp-10);
+}
+@media (min-width: 760px) {
+  .publik .fakta-grid { grid-template-columns: 1fr 1fr; gap: var(--sp-5); }
+}
+
+/* Faktarutan — verifikationens formvärld: löpnummer, hårfina linjer. */
+.publik .faktaruta {
+  border: 1px solid var(--morkt-linje);
+  border-radius: var(--r-md);
+  padding: var(--sp-5) var(--sp-5) var(--sp-6);
+}
+.publik .fakta-nr {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  color: var(--morkt-mjuk);
+  border-bottom: 1px solid var(--morkt-linje);
+  padding-bottom: var(--sp-2);
+  margin-bottom: var(--sp-4);
+}
+.publik .faktaruta h3 {
+  font-family: var(--font-serif);
+  font-weight: 400;
+  font-size: clamp(22px, 3vw, 28px);
+  letter-spacing: var(--tracking-snug);
+  margin: 0 0 var(--sp-2);
+}
+.publik .faktaruta p {
+  font-size: 14.5px;
+  line-height: 1.65;
+  color: var(--morkt-mjuk);
+  margin: 0;
+}
+
+.publik .oppen-karna {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--sp-2) var(--sp-5);
+  border-top: 1px solid var(--morkt-linje);
+  padding-top: var(--sp-5);
+}
+.publik .oppen-karna p {
+  font-family: var(--font-serif);
+  font-size: clamp(20px, 2.6vw, 26px);
+  margin: 0;
+}
+.publik .oppen-karna a {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--morkt-fg);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.publik .oppen-karna a:hover { color: #ffffff; }
+
 /* ============================ sektionsytor ============================ */
 
 .publik section { padding-block: clamp(48px, 7vw, 96px); }

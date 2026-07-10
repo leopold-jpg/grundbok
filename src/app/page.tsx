@@ -171,6 +171,51 @@ function SaFunkarDet() {
   );
 }
 
+// Det som säljer till en försiktig byrå — varje ruta pekar på en
+// mekanism i systemet (hash-beslut, RLS, autonomipolicy) eller ett
+// uttryckligt åtagande. Inga påhittade garantier.
+const FAKTA: { rubrik: string; text: string }[] = [
+  {
+    rubrik: "Hash-bundna beslut",
+    text: "Varje förslag hashas, och attesten binds till hashen och beslutsfattarens identitet. En ändrad rad gör förslaget obeslutbart. Huvudboken är append-only — fel rättas med rättelsepost, aldrig genom ändring.",
+  },
+  {
+    rubrik: "Radnivå-isolering per kund",
+    text: "Varje klients data ligger bakom radnivåsäkerhet i databasen. En byrå ser aldrig en annan byrås värld — och operatören ser drift, aldrig kvitton eller kunddata.",
+  },
+  {
+    rubrik: "Ingen träning på er data",
+    text: "Era underlag och beslut används till er bokföring — ingenting används för att träna modeller.",
+  },
+  {
+    rubrik: "Mänsklig kontroll som mekanism",
+    text: "Human oversight enligt AI-förordningen är en konfigurerbar policy per kund och modul, inte en policytext. Varje förslag bär modell, promptversion, konfidens och lagrum.",
+  },
+];
+
+function Fortroende() {
+  return (
+    <section id="fortroende" className="morkt">
+      <div className="inre">
+        <SektionHuvud nr="02" titel="Förtroende är arkitektur" />
+        <div className="fakta-grid">
+          {FAKTA.map((fakta, i) => (
+            <Reveal key={fakta.rubrik} className="faktaruta" delay={i * 0.05}>
+              <span className="fakta-nr">№ 0{i + 1}</span>
+              <h3>{fakta.rubrik}</h3>
+              <p>{fakta.text}</p>
+            </Reveal>
+          ))}
+        </div>
+        <div className="oppen-karna">
+          <p>Byggd på en öppen kärna — läs koden själv.</p>
+          <a href="https://github.com/leopold-jpg/grundbok">github.com/leopold-jpg/grundbok</a>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 const MODULER: { namn: string; status: "live" | "kommande"; text: string }[] = [
   {
     namn: "Bokföring",
@@ -336,6 +381,7 @@ export default function PublikSida() {
       <SajtTopp />
       <Hero />
       <SaFunkarDet />
+      <Fortroende />
       <Moduler />
       <Vantelista />
       <SajtFot />
