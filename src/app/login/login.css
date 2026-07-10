@@ -1,0 +1,81 @@
+/* grundbok — inloggningen. Samma formspråk som publika sajten
+   (DESIGN-BRIEF: /login ingår): blankett-fält med signaturlinjer,
+   serif-rubrik, mono-etiketter. Bygger direkt på studio-tokens;
+   scopad under .login-sida. Endast utseende — logiken orörd. */
+
+main.login-sida {
+  max-width: 440px;
+  padding-top: 10vh;
+}
+
+.login-sida .wordmark { margin-bottom: var(--sp-6); }
+.login-sida .wordmark a { color: inherit; text-decoration: none; }
+
+.login-sida .dokument {
+  background: var(--bg-elev);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-sm);
+  padding: var(--sp-6);
+}
+@media (min-width: 520px) { .login-sida .dokument { padding: var(--sp-8); } }
+
+.login-sida h1 {
+  font-family: var(--font-serif);
+  font-weight: 400;
+  font-size: 30px;
+  letter-spacing: var(--tracking-snug);
+  margin: 0 0 var(--sp-6);
+}
+
+.login-sida form { display: grid; gap: var(--sp-5); }
+.login-sida label { display: block; }
+.login-sida .falt-etikett {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--fg-subtle);
+  margin-bottom: var(--sp-1);
+}
+.login-sida input {
+  display: block;
+  width: 100%;
+  font-family: var(--font-sans);
+  font-size: 16px; /* ≥16px hindrar iOS-zoom vid fokus */
+  color: var(--fg);
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid var(--border-strong);
+  border-radius: 0;
+  padding: var(--sp-2) 2px;
+}
+.login-sida input:focus {
+  outline: none;
+  border-bottom: 2px solid var(--accent);
+  padding-bottom: calc(var(--sp-2) - 1px);
+}
+
+.login-sida .login-knapp {
+  width: 100%;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--brand-fg);
+  background: var(--brand);
+  border: 1px solid var(--brand);
+  border-radius: var(--r-md);
+  padding: var(--sp-3) var(--sp-6);
+  margin-top: var(--sp-2);
+}
+.login-sida .login-knapp:hover:not(:disabled) {
+  background: var(--brand-hover);
+  border-color: var(--brand-hover);
+}
+.login-sida .login-knapp:disabled { opacity: 0.55; }
+
+.login-sida .dev-not {
+  border-top: 1px solid var(--divider);
+  padding-top: var(--sp-4);
+  margin-top: var(--sp-6);
+}

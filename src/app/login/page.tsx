@@ -3,9 +3,12 @@
 import { Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { sakerNext } from "@/auth/next-param";
+import "./login.css";
 
 // Inloggning för byrå-konsulter och operatören (WP11). Lokal dev-auth —
 // Supabase Auth tar över bakom samma AuthAdapter vid deploy (S4).
+// Utseendet delar publika sajtens formspråk (design-sajt); logiken är
+// oförändrad.
 
 function LoginForm() {
   const router = useRouter();
@@ -37,36 +40,40 @@ function LoginForm() {
   }
 
   return (
-    <main style={{ maxWidth: 420, marginTop: "10vh" }}>
-      <div className="wordmark" style={{ marginBottom: "var(--sp-6)" }}>
-        grund<em>bok</em>
+    <main className="login-sida">
+      <div className="wordmark">
+        <a href="/">
+          grund<em>bok</em>
+        </a>
       </div>
-      <section className="steg">
-        <div className="steg-rubrik">
-          <span className="steg-titel">Logga in</span>
-        </div>
-        <form onSubmit={loggaIn} style={{ display: "grid", gap: "var(--sp-3)" }}>
-          <input
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder="E-post"
-            autoComplete="username"
-            autoFocus
-          />
-          <input
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            placeholder="Lösenord"
-            autoComplete="current-password"
-          />
-          <button className="primar" type="submit" disabled={loggarIn || !email || !password}>
+      <section className="dokument">
+        <h1>Logga in</h1>
+        <form onSubmit={loggaIn}>
+          <label>
+            <span className="falt-etikett">E-post</span>
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              autoComplete="username"
+              autoFocus
+            />
+          </label>
+          <label>
+            <span className="falt-etikett">Lösenord</span>
+            <input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              autoComplete="current-password"
+            />
+          </label>
+          <button className="login-knapp" type="submit" disabled={loggarIn || !email || !password}>
             {loggarIn ? "Loggar in …" : "Logga in"}
           </button>
           {fel && <p className="fel">{fel}</p>}
         </form>
-        <p className="tyst" style={{ marginTop: "var(--sp-4)" }}>
+        <p className="tyst dev-not">
           Dev-läge: konsult.ett@byran-exempel.se eller leopold@otiva.se,
           lösenord <code>grundbok-dev</code>. Riktig inloggning (Supabase Auth)
           kopplas in vid deploy.
