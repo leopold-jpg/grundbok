@@ -437,6 +437,96 @@ main.publik {
   padding-left: var(--sp-3);
 }
 
+/* =========================== så funkar det ============================ */
+
+.publik .steg-lista { display: flex; flex-direction: column; }
+.publik .steget {
+  display: grid;
+  grid-template-columns: clamp(52px, 8vw, 96px) minmax(0, 1fr);
+  gap: var(--sp-4);
+  border-top: 1px solid var(--linje);
+  padding-block: var(--sp-6);
+}
+.publik .steg-siffra {
+  font-family: var(--font-serif);
+  font-size: clamp(36px, 5vw, 56px);
+  line-height: 1;
+  color: var(--ink-svag);
+}
+.publik .steget h3 {
+  font-family: var(--font-serif);
+  font-weight: 400;
+  font-size: clamp(24px, 3.4vw, 32px);
+  letter-spacing: var(--tracking-snug);
+  margin: 0 0 var(--sp-2);
+}
+.publik .steget p {
+  font-size: 15.5px;
+  line-height: 1.6;
+  color: var(--ink-mjuk);
+  max-width: 52ch;
+  margin: 0;
+}
+
+.publik .kanaler { display: flex; gap: var(--sp-3); margin-top: var(--sp-4); }
+.publik .kanal { flex: 1; max-width: 132px; }
+.publik .kanal-yta {
+  aspect-ratio: 4 / 3;
+  background: var(--papper-djup);
+  border: 1px solid var(--linje);
+  border-radius: var(--r-sm);
+  margin-bottom: var(--sp-1);
+}
+.publik .kanal-namn {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-svag);
+}
+
+/* Slutklämmen: raden + kurvan. */
+.publik .krymper {
+  display: grid;
+  gap: var(--sp-6);
+  align-items: end;
+  border-top: 1px solid var(--linje-stark);
+  padding-top: var(--sp-8);
+  margin-top: var(--sp-2);
+}
+@media (min-width: 840px) {
+  .publik .krymper { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+}
+.publik .krymper-rad {
+  font-family: var(--font-serif);
+  font-size: clamp(28px, 4.4vw, 44px);
+  line-height: 1.12;
+  letter-spacing: var(--tracking-tight);
+  max-width: 16ch;
+  margin: 0;
+}
+.publik .krymper-rad em { color: var(--rost); }
+.publik .kurva { margin: 0; }
+.publik .kurva svg { display: block; width: 100%; height: auto; }
+.publik .kurva-axel { stroke: var(--linje-stark); stroke-width: 1; }
+.publik .kurva-linje {
+  stroke: var(--rost);
+  stroke-width: 2.5;
+  fill: none;
+  stroke-linecap: round;
+}
+.publik .kurva figcaption {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-svag);
+  margin-top: var(--sp-2);
+}
+
 /* ============================ sektionsytor ============================ */
 
 .publik section { padding-block: clamp(48px, 7vw, 96px); }
