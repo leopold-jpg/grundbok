@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import HeroPixlar from "./_publik/HeroPixlar";
 import KedjeScen from "./_publik/KedjeScen";
@@ -256,6 +256,21 @@ function Moduler() {
   );
 }
 
+// Löpnummer-tickern (v4 §8): rullar medan inskrivningen pågår. Inget
+// påhittat nummer landas — API:t exponerar inget id (och API:er ligger
+// utanför den hårda gränsen), så kvittensen är verklig mottagningstid.
+function NrTicker({ aktiv }: { aktiv: boolean }) {
+  const [tick, setTick] = useState(0);
+  useEffect(() => {
+    if (!aktiv) return;
+    const t = setInterval(() => setTick((n) => n + 1), 60);
+    return () => clearInterval(t);
+  }, [aktiv]);
+  if (!aktiv) return <span>№ —</span>;
+  const siffror = [0, 1, 2, 3].map((pos) => (tick * 7 + pos * 3) % 10);
+  return <span>№ {siffror.join("")}</span>;
+}
+
 function KontaktBox() {
   const [namn, setNamn] = useState("");
   const [byra, setByra] = useState("");
@@ -263,6 +278,7 @@ function KontaktBox() {
   const [meddelande, setMeddelande] = useState("");
   const [skickar, setSkickar] = useState(false);
   const [skickad, setSkickad] = useState(false);
+  const [mottagenKl, setMottagenKl] = useState("");
   const [fel, setFel] = useState("");
 
   async function skicka(e: React.FormEvent) {
@@ -277,6 +293,7 @@ function KontaktBox() {
       });
       const data = await r.json();
       if (!r.ok) throw new Error(data.fel ?? `HTTP ${r.status}`);
+      setMottagenKl(new Date().toLocaleTimeString("sv-SE"));
       setSkickad(true);
     } catch (err) {
       setFel(err instanceof Error ? err.message : String(err));
@@ -287,8 +304,9 @@ function KontaktBox() {
   if (skickad) {
     return (
       <div className="kontakt" role="status">
-        <span className="stampel">Mottagen</span>
-        <p className="tack">Tack — vi hör av oss.</p>
+        <span className="stampel stampel-in">Registrerad</span>
+        <p className="tack">Tack — ni är inskrivna.</p>
+        <p className="reg-rad">mottagen kl {mottagenKl}</p>
         <p className="tyst">
           Ingen väntelista med automatiska utskick: en människa läser och svarar.
         </p>
@@ -300,7 +318,7 @@ function KontaktBox() {
     <div className="kontakt">
       <div className="kontakt-topp">
         <span>Väntelistan</span>
-        <span>№ —</span>
+        <NrTicker aktiv={skickar} />
       </div>
       <form onSubmit={skicka}>
         <div className="falt-par">
@@ -326,7 +344,7 @@ function KontaktBox() {
           type="submit"
           disabled={skickar}
         >
-          {skickar ? "Skickar …" : "Ställ er på väntelistan"}
+          {skickar ? "Skriver in …" : "Ställ er på väntelistan"}
         </button>
       </form>
       <p className="tyst kontakt-not">

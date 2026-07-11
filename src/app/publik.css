@@ -654,6 +654,20 @@ main.publik {
 @media (min-width: 720px) { .publik .falt-par { grid-template-columns: 1fr 1fr; } }
 
 .publik .kontakt label { display: block; }
+/* Fokusliv (v4): etiketten färgas och en rust-linje sveper in under
+   fältet — utöver (inte i stället för) fokus-outlinen. */
+.publik .kontakt label::after {
+  content: "";
+  display: block;
+  height: 2px;
+  margin-top: -2px;
+  background: var(--rost);
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform 0.28s var(--ease-out);
+}
+.publik .kontakt label:focus-within::after { transform: scaleX(1); }
+.publik .kontakt label:focus-within .falt-etikett { color: var(--rost); }
 .publik .falt-etikett {
   display: block;
   font-family: var(--font-mono);
@@ -705,8 +719,20 @@ main.publik {
 
 .publik .kontakt-not { margin: var(--sp-4) 0 0; }
 
-/* Tack-vyn — kvittensen. */
+/* Tack-vyn — kvittensen: stämpeln slår, mottagningstiden är verklig. */
 .publik .kontakt .stampel { color: var(--rost); margin-bottom: var(--sp-4); }
+.publik .stampel-in { animation: publik-stampel-in 0.3s var(--ease-out) both; }
+@keyframes publik-stampel-in {
+  from { opacity: 0; transform: rotate(-11deg) scale(1.25); }
+  to { opacity: 1; transform: rotate(-4deg) scale(1); }
+}
+.publik .reg-rad {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  color: var(--ink-mjuk);
+  margin: 0 0 var(--sp-3);
+}
 .publik .tack {
   font-weight: 600;
   font-size: clamp(22px, 3vw, 28px);
@@ -734,4 +760,6 @@ main.publik {
     animation: none;
     opacity: 0;
   }
+  .publik .kontakt label::after { transition: none; }
+  .publik .stampel-in { animation: none; }
 }
