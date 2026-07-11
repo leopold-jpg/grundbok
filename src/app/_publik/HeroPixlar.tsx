@@ -1,6 +1,6 @@
 "use client";
 
-import { motion } from "framer-motion";
+import { motion, useScroll, useTransform } from "framer-motion";
 
 // Ambient bakgrund i hero (v4): pixelblock i D1-märkets språk
 // (docs/brand/BRAND.md — pixelkvitto 3×5, perforeringen i botten,
@@ -92,47 +92,78 @@ function PixelKvitto({
   );
 }
 
-// Lösa pixlar som driver i kanterna — systemet som aldrig står still.
-const DRIFT: { x: string; y: string }[] = [
-  { x: "4%", y: "12%" },
-  { x: "13%", y: "64%" },
-  { x: "9%", y: "38%" },
-  { x: "88%", y: "16%" },
-  { x: "94%", y: "48%" },
-  { x: "84%", y: "76%" },
-  { x: "22%", y: "86%" },
-  { x: "76%", y: "90%" },
+// Svävande kuber i tre djup (v6): större = närmare = mer parallax
+// och långsammare drift. Lekfullt men aldrig distraherande.
+const KUBER: { x: string; y: string; storlek: number; djup: number; blur?: boolean }[] = [
+  { x: "4%", y: "12%", storlek: 13, djup: 0.4 },
+  { x: "13%", y: "64%", storlek: 22, djup: 0.9, blur: true },
+  { x: "9%", y: "38%", storlek: 13, djup: 0.5 },
+  { x: "88%", y: "16%", storlek: 18, djup: 0.7 },
+  { x: "94%", y: "48%", storlek: 13, djup: 0.4 },
+  { x: "84%", y: "76%", storlek: 26, djup: 1, blur: true },
+  { x: "22%", y: "86%", storlek: 16, djup: 0.6 },
+  { x: "76%", y: "90%", storlek: 13, djup: 0.5 },
+  { x: "48%", y: "8%", storlek: 15, djup: 0.6 },
 ];
+
+// En kub: yttre lagret bär scroll-parallaxen (olika per djup), det
+// inre den lugna driften + svaga rotationen.
+function Kub({
+  kub,
+  index,
+  spelar,
+}: {
+  kub: (typeof KUBER)[number];
+  index: number;
+  spelar: boolean;
+}) {
+  const { scrollY } = useScroll();
+  const parallax = useTransform(scrollY, [0, 900], [0, -64 * kub.djup]);
+  return (
+    <motion.div
+      style={{
+        position: "absolute",
+        left: kub.x,
+        top: kub.y,
+        y: spelar ? parallax : 0,
+      }}
+    >
+      <motion.div
+        style={{
+          width: kub.storlek,
+          height: kub.storlek,
+          borderRadius: Math.max(2, kub.storlek / 6),
+          background: "var(--ink)",
+          filter: kub.blur ? "blur(1.5px)" : undefined,
+        }}
+        initial={false}
+        animate={
+          spelar
+            ? {
+                opacity: 0.045 + kub.djup * 0.035,
+                y: [0, brus(index, 3) * 20, 0],
+                x: [0, brus(index, 4) * 14, 0],
+                rotate: [0, brus(index, 5) * 5, 0],
+              }
+            : { opacity: 0.04, y: 0, x: 0, rotate: 0 }
+        }
+        transition={
+          spelar
+            ? { duration: 26 + index * 4, ease: "easeInOut", repeat: Infinity }
+            : { duration: 0 }
+        }
+      />
+    </motion.div>
+  );
+}
 
 export default function HeroPixlar({ spelar }: { spelar: boolean }) {
   return (
     <div className="hero-pixlar" aria-hidden="true">
       <PixelKvitto x="5%" y="16%" fas={0} spelar={spelar} />
       <PixelKvitto x="90%" y="40%" fas={13} spelar={spelar} />
-      {DRIFT.map((d, i) => (
-        <motion.div
-          key={i}
-          style={{
-            position: "absolute",
-            left: d.x,
-            top: d.y,
-            width: CELL,
-            height: CELL,
-            borderRadius: 2,
-            background: "var(--ink)",
-          }}
-          initial={false}
-          animate={
-            spelar
-              ? { opacity: 0.05, y: [0, brus(i, 3) * 18, 0], x: [0, brus(i, 4) * 12, 0] }
-              : { opacity: 0.04, y: 0, x: 0 }
-          }
-          transition={
-            spelar
-              ? { duration: 30 + i * 4, ease: "easeInOut", repeat: Infinity }
-              : { duration: 0 }
-          }
-        />
+      {KUBER.map((kub, i) => (
+        <Kub key={i} kub={kub} index={i} spelar={spelar} />
       ))}
     </div>
   );
