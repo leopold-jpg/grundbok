@@ -5,6 +5,11 @@ import { motion } from "framer-motion";
 import HeroPixlar from "./_publik/HeroPixlar";
 import KedjeScen from "./_publik/KedjeScen";
 import ArkitekturFigur from "./_publik/ArkitekturFigur";
+import {
+  IllustrationErData,
+  IllustrationSistaOrdet,
+  IllustrationSparbart,
+} from "./_publik/TrygghetsIllustrationer";
 import AttestSimulator from "./_publik/AttestSimulator";
 import { PanelAvvikelse, PanelKontering, PanelUnderlag } from "./_publik/StegPaneler";
 import BentoModuler from "./_publik/BentoModuler";
@@ -153,24 +158,56 @@ function SaFunkarDet() {
   );
 }
 
-// Förtroendesektionen (v4 §5): EN ritad arkitekturfigur bär de fyra
-// poängerna som etiketter i flödet förslag → hash → attest/policy →
-// append-only huvudbok. En rad brödtext under — inte fyra stycken.
-// (Mörk/ljus-jämförelsen från v3 är avgjord: ljus; historiken finns i git.)
+// Förtroendesektionen (v6 §7): trygghet före teknik — tre grafiska
+// löften som glass-kort (glass används ENDAST här + navets blur tills
+// vidare). Arkitekturdiagrammet lever kvar i en diskret utfällning
+// för tekniska granskare. Varje löfte pekar på en mekanism i repot.
+const LOFTEN = [
+  {
+    rubrik: "Er data är er",
+    text: "Era underlag används till er bokföring — aldrig till att träna modeller.",
+    Illustration: IllustrationErData,
+  },
+  {
+    rubrik: "En människa har sista ordet",
+    text: "Ingenting bokförs utan attest eller er uttryckliga policy — och rättelser kräver alltid människa.",
+    Illustration: IllustrationSistaOrdet,
+  },
+  {
+    rubrik: "Allt är spårbart",
+    text: "Varje beslut loggas med hash, identitet och lagrum — huvudboken är append-only.",
+    Illustration: IllustrationSparbart,
+  },
+] as const;
+
 function Fortroende() {
   const spelar = useSpelar();
   return (
-    <section id="fortroende">
+    <section id="fortroende" className="is-yta trygghet">
       <div className="inre">
         <SektionHuvud nr="02" titel="Förtroende är arkitektur" />
-        <Reveal>
-          <ArkitekturFigur spelar={spelar} />
-        </Reveal>
-        <p className="fortroende-rad">
-          Hash-bundna beslut, radnivå-isolering per kund, ingen träning på er
-          data och mänsklig kontroll som konfigurerbar mekanism — spårbarheten
-          AI-förordningen kräver är arkitektur här, inte efterhandskonstruktion.
-        </p>
+        <div className="trygghet-grid">
+          {LOFTEN.map((lofte, i) => (
+            <Reveal key={lofte.rubrik} className="glass-kort" delay={i * 0.08}>
+              <div className="glass-bild" aria-hidden="true">
+                <lofte.Illustration spelar={spelar} />
+              </div>
+              <h3>{lofte.rubrik}</h3>
+              <p>{lofte.text}</p>
+            </Reveal>
+          ))}
+        </div>
+        <details className="teknik-utfallning">
+          <summary>För era tekniska granskare — hela arkitekturen</summary>
+          <div className="teknik-innehall">
+            <ArkitekturFigur spelar={spelar} />
+            <p className="fortroende-rad">
+              Hash-bundna beslut, radnivå-isolering per kund, ingen träning på er
+              data och mänsklig kontroll som konfigurerbar mekanism — spårbarheten
+              AI-förordningen kräver är arkitektur här, inte efterhandskonstruktion.
+            </p>
+          </div>
+        </details>
       </div>
     </section>
   );
