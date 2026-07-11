@@ -499,49 +499,40 @@ main.publik {
 
 /* =========================== så funkar det ============================ */
 
-.publik .steg-lista { display: flex; flex-direction: column; }
-.publik .steget {
+/* Tre illustrerade paneler (v4) — bilden bär, texten kvitterar. */
+.publik .panel-grid {
   display: grid;
-  grid-template-columns: clamp(52px, 8vw, 96px) minmax(0, 1fr);
-  gap: var(--sp-4);
-  border-top: 1px solid var(--linje);
-  padding-block: var(--sp-5);
+  gap: var(--sp-5);
+  margin-bottom: var(--sp-8);
 }
-.publik .steg-siffra {
-  font-family: var(--font-mono);
-  font-size: clamp(20px, 2.6vw, 26px);
-  line-height: 1.3;
-  color: var(--ink-svag);
+@media (min-width: 900px) {
+  .publik .panel-grid { grid-template-columns: 1fr 1fr 1fr; }
 }
-.publik .steget h3 {
-  font-weight: 600;
-  font-size: clamp(18px, 2.4vw, 21px);
-  letter-spacing: var(--tracking-snug);
-  margin: 0 0 var(--sp-2);
-}
-.publik .steget p {
-  font-size: 15.5px;
-  line-height: 1.6;
-  color: var(--ink-mjuk);
-  max-width: 52ch;
-  margin: 0;
-}
-
-.publik .kanaler { display: flex; gap: var(--sp-3); margin-top: var(--sp-4); }
-.publik .kanal { flex: 1; max-width: 132px; }
-.publik .kanal-yta {
-  aspect-ratio: 4 / 3;
-  background: var(--papper-djup);
+.publik .panel-bild {
+  background: var(--papper-elev);
   border: 1px solid var(--linje);
-  border-radius: var(--r-md);
-  margin-bottom: var(--sp-1);
+  border-radius: var(--r-lg);
+  padding: var(--sp-3);
+  margin-bottom: var(--sp-3);
 }
-.publik .kanal-namn {
+.publik .panel-nr {
   font-family: var(--font-mono);
-  font-size: 10px;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
+  font-size: 11px;
+  letter-spacing: 0.1em;
   color: var(--ink-svag);
+}
+.publik .panelen h3 {
+  font-weight: 600;
+  font-size: clamp(17px, 2.2vw, 19px);
+  letter-spacing: var(--tracking-snug);
+  margin: var(--sp-1) 0 var(--sp-1);
+}
+.publik .panelen p {
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--ink-mjuk);
+  margin: 0;
+  max-width: 40ch;
 }
 
 /* Slutklämmen: raden + kurvan. */

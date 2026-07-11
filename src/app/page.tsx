@@ -4,6 +4,7 @@ import { useState } from "react";
 import { motion } from "framer-motion";
 import HeroPixlar from "./_publik/HeroPixlar";
 import KedjeScen from "./_publik/KedjeScen";
+import { PanelAvvikelse, PanelKontering, PanelUnderlag } from "./_publik/StegPaneler";
 import { plexMono } from "./_publik/fonter";
 import { useSpelar } from "./_publik/useSpelar";
 import "./publik.css";
@@ -122,47 +123,41 @@ function AttestKurva() {
   );
 }
 
-const STEGEN: { rubrik: string; text: string; kanaler?: string[] }[] = [
+// Visuellt buren sekvens (v4): tre illustrerade paneler med max en
+// mening var — illustrationerna bär berättelsen, texten kvitterar.
+const STEGEN = [
   {
     rubrik: "Släpp in underlaget",
-    text: "Klistra in era kvitton och fakturor i dag — uppladdning, mejladress per klient och foto via kundappen är på väg. Varje kanal är bara en källa in.",
-    kanaler: ["Mejl", "Foto", "API"],
+    text: "Klistra in i dag — mejl, foto och uppladdning är på väg; varje kanal är bara en källa in.",
+    Panel: PanelUnderlag,
   },
   {
     rubrik: "Agenterna tolkar och konterar",
-    text: "Kontering, momssats och deklarationsrutor enligt BAS och gällande momslag — varje förslag bär lagrum, konfidens och modellversion.",
+    text: "BAS-kontering och momssats med lagrum, konfidens och modellversion på varje förslag.",
+    Panel: PanelKontering,
   },
   {
     rubrik: "Ni attesterar bara avvikelserna",
-    text: "Rutinhändelser inom er policy bokförs själva, loggade som policybeslut. Kön krymper — kontrollen består.",
+    text: "Rutinen bokför sig själv inom er policy — kön krymper, kontrollen består.",
+    Panel: PanelAvvikelse,
   },
-];
+] as const;
 
 function SaFunkarDet() {
+  const spelar = useSpelar();
   return (
     <section id="sa-funkar-det">
       <div className="inre">
         <SektionHuvud nr="01" titel="Så funkar det" />
-        <div className="steg-lista">
+        <div className="panel-grid">
           {STEGEN.map((steg, i) => (
-            <Reveal key={steg.rubrik} className="steget" delay={i * 0.06}>
-              <span className="steg-siffra">{i + 1}</span>
-              <div>
-                <h3>{steg.rubrik}</h3>
-                <p>{steg.text}</p>
-                {steg.kanaler && (
-                  <div className="kanaler">
-                    {steg.kanaler.map((kanal) => (
-                      <div key={kanal} className="kanal">
-                        {/* ASSET: stiliserade kvittofoton (genereras separat,
-                            DESIGN-BRIEF §Assets) — solid platshållaryta tills dess. */}
-                        <div className="kanal-yta" />
-                        <span className="kanal-namn">{kanal}</span>
-                      </div>
-                    ))}
-                  </div>
-                )}
+            <Reveal key={steg.rubrik} className="panelen" delay={i * 0.08}>
+              <div className="panel-bild">
+                <steg.Panel spelar={spelar} />
               </div>
+              <span className="panel-nr">{i + 1}</span>
+              <h3>{steg.rubrik}</h3>
+              <p>{steg.text}</p>
             </Reveal>
           ))}
         </div>
