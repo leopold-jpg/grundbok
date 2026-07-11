@@ -279,6 +279,7 @@ function KontaktBox() {
   const [skickar, setSkickar] = useState(false);
   const [skickad, setSkickad] = useState(false);
   const [mottagenKl, setMottagenKl] = useState("");
+  const [regId, setRegId] = useState("");
   const [fel, setFel] = useState("");
 
   async function skicka(e: React.FormEvent) {
@@ -293,6 +294,7 @@ function KontaktBox() {
       });
       const data = await r.json();
       if (!r.ok) throw new Error(data.fel ?? `HTTP ${r.status}`);
+      setRegId(typeof data.id === "string" ? data.id.slice(0, 8) : "");
       setMottagenKl(new Date().toLocaleTimeString("sv-SE"));
       setSkickad(true);
     } catch (err) {
@@ -306,7 +308,9 @@ function KontaktBox() {
       <div className="kontakt" role="status">
         <span className="stampel stampel-in">Registrerad</span>
         <p className="tack">Tack — ni är inskrivna.</p>
-        <p className="reg-rad">mottagen kl {mottagenKl}</p>
+        <p className="reg-rad">
+          {regId && <>reg {regId} · </>}mottagen kl {mottagenKl}
+        </p>
         <p className="tyst">
           Ingen väntelista med automatiska utskick: en människa läser och svarar.
         </p>
