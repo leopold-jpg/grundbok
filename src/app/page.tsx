@@ -7,14 +7,8 @@ import KedjeScen from "./_publik/KedjeScen";
 import ArkitekturFigur from "./_publik/ArkitekturFigur";
 import AttestSimulator from "./_publik/AttestSimulator";
 import { PanelAvvikelse, PanelKontering, PanelUnderlag } from "./_publik/StegPaneler";
-import {
-  IkonBokforing,
-  IkonBokslut,
-  IkonKundapp,
-  IkonLoner,
-  IkonRadgivning,
-  IkonSkatt,
-} from "./_publik/ModulIkoner";
+import BentoModuler from "./_publik/BentoModuler";
+import { RegTicker } from "./_publik/TickerOchLogotyper";
 import { plexMono } from "./_publik/fonter";
 import { useSpelar } from "./_publik/useSpelar";
 import "./publik.css";
@@ -182,75 +176,15 @@ function Fortroende() {
   );
 }
 
-// Moduler som ikonkort (v4 §7) i panelernas illustrationsspråk —
-// live i full färg, kommande dämpade. Max en mening per modul; samma
-// ärliga innehåll som tidigare, bara kortare.
-const MODULER = [
-  {
-    namn: "Bokföring",
-    status: "live",
-    text: "Underlag in — BAS-kontering och momssats med lagrum, direkt i attestkön.",
-    Ikon: IkonBokforing,
-  },
-  {
-    namn: "Rådgivning",
-    status: "live",
-    text: "Svar om konton, moms och lagrum — alltid med källa och konfidens.",
-    Ikon: IkonRadgivning,
-  },
-  {
-    namn: "Kundappen",
-    status: "kommande",
-    text: "Era kunder fotar kvittot — det bokför sig självt.",
-    Ikon: IkonKundapp,
-  },
-  {
-    namn: "Löner",
-    status: "kommande",
-    text: "Rådgivning först, kontering sen — vi integrerar i stället för att bygga en egen beräkningsmotor.",
-    Ikon: IkonLoner,
-  },
-  {
-    namn: "Bokslut",
-    status: "kommande",
-    text: "Periodiseringar och avstämningar som förslag i samma attestväg.",
-    Ikon: IkonBokslut,
-  },
-  {
-    namn: "Skatt & juridik",
-    status: "kommande",
-    text: "Fler rättskällor på samma rådgivningsgrund — alltid med lagrum.",
-    Ikon: IkonSkatt,
-  },
-] as const;
-
+// Moduler som bento-grid (v5) — live-modulerna stora med levande
+// detaljer, kommande dämpade. Byggd i parallell worktree.
 function Moduler() {
+  const spelar = useSpelar();
   return (
     <section id="moduler" className="is-yta">
       <div className="inre">
         <SektionHuvud nr="03" titel="Moduler" />
-        <div className="modul-grid">
-          {MODULER.map((modul, i) => (
-            <Reveal
-              key={modul.namn}
-              className="modulkort"
-              delay={i * 0.05}
-            >
-              <div data-status={modul.status} className="modulkort-inre">
-                <div className="modul-ikon" aria-hidden="true">
-                  <modul.Ikon />
-                </div>
-                <div className="modul-huvud">
-                  <h3>{modul.namn}</h3>
-                  <span className="modul-status" data-live={modul.status === "live"}>
-                    {modul.status === "live" ? "Live" : "Kommande"}
-                  </span>
-                </div>
-                <p>{modul.text}</p>
-              </div>
-            </Reveal>
-          ))}
-        </div>
+        <BentoModuler spelar={spelar} />
       </div>
     </section>
   );
@@ -272,6 +206,7 @@ function NrTicker({ aktiv }: { aktiv: boolean }) {
 }
 
 function KontaktBox() {
+  const spelar = useSpelar();
   const [namn, setNamn] = useState("");
   const [byra, setByra] = useState("");
   const [email, setEmail] = useState("");
@@ -309,7 +244,12 @@ function KontaktBox() {
         <span className="stampel stampel-in">Registrerad</span>
         <p className="tack">Tack — ni är inskrivna.</p>
         <p className="reg-rad">
-          {regId && <>reg {regId} · </>}mottagen kl {mottagenKl}
+          {regId && (
+            <>
+              reg <RegTicker varde={regId} spelar={spelar} /> ·{" "}
+            </>
+          )}
+          mottagen kl {mottagenKl}
         </p>
         <p className="tyst">
           Ingen väntelista med automatiska utskick: en människa läser och svarar.

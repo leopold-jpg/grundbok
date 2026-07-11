@@ -575,46 +575,21 @@ main.publik {
 
 /* =============================== moduler =============================== */
 
-/* Ikonkort (v4) — live i full färg, kommande dämpade. */
-.publik .modul-grid { display: grid; gap: var(--sp-4); }
-@media (min-width: 680px) { .publik .modul-grid { grid-template-columns: 1fr 1fr; } }
-@media (min-width: 980px) { .publik .modul-grid { grid-template-columns: 1fr 1fr 1fr; } }
-.publik .modulkort-inre {
-  height: 100%;
-  background: var(--kort);
-  border: 1px solid var(--linje);
-  border-radius: var(--r-lg);
-  padding: var(--sp-4) var(--sp-5);
+/* Bento-grid (v5) — live-modulerna spänner två kolumner på desktop. */
+.publik .bento-grid { display: grid; gap: var(--sp-4); }
+@media (min-width: 680px) {
+  .publik .bento-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
-.publik .modulkort-inre[data-status="kommande"] .modul-ikon,
-.publik .modulkort-inre[data-status="kommande"] h3 { opacity: 0.55; }
-.publik .modul-ikon { margin-bottom: var(--sp-3); }
-.publik .modul-huvud {
-  display: flex;
-  align-items: baseline;
-  gap: var(--sp-3);
-  margin-bottom: var(--sp-1);
+@media (min-width: 980px) {
+  .publik .bento-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .publik .bento-kort--live { grid-column: span 2; }
 }
-.publik .modulkort h3 {
-  font-weight: 600;
-  font-size: 17px;
-  letter-spacing: var(--tracking-snug);
-  margin: 0;
+.publik .bento-kort {
+  transition: box-shadow var(--dur-med) var(--ease-out), transform var(--dur-med) var(--ease-out);
 }
-.publik .modul-status {
-  font-size: 10px;
-  font-weight: 600;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: var(--ink-svag);
-  white-space: nowrap;
-}
-.publik .modul-status[data-live="true"] { color: var(--gron); font-weight: 700; }
-.publik .modulkort p {
-  font-size: 13.5px;
-  line-height: 1.55;
-  color: var(--ink-mjuk);
-  margin: 0;
+.publik .bento-kort:hover {
+  box-shadow: var(--skugga-lyft);
+  transform: translateY(-2px);
 }
 
 /* ============================= väntelistan ============================= */
@@ -746,4 +721,6 @@ main.publik {
     opacity: 0;
   }
   .publik .stampel-in { animation: none; }
+  .publik .bento-kort { transition: none; }
+  .publik .bento-kort:hover { transform: none; }
 }
