@@ -1,26 +1,24 @@
-/* grundbok — publika sajten. Identitet: "papper som blivit levande"
-   (DESIGN-BRIEF v2). Scopad under .publik. Bygger på Gesso-tokens
-   (studio-skinnet); paletten här är briefens fördjupning av samma
-   familj: varmt papper som bas, djupt bläck, terracotta som ENDA
-   accent. Serif bär rubrikerna, grotesk brödtexten, monospace
-   siffror/konton/lagrum (kvitto-känslan). Mobil först. */
+/* grundbok — publika sajten. Identitet: varm ljus produktförst-
+   minimalism (DESIGN-BRIEF v3, låst mot facit i docs/design-referens/
+   publik/). Scopad under .publik, ovanpå Gesso-tokens: papper #F7F3EA,
+   bläck #2C2A26, rust #A4502E som varm accent. Grotesk bär rubriker
+   och gränssnitt; serifen är varumärkeskrydda (ordmärket, kursiva
+   betoningar); mono för siffror/konton/lagrum. Mobil först. */
 
 main.publik {
-  /* Fördjupad palett — scopade slots ovanpå studio-skinnet. Bläcket är
-     mörkare än --fg och pappret något djupare; accenten är exakt
-     skinnets terracotta. Mörka sektioner inverterar till bläck/cream. */
+  /* Palett per brief v3 — scopade slots ovanpå studio-skinnet. */
   --papper: #F7F3EA;
   --papper-elev: #FCFAF3;
   --papper-djup: #EFE7D6;
-  --ink: #17110a;
-  --ink-mjuk: #5d5343;
+  --ink: #2C2A26;
+  --ink-mjuk: #5f5a4f; /* 6,2:1 på papper */
   --ink-svag: #766a54; /* AA: 4,8:1 på papper */
-  --linje: #e3dac7;
+  --linje: #ddd6c8; /* briefens kortkant */
   --linje-stark: #c9bda2;
-  --rost: var(--accent);
-  --rost-djup: var(--accent-hover);
-  --rost-ljus: #cf8a64; /* smågradstext på mörkt: 6,7:1 */
-  --morkt-bg: #17110a;
+  --rost: #A4502E; /* 5,0:1 på papper, vit text 5,6:1 */
+  --rost-djup: #8a4226;
+  --rost-ljus: #cf8a64; /* smågradstext på mörkt: 5,1:1 */
+  --morkt-bg: #2C2A26;
   --morkt-fg: #f3edde;
   --morkt-mjuk: #b3a78e;
   --morkt-linje: rgba(243, 237, 222, 0.18);
