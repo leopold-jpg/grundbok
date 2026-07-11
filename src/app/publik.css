@@ -580,6 +580,23 @@ main.publik {
 
 /* ======================= förtroende (inverterad) ====================== */
 
+/* Ljus variant (brief v3): typografiskt buren — papper rakt igenom,
+   tunna linjer, mono-detaljer, ljusa kort. Mörka varianten (.morkt)
+   behålls nedanför för jämförelsen; växla i page.tsx. */
+.publik .fortroende-ljus .sektion-huvud { border-top-color: var(--linje-stark); }
+.publik .fortroende-ljus .faktaruta {
+  background: var(--papper-elev);
+  border-color: var(--linje);
+}
+.publik .fortroende-ljus .fakta-nr {
+  color: var(--ink-svag);
+  border-bottom-color: var(--linje);
+}
+.publik .fortroende-ljus .faktaruta p { color: var(--ink-mjuk); }
+.publik .fortroende-ljus .oppen-karna { border-top-color: var(--linje-stark); }
+.publik .fortroende-ljus .oppen-karna a { color: var(--ink); }
+.publik .fortroende-ljus .oppen-karna a:hover { color: var(--rost-djup); }
+
 .publik .morkt {
   background: var(--morkt-bg);
   color: var(--morkt-fg);
@@ -679,9 +696,8 @@ main.publik {
   gap: var(--sp-4);
 }
 .publik .modulrad h3 {
-  font-family: var(--font-serif);
-  font-weight: var(--serifvikt-rubrik);
-  font-size: clamp(24px, 3.2vw, 30px);
+  font-weight: 600;
+  font-size: clamp(18px, 2.4vw, 22px);
   letter-spacing: var(--tracking-snug);
   margin: 0;
 }
