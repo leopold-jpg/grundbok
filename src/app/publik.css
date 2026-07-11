@@ -683,8 +683,8 @@ main.publik {
   max-width: 760px;
   background: var(--kort);
   border: 1px solid var(--linje);
-  border-radius: var(--r-lg);
-  box-shadow: var(--skugga-kort);
+  border-radius: var(--r-xl);
+  box-shadow: var(--skugga-lyft);
   padding: var(--sp-6);
 }
 @media (min-width: 720px) { .publik .kontakt { padding: var(--sp-8); } }
