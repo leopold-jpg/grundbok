@@ -29,25 +29,25 @@ function SajtTopp() {
   );
 }
 
+// Hero enligt facit (DESIGN-BRIEF v3): centrerad rubrik + kort copy +
+// en CTA, och kedje-scenen som inramad produktskärm direkt under —
+// rubriken säger vad, scenen bevisar det.
 function Hero() {
   return (
     <section className="hero">
       <div className="inre">
-        <div>
-          <span className="overline">Agentisk redovisning · byggd på öppen kärna</span>
-          <h1>
-            Framtidens redovisning <em>attesterar sig själv</em>
-          </h1>
-          <p className="ingress">
-            Specialistagenter tolkar och konterar era underlag enligt gällande rätt,
-            med lagrum på varje förslag. Ingenting bokförs utan att en behörig
-            människa attesterat eller er egen policy uttryckligen tillåtit det —
-            ansvaret flyttar aldrig.
-          </p>
-          <a className="cta" href="#vantelista">
-            Ställ er på väntelistan
-          </a>
-        </div>
+        <span className="overline">Agentisk redovisning · byggd på öppen kärna</span>
+        <h1>
+          Framtidens redovisning <em>attesterar sig själv</em>
+        </h1>
+        <p className="ingress">
+          Specialistagenter tolkar och konterar era underlag enligt gällande rätt,
+          med lagrum på varje förslag. Ingenting bokförs utan attest eller er
+          uttryckliga policy — ansvaret flyttar aldrig.
+        </p>
+        <a className="cta" href="#vantelista">
+          Ställ er på väntelistan
+        </a>
         <div className="scen-yta">
           <KedjeScen />
         </div>

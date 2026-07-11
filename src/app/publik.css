@@ -172,29 +172,29 @@ main.publik {
    papper/fiber läggs som background-image här — tills dess bär den
    solida papperytan sektionen. */
 .publik .hero {
-  padding-block: clamp(56px, 9vw, 120px) clamp(48px, 7vw, 96px);
+  padding-block: clamp(48px, 7vw, 88px) clamp(40px, 6vw, 64px);
 }
-.publik .hero .inre {
-  display: grid;
-  gap: var(--sp-10);
-  align-items: center;
-}
-@media (min-width: 960px) {
-  .publik .hero .inre { grid-template-columns: minmax(0, 10fr) minmax(0, 11fr); }
-}
+/* Centrerad komposition (facit): rubrik → kort copy → en CTA → scenen
+   som inramad produktskärm under. */
+.publik .hero .inre { text-align: center; }
 .publik .hero h1 {
-  font-size: clamp(46px, 9vw, 88px);
-  line-height: 1.01;
-  margin: var(--sp-4) 0 var(--sp-5);
-  max-width: 13ch;
+  font-size: clamp(40px, 6.5vw, 64px);
+  line-height: 1.06;
+  margin: var(--sp-4) auto var(--sp-4);
+  max-width: 18ch;
 }
 .publik .hero h1 em { color: var(--rost); }
 .publik .hero .ingress {
   font-size: 17px;
-  line-height: 1.65;
+  line-height: 1.6;
   color: var(--ink-mjuk);
-  max-width: 46ch;
-  margin: 0 0 var(--sp-6);
+  max-width: 52ch;
+  margin: 0 auto var(--sp-6);
+}
+.publik .hero .scen-yta {
+  max-width: 800px;
+  margin: clamp(40px, 6vw, 64px) auto 0;
+  text-align: left;
 }
 
 .publik .cta {
