@@ -180,7 +180,19 @@ main.publik {
    papper/fiber läggs som background-image här — tills dess bär den
    solida papperytan sektionen. */
 .publik .hero {
+  position: relative;
   padding-block: clamp(48px, 7vw, 88px) clamp(40px, 6vw, 64px);
+}
+/* Ambient pixelliv (D1-språket) — bakom innehållet, aldrig i vägen. */
+.publik .hero-pixlar {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+.publik .hero .inre { position: relative; }
+@media (max-width: 719px) {
+  .publik .hero-pixlar { display: none; }
 }
 /* Centrerad komposition (facit): rubrik → kort copy → en CTA → scenen
    som inramad produktskärm under. */

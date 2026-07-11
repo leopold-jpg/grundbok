@@ -2,8 +2,10 @@
 
 import { useState } from "react";
 import { motion } from "framer-motion";
+import HeroPixlar from "./_publik/HeroPixlar";
 import KedjeScen from "./_publik/KedjeScen";
 import { plexMono } from "./_publik/fonter";
+import { useSpelar } from "./_publik/useSpelar";
 import "./publik.css";
 
 // Publika sajten — det blivande kunden ser (DESIGN-BRIEF v2: "papper
@@ -33,8 +35,10 @@ function SajtTopp() {
 // en CTA, och kedje-scenen som inramad produktskärm direkt under —
 // rubriken säger vad, scenen bevisar det.
 function Hero() {
+  const spelar = useSpelar();
   return (
     <section className="hero">
+      <HeroPixlar spelar={spelar} />
       <div className="inre">
         <span className="overline">Agentisk redovisning · byggd på öppen kärna</span>
         <h1>
