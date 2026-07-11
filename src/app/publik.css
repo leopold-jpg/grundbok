@@ -281,7 +281,7 @@ main.publik {
 
 .publik .scen {
   position: relative;
-  border: 1px solid var(--linje-stark);
+  border: 1px solid var(--linje);
   border-radius: var(--r-lg);
   background: var(--papper-elev);
   box-shadow: var(--shadow-md);
@@ -437,7 +437,7 @@ main.publik {
   translate: -50% -50%;
   width: min(400px, 96%);
   background: var(--papper-elev);
-  border: 1px solid var(--linje-stark);
+  border: 1px solid var(--linje);
   border-radius: var(--r-md);
   box-shadow: var(--shadow-lg);
   padding: var(--sp-5);
@@ -521,7 +521,7 @@ main.publik {
   aspect-ratio: 4 / 3;
   background: var(--papper-djup);
   border: 1px solid var(--linje);
-  border-radius: var(--r-sm);
+  border-radius: var(--r-md);
   margin-bottom: var(--sp-1);
 }
 .publik .kanal-namn {
@@ -598,8 +598,9 @@ main.publik {
 
 /* Faktarutan — verifikationens formvärld: löpnummer, hårfina linjer. */
 .publik .faktaruta {
+  background: rgba(252, 250, 243, 0.05);
   border: 1px solid var(--morkt-linje);
-  border-radius: var(--r-md);
+  border-radius: var(--r-lg);
   padding: var(--sp-5) var(--sp-5) var(--sp-6);
 }
 .publik .fakta-nr {
@@ -710,7 +711,7 @@ main.publik {
   position: relative;
   max-width: 760px;
   background: var(--papper-elev);
-  border: 1px solid var(--linje-stark);
+  border: 1px solid var(--linje);
   border-radius: var(--r-lg);
   box-shadow: var(--shadow-sm);
   padding: var(--sp-6);
