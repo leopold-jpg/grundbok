@@ -1,21 +1,25 @@
 "use client";
 
 /**
- * AttestSimulator — interaktiv "attesthögen krymper"-simulator för publika sajten.
+ * AttestSimulator v2 — "frigör timmar till rådgivning"-simulator för publika sajten.
  *
  * Props-kontrakt:
  *   spelar: boolean — integratören sätter denna till `mounted && !prefers-reduced-motion`.
- *     Servern renderar alltid spelar=false. Komponenten renderar identiskt på server
- *     och första klientrendering: all state har statiska defaults (100 underlag, 50 % rutin),
- *     inga effekter muterar initial DOM. `spelar` styr ENBART om kvadraternas färgbyte
- *     får en mjuk CSS-transition (200 ms) eller sker direkt.
+ *     Servern renderar alltid spelar=false och komponenten renderar identiskt på server
+ *     och första klientrendering: all state har statiska defaults (100 underlag,
+ *     50 % rutin, 5 min/underlag, 700 kr/h) och inga effekter muterar initial DOM.
+ *     `spelar` styr ENBART om kvadraternas färgbyte får en mjuk CSS-transition
+ *     (200 ms) eller sker direkt.
  *
- * Klassnamn som integratören stylar i publik.css (komponenten skriver ingen CSS själv):
- *   .sim-reglage — de två range-inputarna (hover/fokusring, ev. thumb-styling).
- *     Baseline-utseende finns redan via inline `accentColor: var(--bla)`.
+ * Klassnamn som integratören kan styla vidare i publik.css (komponenten skriver
+ * ingen egen CSS — baseline-utseendet ligger i inline styles):
+ *   .sim-reglage — range-inputen "Underlag per månad" (accentColor: var(--bla) inline).
+ *   .sim-falt   — de tre antagande-fälten (type="number"); boxad kant och blå
+ *                 fokusring finns redan inline via fokus-state.
  *
- * Allt som visas är ren aritmetik på besökarens reglagevärden — inga hårdkodade
- * procentsatser, timbesparingar eller kundpåståenden.
+ * Allt som visas är ren aritmetik på besökarens egna antaganden — inga hårdkodade
+ * timbesparingar, procentsatser eller kundpåståenden. Ramen är att rutintid
+ * frigörs till rådgivning, aldrig att någon ersätts.
  */
 
 import { useMemo, useState, type CSSProperties } from "react";
@@ -25,16 +29,20 @@ type AttestSimulatorProps = {
   spelar: boolean;
 };
 
+const SANS = "var(--font-sans)";
 const MONO = "var(--font-mono)";
 
+/** Grotesk small-caps-etikett — etiketter sätts aldrig i mono. */
 const etikettStil: CSSProperties = {
-  fontFamily: MONO,
+  fontFamily: SANS,
   fontSize: 11,
+  fontWeight: 500,
   letterSpacing: "0.08em",
   textTransform: "uppercase",
   color: "var(--ink-svag)",
 };
 
+/** Synligt siffervärde intill en etikett. */
 const vardeStil: CSSProperties = {
   fontFamily: MONO,
   fontSize: 13,
@@ -42,23 +50,47 @@ const vardeStil: CSSProperties = {
   color: "var(--ink)",
 };
 
+/** Tolkar ett fälts text som tal och klämmer in det i [min, max]; ogiltigt → min. */
+function klamp(text: string, min: number, max: number): number {
+  const tal = Number(text);
+  if (!Number.isFinite(tal)) return min;
+  return Math.min(max, Math.max(min, tal));
+}
+
 export default function AttestSimulator({ spelar }: AttestSimulatorProps) {
   const [underlag, setUnderlag] = useState(100);
-  const [rutin, setRutin] = useState(50);
+  const [andelText, setAndelText] = useState("50");
+  const [minuterText, setMinuterText] = useState("5");
+  const [timkostnadText, setTimkostnadText] = useState("700");
+  const [fokusFalt, setFokusFalt] = useState<string | null>(null);
 
-  // Ren aritmetik: så många bokförs av policyn, resten kräver attest.
-  const bokforsSjalv = Math.floor((underlag * rutin) / 100);
-  const kraverAttest = underlag - bokforsSjalv;
+  // Antaganden, inklämda i sina tillåtna intervall.
+  const andel = klamp(andelText, 0, 100);
+  const minuter = klamp(minuterText, 1, 60);
+  const timkostnad = klamp(timkostnadText, 100, 3000);
+
+  // Ren aritmetik av inmatningarna — inget hårdkodat.
+  const hanterasAvPolicy = Math.floor((underlag * andel) / 100);
+  const kraverAttest = underlag - hanterasAvPolicy;
+  const timmar = (hanterasAvPolicy * minuter) / 60;
+  const kronor = Math.round(timmar * timkostnad);
+
+  const timmarText = timmar.toLocaleString("sv-SE", {
+    minimumFractionDigits: 1,
+    maximumFractionDigits: 1,
+  });
+  const kronorText = kronor.toLocaleString("sv-SE");
 
   const rutTransition = spelar
     ? "background-color 200ms ease, border-color 200ms ease"
     : "none";
 
-  // Rutnät: en kvadrat per underlag. Attest-högen (rost) först, rutin (dämpad) sist.
+  // Rutnät: en kvadrat per underlag. Attest-delen (blå) läses först,
+  // policy-delen (dämpad) sist.
   const rutor = useMemo(
     () =>
       Array.from({ length: underlag }, (_, i) => {
-        const arRutin = i >= kraverAttest;
+        const arPolicy = i >= kraverAttest;
         return (
           <div
             key={i}
@@ -68,8 +100,8 @@ export default function AttestSimulator({ spelar }: AttestSimulatorProps) {
               borderRadius: 3,
               boxSizing: "border-box",
               border: "1px solid",
-              borderColor: arRutin ? "var(--linje)" : "var(--bla)",
-              backgroundColor: arRutin ? "var(--yta-is)" : "var(--bla)",
+              borderColor: arPolicy ? "var(--linje)" : "var(--bla)",
+              backgroundColor: arPolicy ? "var(--yta-is)" : "var(--bla)",
               transition: rutTransition,
             }}
           />
@@ -78,99 +110,146 @@ export default function AttestSimulator({ spelar }: AttestSimulatorProps) {
     [underlag, kraverAttest, rutTransition]
   );
 
-  // Kurva: från 100 % (alla kräver attest) ner till besökarens attest-nivå (1 − andel rutin).
-  const yTopp = 10; // y-koordinat för 100 %
-  const yBas = 100; // y-koordinat för 0 % (baslinjen)
-  const attestNiva = (100 - rutin) / 100;
-  const ySlut = yBas - attestNiva * (yBas - yTopp);
-  const kurvaD = `M 10 ${yTopp} C 220 ${yTopp}, 340 ${ySlut}, 550 ${ySlut}`;
+  const falt: Array<{
+    id: string;
+    etikett: string;
+    min: number;
+    max: number;
+    varde: string;
+    sattVarde: (v: string) => void;
+    klampat: number;
+  }> = [
+    {
+      id: "sim-andel",
+      etikett: "Andel rutin (%)",
+      min: 0,
+      max: 100,
+      varde: andelText,
+      sattVarde: setAndelText,
+      klampat: andel,
+    },
+    {
+      id: "sim-minuter",
+      etikett: "Minuter per underlag",
+      min: 1,
+      max: 60,
+      varde: minuterText,
+      sattVarde: setMinuterText,
+      klampat: minuter,
+    },
+    {
+      id: "sim-timkostnad",
+      etikett: "Timkostnad (kr)",
+      min: 100,
+      max: 3000,
+      varde: timkostnadText,
+      sattVarde: setTimkostnadText,
+      klampat: timkostnad,
+    },
+  ];
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
-      {/* Reglage */}
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 24 }}>
+      {/* Reglage — ett enda: volymen underlag */}
+      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
         <div
           style={{
-            flex: "1 1 220px",
             display: "flex",
-            flexDirection: "column",
-            gap: 8,
+            justifyContent: "space-between",
+            alignItems: "baseline",
+            gap: 12,
           }}
         >
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "baseline",
-              gap: 12,
-            }}
-          >
-            <label htmlFor="sim-underlag" style={etikettStil}>
-              Underlag per månad
-            </label>
-            <span style={vardeStil}>{underlag}</span>
-          </div>
-          <input
-            id="sim-underlag"
-            className="sim-reglage"
-            type="range"
-            min={20}
-            max={300}
-            step={20}
-            value={underlag}
-            onChange={(e) => setUnderlag(Number(e.target.value))}
-            aria-valuetext={`${underlag} underlag per månad`}
-            style={{
-              display: "block",
-              width: "100%",
-              margin: 0,
-              accentColor: "var(--bla)",
-            }}
-          />
+          <label htmlFor="sim-underlag" style={etikettStil}>
+            Underlag per månad
+          </label>
+          <span style={vardeStil}>{underlag.toLocaleString("sv-SE")}</span>
         </div>
-
-        <div
+        <input
+          id="sim-underlag"
+          className="sim-reglage"
+          type="range"
+          min={20}
+          max={300}
+          step={20}
+          value={underlag}
+          onChange={(e) => setUnderlag(Number(e.target.value))}
+          aria-valuetext={`${underlag} underlag per månad`}
           style={{
-            flex: "1 1 220px",
-            display: "flex",
-            flexDirection: "column",
-            gap: 8,
+            display: "block",
+            width: "100%",
+            margin: 0,
+            accentColor: "var(--bla)",
           }}
-        >
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "baseline",
-              gap: 12,
-            }}
-          >
-            <label htmlFor="sim-rutin" style={etikettStil}>
-              Andel rutin (inom er policy)
-            </label>
-            <span style={vardeStil}>{rutin} %</span>
-          </div>
-          <input
-            id="sim-rutin"
-            className="sim-reglage"
-            type="range"
-            min={0}
-            max={100}
-            step={5}
-            value={rutin}
-            onChange={(e) => setRutin(Number(e.target.value))}
-            aria-valuetext={`${rutin} procent rutin`}
-            style={{
-              display: "block",
-              width: "100%",
-              margin: 0,
-              accentColor: "var(--bla)",
-            }}
-          />
+        />
+      </div>
+
+      {/* Antaganden — öppna och justerbara, grupperade under rubrikraden */}
+      <div
+        role="group"
+        aria-labelledby="sim-antaganden-rubrik"
+        style={{ display: "flex", flexDirection: "column", gap: 12 }}
+      >
+        <span id="sim-antaganden-rubrik" style={etikettStil}>
+          Antaganden — justera efter er byrå
+        </span>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 16 }}>
+          {falt.map((f) => {
+            const harFokus = fokusFalt === f.id;
+            return (
+              <div
+                key={f.id}
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 6,
+                  flex: "0 1 auto",
+                }}
+              >
+                <label htmlFor={f.id} style={etikettStil}>
+                  {f.etikett}
+                </label>
+                <input
+                  id={f.id}
+                  className="sim-falt"
+                  type="number"
+                  min={f.min}
+                  max={f.max}
+                  step={1}
+                  value={f.varde}
+                  onChange={(e) => f.sattVarde(e.target.value)}
+                  onFocus={() => setFokusFalt(f.id)}
+                  onBlur={() => {
+                    setFokusFalt(null);
+                    f.sattVarde(String(f.klampat));
+                  }}
+                  style={{
+                    width: 96,
+                    boxSizing: "border-box",
+                    padding: "6px 10px",
+                    borderRadius: 6,
+                    border: "1px solid",
+                    borderColor: harFokus
+                      ? "var(--bla)"
+                      : "var(--linje-stark)",
+                    boxShadow: harFokus
+                      ? "0 0 0 1px var(--bla)"
+                      : "none",
+                    outline: "none",
+                    backgroundColor: "var(--yta)",
+                    fontFamily: MONO,
+                    fontSize: 13,
+                    fontVariantNumeric: "tabular-nums",
+                    color: "var(--ink)",
+                  }}
+                />
+              </div>
+            );
+          })}
         </div>
       </div>
 
-      {/* Rutnät — dekorativ visualisering av samma tal som resultatraden */}
+      {/* Rutnät — dekorativ visualisering av samma tal som utfallsraden */}
       <div
         aria-hidden="true"
         style={{ display: "flex", flexWrap: "wrap", gap: 4 }}
@@ -178,19 +257,39 @@ export default function AttestSimulator({ spelar }: AttestSimulatorProps) {
         {rutor}
       </div>
 
-      {/* Resultatrad — ren aritmetik av inmatningen */}
-      <output
-        htmlFor="sim-underlag sim-rutin"
-        style={{
-          fontFamily: MONO,
-          fontSize: 13,
-          fontVariantNumeric: "tabular-nums",
-          color: "var(--ink)",
-        }}
-      >
-        {bokforsSjalv} av {underlag} bokförs av er policy · {kraverAttest}{" "}
-        kräver er attest
-      </output>
+      {/* Utfall — ren aritmetik av besökarens antaganden */}
+      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+        <output
+          htmlFor="sim-underlag sim-andel sim-minuter sim-timkostnad"
+          aria-live="polite"
+          style={{
+            fontFamily: SANS,
+            fontSize: 14,
+            lineHeight: 1.6,
+            color: "var(--ink)",
+          }}
+        >
+          <span style={vardeStil}>
+            {hanterasAvPolicy.toLocaleString("sv-SE")}
+          </span>{" "}
+          av{" "}
+          <span style={vardeStil}>{underlag.toLocaleString("sv-SE")}</span>{" "}
+          hanteras av er policy —{" "}
+          <span style={vardeStil}>~{timmarText}</span> timmar per månad till
+          rådgivning i stället, motsvarande{" "}
+          <span style={vardeStil}>~{kronorText}</span> kr.
+        </output>
+        <p
+          style={{
+            margin: 0,
+            fontFamily: SANS,
+            fontSize: 12,
+            color: "var(--ink-svag)",
+          }}
+        >
+          Räkneexempel — bygger på era antaganden.
+        </p>
+      </div>
 
       {/* Legend */}
       <div
@@ -201,9 +300,7 @@ export default function AttestSimulator({ spelar }: AttestSimulatorProps) {
           alignItems: "center",
         }}
       >
-        <span
-          style={{ display: "inline-flex", alignItems: "center", gap: 8 }}
-        >
+        <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
           <span
             aria-hidden="true"
             style={{
@@ -214,13 +311,13 @@ export default function AttestSimulator({ spelar }: AttestSimulatorProps) {
               flexShrink: 0,
             }}
           />
-          <span style={{ fontFamily: MONO, fontSize: 12, color: "var(--ink-mjuk)" }}>
+          <span
+            style={{ fontFamily: SANS, fontSize: 12, color: "var(--ink-mjuk)" }}
+          >
             kräver er attest
           </span>
         </span>
-        <span
-          style={{ display: "inline-flex", alignItems: "center", gap: 8 }}
-        >
+        <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
           <span
             aria-hidden="true"
             style={{
@@ -233,52 +330,12 @@ export default function AttestSimulator({ spelar }: AttestSimulatorProps) {
               flexShrink: 0,
             }}
           />
-          <span style={{ fontFamily: MONO, fontSize: 12, color: "var(--ink-mjuk)" }}>
-            bokförs själv
+          <span
+            style={{ fontFamily: SANS, fontSize: 12, color: "var(--ink-mjuk)" }}
+          >
+            hanteras av er policy
           </span>
         </span>
-      </div>
-
-      {/* Kurva — illustration av samma attest-nivå över tid */}
-      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-        <svg
-          viewBox="0 0 560 120"
-          aria-hidden="true"
-          style={{ display: "block", width: "100%", height: "auto" }}
-        >
-          {/* Hårfin baslinje (0 %) */}
-          <line
-            x1={10}
-            y1={yBas}
-            x2={550}
-            y2={yBas}
-            stroke="var(--linje-stark)"
-            strokeWidth={1}
-          />
-          {/* Kurva från 100 % ner till attest-nivån */}
-          <path
-            d={kurvaD}
-            fill="none"
-            stroke="var(--bla)"
-            strokeWidth={1.5}
-          />
-        </svg>
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            flexWrap: "wrap",
-            gap: 8,
-            fontFamily: MONO,
-            fontSize: 11,
-            color: "var(--ink-svag)",
-          }}
-        >
-          <span>
-            andel som kräver attest — illustration, er policy avgör takten
-          </span>
-          <span>tid →</span>
-        </div>
       </div>
     </div>
   );
