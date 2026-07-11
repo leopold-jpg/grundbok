@@ -195,9 +195,17 @@ const FAKTA: { rubrik: string; text: string }[] = [
   },
 ];
 
+// Mörk/ljus-jämförelsen: brief v3 säger ljus (typografiskt buren).
+// Växla till "mork" här — eller checka ut commiten före denna — för
+// att se den inverterade varianten sida vid sida i browsern.
+const FORTROENDE_VARIANT: "mork" | "ljus" = "ljus";
+
 function Fortroende() {
   return (
-    <section id="fortroende" className="morkt">
+    <section
+      id="fortroende"
+      className={FORTROENDE_VARIANT === "mork" ? "morkt" : "fortroende-ljus"}
+    >
       <div className="inre">
         <SektionHuvud nr="02" titel="Förtroende är arkitektur" />
         <div className="fakta-grid">
