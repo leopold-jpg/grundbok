@@ -159,9 +159,19 @@ main.publik {
   text-decoration: none;
 }
 .publik .sajt-topp nav a:hover { color: var(--ink); }
+/* Facits nav-mönster: en riktig pill-knapp längst till höger. */
 .publik .sajt-topp nav a.topp-cta {
+  font-size: 13px;
   font-weight: 600;
-  color: var(--rost);
+  color: var(--accent-fg);
+  background: var(--rost);
+  border-radius: var(--r-pill);
+  padding: 7px 16px;
+  transition: background var(--dur-fast) var(--ease-out);
+}
+.publik .sajt-topp nav a.topp-cta:hover {
+  color: var(--accent-fg);
+  background: var(--rost-djup);
 }
 
 /* ================================ hero ================================ */
