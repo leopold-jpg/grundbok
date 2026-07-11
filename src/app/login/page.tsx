@@ -3,7 +3,7 @@
 import { Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { sakerNext } from "@/auth/next-param";
-import { fraunces, plexMono } from "../_publik/fonter";
+import { plexMono } from "../_publik/fonter";
 import "./login.css";
 
 // Inloggning för byrå-konsulter och operatören (WP11). Lokal dev-auth —
@@ -41,7 +41,7 @@ function LoginForm() {
   }
 
   return (
-    <main className={`login-sida ${fraunces.variable} ${plexMono.variable}`}>
+    <main className={`login-sida ${plexMono.variable}`}>
       <div className="wordmark">
         <a href="/">
           grund<em>bok</em>

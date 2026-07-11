@@ -23,14 +23,14 @@ main.publik {
   --morkt-mjuk: #b3a78e;
   --morkt-linje: rgba(243, 237, 222, 0.18);
 
-  /* Typografin (DESIGN-INSPO, prov i docs/design-referens/typografiprov/):
-     Fraunces bär displayen — didone-tyngd i storgrad via variabel vikt +
-     optisk storlek. IBM Plex Mono för kvitto-känslan. Variablerna sätts
-     av next/font i _publik/fonter.ts; skinnets serif är fallback. */
-  --font-serif: var(--font-publik-serif), var(--font-app-serif), Georgia, serif;
+  /* Typografin (brief v3 + prov i docs/design-referens/typografiprov/):
+     Inter bär rubrikerna; Instrument Serif (layoutens --font-app-serif)
+     är varumärkeskryddan i sin enda vikt; IBM Plex Mono för siffror/
+     konton/lagrum via _publik/fonter.ts. */
+  --font-serif: var(--font-app-serif), "Instrument Serif", Georgia, serif;
   --font-mono: var(--font-publik-mono), ui-monospace, "SF Mono", Menlo, monospace;
-  --serifvikt-display: 560;
-  --serifvikt-rubrik: 520;
+  --serifvikt-display: 400;
+  --serifvikt-rubrik: 400;
 
   /* Full bredd — sektionerna hanterar sina egna ytor; globals
      main-måtten gäller inte här. */

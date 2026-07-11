@@ -12,3 +12,10 @@ Valet är inte hårdlåst: display-serifen sätts på ETT ställe
 (`src/app/_publik/fonter.ts` + `--font-serif`-raden i
 `src/app/publik.css`). När referensbilderna landar i
 `docs/design-referens/` — pröva provet mot dem och byt vid behov.
+
+## 2026-07-11 — kalibrering mot facit (brief v3)
+
+Efter Leopolds 18 vinnare och brief v3 bär Inter rubrikerna; serifen
+är enbart varumärkeskrydda (ordmärket + kursiva betoningar). Som
+kryddfamilj valdes **Instrument Serif** (prov 2) — facits serifer är
+lätta och eleganta, inte tunga didoner; Fraunces utgick.

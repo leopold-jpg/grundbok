@@ -6,9 +6,9 @@
 main.login-sida {
   /* Samma typsnitt som publika ytan (fonter.ts); skinnets serif är
      fallback. */
-  --font-serif: var(--font-publik-serif), var(--font-app-serif), Georgia, serif;
+  --font-serif: var(--font-app-serif), "Instrument Serif", Georgia, serif;
   --font-mono: var(--font-publik-mono), ui-monospace, "SF Mono", Menlo, monospace;
-  --serifvikt-display: 560;
+  --serifvikt-display: 400;
 
   max-width: 440px;
   padding-top: 10vh;
