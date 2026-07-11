@@ -1,4 +1,4 @@
-# DESIGN-BRIEF — grundboks publika sajt (v2)
+# DESIGN-BRIEF — grundboks publika sajt (v3)
 
 Mål: en publik sajt i nivå med de bästa SaaS-sajterna i kategorin
 (referens: taxxa.ai — studera deras grepp, kopiera inte deras uttryck).
@@ -13,26 +13,37 @@ plus /login-sidans utseende (samma formspråk). RÖR INTE /byra,
 POST:a till befintliga leads-flödet. Mobil först — hero och kontaktbox
 ska vara perfekta i telefon.
 
-## Identitet: "papper som blivit levande"
+## Identitet: varm ljus produktförst-minimalism
+## (v3 — låst 2026-07-10 mot Leopolds 18 vinnare i docs/design-referens/publik/)
 
-Grundbok ÄR bokföring — kvitton, verifikationer, huvudbok. Identiteten
-utvecklar studio-skinnet till premium i stället för att bli generisk
-SaaS-gradient:
+Bilderna i docs/design-referens/publik/ är FACIT. Deras gemensamma
+språk, som gäller:
 
-- **Palett**: dagens cream/papper som bas, mörknad och fördjupad —
-  varm off-white (#F7F3EA-familjen), djup bläck-svart för text,
-  rust/terracotta som ENDA accent (knappar, markeringar, ordmärkets
-  "bok"). Gott om mörka partier är tillåtet (inverterade sektioner i
-  bläck med cream-text) för kontrast och tyngd — men aldrig blå/lila
-  tech-gradient.
-- **Typografi**: serif för rubriker (samma familj som ordmärket,
-  stora grader, tight leading), ren grotesk för brödtext, monospace
-  för siffror/konton/lagrum (kvitto-känslan). Typografin är designen —
-  hellre en enorm serif-rubrik på tomt papper än dekorationer.
-- **Grafiskt språk**: kvittots och verifikationens formvärld —
-  perforeringar, löpnummer, stämplar, tabellinjer, hash-strängar som
-  texturelement. Inga generiska 3D-blobbar, inga emoji, inga
-  stockilluminationer av människor vid laptops.
+- **Produkten först.** Hero = stor men inte monumental rubrik + kort
+  copy + kedje-scenen som inramad produktskärm (mjuka hörn, tunn kant
+  ~#ddd6c8, svag skugga) direkt i/under hero. Rubriken säger vad,
+  scenen bevisar det. Scenen är sajtens hjärta — mest tid där.
+- **Varmt ljust rakt igenom.** Papper (#F7F3EA), bläck (#2C2A26),
+  rust (#A4502E) som varm accent som FÅR ta plats (CTA, markeringar,
+  detaljer i scenen). Inga mörka inverterade sektioner, inga
+  gradienter.
+- **Typografi:** grotesk (Inter) bär rubriker och gränssnitt — stora
+  grader, tight, lugnt. Serif (Fraunces) som varumärkeskrydda:
+  ordmärket, enstaka display-ord eller kursiva betoningar — aldrig
+  hela stycken. Mono för konton/lagrum/hash och markerade fraser.
+- **Mjuka kort med tydlig kant** för inramat innehåll. Aldrig tunga
+  skuggor eller glassmorphism.
+- **Luft och få element** — men vinnarna VISAR innehåll snarare än
+  gömmer det; inte Squarespace-radikal reduktion.
+- Max ETT varmt fotografiskt/illustrativt inslag på hela sajten, och
+  bara om det förtjänar sig.
+
+## Arbetsytorna (nästa pass — EJ denna session)
+
+Beslutat: LJUS arbetsyta i samma papper. Referens:
+docs/design-referens/arbetsyta/ — Airtable-varm CRM där datan bär
+färgen: statuschips, modulfärger, konfidensbadges på ljus bas. Tätt
+men lugnt, generös radhöjd, mono-siffror.
 
 ## Hero: kedjan i rörelse (sajtens huvudnummer)
 
@@ -57,7 +68,8 @@ men vår kedja är något de inte kan visa.
    agenterna tolkar och konterar med lagrum → ni attesterar bara
    avvikelserna. Avsluta med raden "attesthögen krymper — det är
    produkten" och en liten kurva som illustrerar det.
-3. **Förtroende/säkerhet** (inverterad mörk sektion) — det som säljer
+3. **Förtroende/säkerhet** (ljus, typografiskt buren — tunna linjer,
+   mono-detaljer, verifikations-estetik) — det som säljer
    till en försiktig byrå: hash-bundna beslut (en ändrad rad gör
    förslaget obeslutbart), radnivå-isolering per kund, ingen träning
    på er data, EU AI Act-hållning (human oversight som konfigurerbar
