@@ -297,7 +297,7 @@ main.publik {
   border-radius: var(--r-lg);
   background: var(--papper-elev);
   box-shadow: var(--shadow-md);
-  padding: var(--sp-5);
+  padding: var(--sp-4) var(--sp-5);
 }
 .publik .scen-inre {
   display: flex;
@@ -317,7 +317,7 @@ main.publik {
   align-items: baseline;
   gap: var(--sp-3);
   border-bottom: 1px solid var(--linje);
-  padding-bottom: var(--sp-3);
+  padding-bottom: var(--sp-2);
 }
 .publik .scen-titel { font-weight: 600; font-size: 15px; }
 .publik .scen-not {
@@ -332,13 +332,13 @@ main.publik {
 .publik .kvitto {
   position: relative;
   align-self: center;
-  width: min(330px, 94%);
+  width: min(300px, 94%);
   background: #fffdf6;
   border: 1px solid var(--linje);
   border-bottom: none;
-  padding: var(--sp-4) var(--sp-5) var(--sp-4);
+  padding: 14px 18px;
   font-family: var(--font-mono);
-  font-size: 12px;
+  font-size: 11.5px;
   line-height: 1.5;
   box-shadow: var(--shadow-sm);
 }
@@ -380,18 +380,18 @@ main.publik {
   grid-template-columns: 92px minmax(0, 1fr);
   align-items: baseline;
   gap: var(--sp-3);
-  padding-block: 7px;
+  padding-block: 6px;
   border-top: 1px solid var(--linje);
 }
 .publik .tolk-etikett {
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: 9.5px;
   letter-spacing: 0.14em;
   text-transform: uppercase;
   color: var(--ink-svag);
 }
-.publik .tolk-varde { font-size: 14px; }
-.publik .tolk-varde.mono { font-family: var(--font-mono); font-size: 13px; }
+.publik .tolk-varde { font-size: 13.5px; }
+.publik .tolk-varde.mono { font-family: var(--font-mono); font-size: 12.5px; }
 .publik .tolkrad[data-aktiv="true"] .tolk-varde::after {
   content: "";
   display: inline-block;
@@ -400,7 +400,7 @@ main.publik {
   margin-left: 6px;
   background: var(--rost);
   vertical-align: baseline;
-  animation: publik-caret 1s steps(2, start) infinite;
+  animation: publik-caret 1.15s steps(2, start) infinite;
 }
 @keyframes publik-caret {
   to { opacity: 0; }
@@ -410,7 +410,7 @@ main.publik {
 .publik .scen-attest { display: flex; align-items: center; gap: var(--sp-3); }
 .publik .scen-knapp {
   display: inline-block;
-  font-size: 14px;
+  font-size: 13.5px;
   font-weight: 600;
   color: var(--accent-fg);
   background: var(--rost);
@@ -452,7 +452,7 @@ main.publik {
   border: 1px solid var(--linje);
   border-radius: var(--r-md);
   box-shadow: var(--shadow-lg);
-  padding: var(--sp-5);
+  padding: var(--sp-4) var(--sp-5);
 }
 .publik .scen-verifikation .stampel {
   position: absolute;
@@ -475,8 +475,8 @@ main.publik {
   justify-content: space-between;
   gap: var(--sp-3);
   font-family: var(--font-mono);
-  font-size: 12px;
-  padding-block: 6px;
+  font-size: 11.5px;
+  padding-block: 5px;
   border-top: 1px solid var(--linje);
 }
 .publik .ver-hash {

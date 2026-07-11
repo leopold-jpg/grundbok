@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { motion, useReducedMotion } from "framer-motion";
+import { motion } from "framer-motion";
+import { useSpelar } from "./useSpelar";
 
 // Kedje-hero:n — sajtens huvudnummer (DESIGN-BRIEF §Hero). En lugnt
 // loopande produktscen i kod: kvittot glider in → tolkningen skrivs
@@ -39,12 +40,16 @@ const TIDSLINJE: [steg: number, vidMs: number][] = [
 
 const LUGN = { duration: 0.5, ease: [0.22, 1, 0.36, 1] as const };
 
-function Kvitto({ synligt }: { synligt: boolean }) {
+function Kvitto({ synligt, tillbakadraget }: { synligt: boolean; tillbakadraget?: boolean }) {
   return (
     <motion.div
       className="kvitto"
       initial={false}
-      animate={synligt ? { opacity: 1, y: 0, rotate: -1 } : { opacity: 0, y: -26, rotate: 2 }}
+      animate={
+        synligt
+          ? { opacity: tillbakadraget ? 0.72 : 1, y: 0, rotate: -1, scale: tillbakadraget ? 0.985 : 1 }
+          : { opacity: 0, y: -26, rotate: 2, scale: 1 }
+      }
       transition={{ ...LUGN, duration: 0.6 }}
     >
       <div className="kvitto-titel">Faktura</div>
@@ -122,18 +127,22 @@ function Verifikation({ steg, statisk }: { steg: number; statisk?: boolean }) {
     <motion.div
       className="scen-verifikation"
       initial={false}
-      animate={synlig ? { opacity: 1, y: 0 } : { opacity: 0, y: 10 }}
+      animate={synlig ? { opacity: 1, y: 0 } : { opacity: 0, y: 16 }}
       // In: vänta tills attest-vyn hunnit tona ner. Ut: direkt.
-      transition={{ ...LUGN, delay: synlig && !statisk ? 0.3 : 0 }}
+      transition={{ ...LUGN, duration: 0.6, delay: synlig && !statisk ? 0.35 : 0 }}
       style={{ pointerEvents: "none" }}
     >
       <motion.span
         className="stampel"
         initial={false}
         animate={
-          synlig ? { opacity: 1, scale: 1, rotate: -8 } : { opacity: 0, scale: 1.5, rotate: -14 }
+          synlig ? { opacity: 1, scale: 1, rotate: -8 } : { opacity: 0, scale: 1.22, rotate: -11 }
         }
-        transition={{ duration: 0.2, ease: "easeOut", delay: synlig && !statisk ? 0.75 : 0 }}
+        transition={{
+          duration: 0.34,
+          ease: [0.22, 1, 0.36, 1],
+          delay: synlig && !statisk ? 0.85 : 0,
+        }}
       >
         Attesterad
       </motion.span>
@@ -176,19 +185,13 @@ function Verifikation({ steg, statisk }: { steg: number; statisk?: boolean }) {
 }
 
 export default function KedjeScen() {
-  const stilla = useReducedMotion();
   // Servern och första klientrenderingen visar alltid det frusna
   // slutläget (samma träd → ingen hydration mismatch; innehållet syns
-  // utan JS). Loopen startar först efter montering, och bara för
-  // användare utan prefers-reduced-motion.
-  const [spelar, setSpelar] = useState(false);
+  // utan JS). Loopen startar efter montering via useSpelar.
+  const spelar = useSpelar();
   const [pausad, setPausad] = useState(false);
   const [steg, setSteg] = useState(0);
   const [cykel, setCykel] = useState(0);
-
-  useEffect(() => {
-    if (!stilla) setSpelar(true);
-  }, [stilla]);
 
   useEffect(() => {
     if (!spelar || pausad) return;
@@ -266,10 +269,12 @@ export default function KedjeScen() {
             <motion.div
               className="scen-flode"
               initial={false}
-              animate={{ opacity: visaVerifikation ? 0.1 : 1 }}
-              transition={LUGN}
+              animate={
+                visaVerifikation ? { opacity: 0.08, scale: 0.992 } : { opacity: 1, scale: 1 }
+              }
+              transition={{ ...LUGN, duration: 0.45 }}
             >
-              <Kvitto synligt={steg >= 1} />
+              <Kvitto synligt={steg >= 1} tillbakadraget={steg >= 2} />
               <Tolkning steg={steg} />
               <AttestRad steg={steg} />
             </motion.div>
