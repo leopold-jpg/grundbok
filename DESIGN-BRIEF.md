@@ -1,108 +1,117 @@
-# DESIGN-BRIEF — grundboks publika sajt (v3)
+# DESIGN-BRIEF — grundboks publika sajt (v4)
 
-Mål: en publik sajt i nivå med de bästa SaaS-sajterna i kategorin
-(referens: taxxa.ai — studera deras grepp, kopiera inte deras uttryck).
-Dagens sajt är en fungerande wireframe; strukturen och kopplingarna
-behålls, uttrycket görs om helt.
+Mål: en publik sajt i nivå med de bästa SaaS-sajterna i kategorin.
+v4 kodifierar riktningsbytet 2026-07-11 (vit/blå SaaS-produkt) och
+ersätter v3 ("papper som blivit levande" är avvecklat som identitet;
+kvittots formvärld lever kvar endast där den bär funktion). Läses
+med DESIGN-INSPO.md (v2) och facit-bilderna:
+
+- STRUKTUR: docs/design-referens/saas/ (taxxa + utvalda vinnare)
+- TEMPERATUR: Rote-referensen i samma mapp är palett-facit
+- Märket: docs/brand/ (D1 — blå variant tills namnbeslutet)
 
 ## Omfattning — HÅRD GRÄNS
 
-Endast den publika ytan: src/app/page.tsx, dess komponenter och CSS,
-plus /login-sidans utseende (samma formspråk). RÖR INTE /byra,
-/operator, API:er, auth-logik eller kärnan. Kontaktboxen ska fortsatt
-POST:a till befintliga leads-flödet. Mobil först — hero och kontaktbox
-ska vara perfekta i telefon.
+Endast den publika ytan: src/app/page.tsx, dess komponenter/CSS
+(src/app/_publik/) och /login-sidans utseende. RÖR INTE /byra,
+/operator, auth-logik eller kärnan. API:er rörs endast på uttrycklig
+beställning (hittills en: POST /api/leads exponerar lead-id för
+väntelistans kvittens). Delade layout.tsx/globals.css rörs aldrig —
+publika ytan scopar fonter och variabler själv. Mobil först — hero
+och väntelistan ska vara perfekta i telefon.
 
-## Identitet: varm ljus produktförst-minimalism
-## (v3 — låst 2026-07-10 mot Leopolds 18 vinnare i docs/design-referens/publik/)
+## Identitet: vit/blå SaaS-produkt
 
-Bilderna i docs/design-referens/publik/ är FACIT. Deras gemensamma
-språk, som gäller:
+- **Bas**: rent kallvitt (#FFFFFF) med sektionsband i isblått
+  (#F5F8FC). Kort: vita, kant #E3E9F2, svag skugga. Skuggor och
+  djup får användas (subtilt) — mjukvara, inte papper.
+- **Text**: nästan-svart kallgrå (#0F172A), sekundär #475569,
+  tertiär #64748B. Alla nivåer AA-räknade.
+- **Accent**: EN klarblå (#2563EB) — CTA, länkar, kedje-scenens
+  detaljer, simulatorns attest-kvadrater, beam-pulsen, D1-märkets
+  accentpixel. Hover #1D4ED8.
+- **Status**: grönt (#15803D för text) ENDAST som status — stämplar
+  (Attesterad/Registrerad), LIVE-chips. Inget mer.
+- **Mörk kontrastyta**: djup marinblå (#0B1B34) för sidfoten; EN
+  subtil blå gradient på mörk yta är tillåten. Inga gradient-orgier.
+- **Typografi**: Inter bär rubriker och gränssnitt (600, tight,
+  måttlig skala ~48–64/32–40 px). Instrument Serif ENDAST som
+  varumärkeskrydda: ordmärket och enstaka kursiva betoningar.
+  IBM Plex Mono ENDAST för siffror, konton, hash och reg-id —
+  aldrig etiketter, sektionsnummer eller knappar; etiketter sätts
+  i grotesk small-caps (11px/600/uppercase).
+- **Kvitto-manér** (perforering, zigzagkant, mono-kvitto) lever
+  ENDAST i kedje-scenen och D1-märket — aldrig som allmän dekor.
+  Inga №-tecken utan funktion.
 
-- **Produkten först.** Hero = stor men inte monumental rubrik + kort
-  copy + kedje-scenen som inramad produktskärm (mjuka hörn, tunn kant
-  ~#ddd6c8, svag skugga) direkt i/under hero. Rubriken säger vad,
-  scenen bevisar det. Scenen är sajtens hjärta — mest tid där.
-- **Varmt ljust rakt igenom.** Papper (#F7F3EA), bläck (#2C2A26),
-  rust (#A4502E) som varm accent som FÅR ta plats (CTA, markeringar,
-  detaljer i scenen). Inga mörka inverterade sektioner, inga
-  gradienter.
-- **Typografi:** grotesk (Inter) bär rubriker och gränssnitt — stora
-  grader, tight, lugnt. Serif (Fraunces) som varumärkeskrydda:
-  ordmärket, enstaka display-ord eller kursiva betoningar — aldrig
-  hela stycken. Mono för konton/lagrum/hash och markerade fraser.
-- **Mjuka kort med tydlig kant** för inramat innehåll. Aldrig tunga
-  skuggor eller glassmorphism.
-- **Luft och få element** — men vinnarna VISAR innehåll snarare än
-  gömmer det; inte Squarespace-radikal reduktion.
-- Max ETT varmt fotografiskt/illustrativt inslag på hela sajten, och
-  bara om det förtjänar sig.
+## Struktur (taxxa-mönstret, i ordning)
 
-## Arbetsytorna (nästa pass — EJ denna session)
+1. **Hero**: centrerad rubrik ("Framtidens redovisning attesterar
+   sig själv" — betoningen i blå serif-kursiv) + kort copy + EN CTA,
+   ambient pixelliv i bakgrunden (D1-språket, låg opacitet, dolt på
+   mobil), och kedje-scenen som inramad produktskärm direkt under.
+2. **(Vilande) social proof-rad** — LogotypRad-komponenten är byggd
+   men renderas INTE förrän riktiga kundlogotyper finns.
+3. **Så funkar det** (isblått band): tre illustrerade SVG-paneler
+   med loopande mikrodetaljer, max en mening per steg. Avslutas med
+   "attesthögen krymper — det är produkten" + den interaktiva
+   simulatorn: reglage för underlag/månad och andel rutin, rutnät
+   där attest-högen (blå) läses först, resultat och kurva som REN
+   ARITMETIK av besökarens tal.
+4. **Förtroende är arkitektur** (vitt): EN ritad figur — underlag →
+   förslag → hash → attest (blå, behörig människa)/policy →
+   append-only huvudbok — med de fyra poängerna som etiketter i
+   figuren och animated beam som pulserar genom flödet. En rad
+   brödtext under, inte fyra stycken.
+5. **Moduler** (isblått band): bento-grid — live-modulerna stora
+   med levande ikondetaljer, kommande dämpade. Max en mening per
+   modul, ärlig live/kommande-märkning.
+6. **Väntelistan** (vitt): boxade fält med blå fokusring, aktiv
+   submit ("Skriver in …" + rullande reg-ticker), kvittens med grön
+   Registrerad-stämpel, VERKLIGT reg-id (ur API-svaret, tickas fram)
+   och mottagningstid. Konverteringen ska kännas som att skrivas in
+   i systemet.
+7. **Sidfot** (marin): ordmärke, öppen kärna-meningen, GitHub,
+   kontakt→väntelistan, login, © Leopold Seifert.
 
-Beslutat: LJUS arbetsyta i samma papper. Referens:
-docs/design-referens/arbetsyta/ — Airtable-varm CRM där datan bär
-färgen: statuschips, modulfärger, konfidensbadges på ljus bas. Tätt
-men lugnt, generös radhöjd, mono-siffror.
+## Kedje-scenen (sajtens hjärta — behålls)
 
-## Hero: kedjan i rörelse (sajtens huvudnummer)
-
-Vänster: en mening. "Framtidens redovisning attesterar sig själv" /
-underrubrik om agenter + ansvarskedja (copy får vässas). En CTA:
-"Ställ er på väntelistan".
-
-Höger (eller under på mobil): EN levande produktscen byggd i kod
-(Framer Motion eller ren CSS — INTE video, INTE bildsekvens):
-ett kvitto glider in → tolkningen skrivs fram rad för rad (motpart,
+Kvittot glider in → tolkningen skrivs fram rad för rad (motpart,
 konto 4010, moms 12 %, ML (2023:200) 9 kap., konfidens) → attest-
-knappen trycks → verifikation #47 stämplas med hash. Loopar lugnt.
-Använd riktiga UI-komponenter/samma visuella språk som /byra så att
-scenen ÄR produkten. Detta är samma grepp som taxxas chatt-hero —
-men vår kedja är något de inte kan visa.
+knappen trycks → verifikation 47 stämplas (grönt) med hash. Samma
+exempeldata som demon, märkt "exempeldata". Produktfilm-känsla:
+statisk layout, mjuka fokusskiften, stämpeln landar mjukt.
 
-## Sektioner, i ordning
+## Rörelse
 
-1. **Hero** enligt ovan.
-2. **Så funkar det** — tre steg med scrollanimation: släpp in
-   underlaget (mejl/foto/API som ikonspråk i kvitto-estetik) →
-   agenterna tolkar och konterar med lagrum → ni attesterar bara
-   avvikelserna. Avsluta med raden "attesthögen krymper — det är
-   produkten" och en liten kurva som illustrerar det.
-3. **Förtroende/säkerhet** (ljus, typografiskt buren — tunna linjer,
-   mono-detaljer, verifikations-estetik) — det som säljer
-   till en försiktig byrå: hash-bundna beslut (en ändrad rad gör
-   förslaget obeslutbart), radnivå-isolering per kund, ingen träning
-   på er data, EU AI Act-hållning (human oversight som konfigurerbar
-   mekanism), byggd på öppen kärna (GitHub-länk). Faktarutor i
-   verifikations-estetik, inte ikon-grid.
-4. **Moduler** — bokföring & rådgivning (live), löner/bokslut/skatt
-   (kommande), kundappen (kommande: "era kunder fotar kvittot — det
-   bokför sig självt"). Ärlig märkning, inga påhittade features.
-5. **Väntelistan** — kontaktboxen (namn, byrå, e-post, fritext),
-   premium-formulär, tydlig tack-vy. Detta är sajtens konvertering;
-   den ska kännas som att skriva under något, inte fylla i något.
-6. **Sidfot** — ordmärke, GitHub, en mening om öppen kärna, kontakt.
+Scroll-avslöjanden med självförtroende (staggered reveals, reg-
+ticker, beam) men: prefers-reduced-motion respekteras överallt
+(fruset slutläge + CSS-överstyrning av framer-inline-stilar),
+pausknapp på kedje-loopen (WCAG 2.2.2), hydration-säkert (servern
+renderar alltid det statiska läget), visibilitychange nollställer
+loopar, aldrig scroll-hijacking. Max EN wow-effekt per vy (beamen).
 
-INGA testimonials eller kundlogotyper ännu — vi har inga, och påhittade
-är förbjudna. Sektionen läggs till när Mats byrå är live.
+## Komponentmönster
 
-## Motion-principer
+Magic UI/Aceternity/shadcn är MÖNSTERKÄLLOR: läs källkoden, förstå
+mönstret, återimplementera mot våra CSS-variabler och Motion-setup.
+Aldrig Tailwind som beroende. Fristående komponenter byggs med
+props-kontraktet { spelar: boolean } (från useSpelar: mounted &&
+!prefers-reduced-motion) och endast CSS-variabler — så kan de byggas
+parallellt i worktrees utan att röra page.tsx/publik.css.
 
-Scrolldrivna avslöjanden (fade/translate, subtila), kedje-hero:n som
-enda kontinuerliga animation, allt annat lugnt. Respektera
-prefers-reduced-motion. Inga parallax-orgier, ingen scroll-hijacking.
+## Vad som är förbjudet (oförändrat sedan v1)
 
-## Kvalitetsribba
+Påhittade siffror, kunder, citat, logotyper eller features. Allt
+värde i simulatorn kommer ur besökarens egna tal. Testimonials och
+logotypraden aktiveras först när Mats byrå är live. Emoji-ikoner.
+Mer än en wow-effekt per vy.
 
-Ställ sajten bredvid taxxa.ai och linear.app: den ska kännas lika
-avsiktlig men omisskännligt vara grundbok. Om en sektion känns som en
-mall — gör om den. Hellre färre, perfekta sektioner än många halvbra.
+## Öppna punkter
 
-## Assets att generera separat (Higgsfield/bildgenerering — EJ i
-denna kodsession)
-
-- Hero-bakgrundstextur: papper/fiber, mycket subtil
-- Kvittofoton för "släpp in underlaget"-steget (stiliserade, svenska
-  kvitton utan riktiga varumärken)
-- Ev. og-image/social share i samma formspråk
-Koden byggs med platshållare (solida ytor i paletten) där dessa ska in.
+- Ordmärket/loggan: RÖRS INTE — väntar på namnbeslutet (D1:s
+  rust-varianter ligger kvar i docs/brand/ parallellt med blå).
+- og-image/social share i nya systemet (genereras separat).
+- Sidtiteln "vertikal skiva" bor i delade layout.tsx → egen liten PR.
+- Arbetsytorna (/byra, /operator) görs om i NÄSTA pass — ljusa, i
+  samma system; referens: docs/design-referens/arbetsyta/.
