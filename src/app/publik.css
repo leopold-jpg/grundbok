@@ -578,36 +578,29 @@ main.publik {
 
 /* =============================== moduler =============================== */
 
-/* Huvudbokens formvärld: rader med löpnummer och tabellinjer, ärlig
-   märkning live/kommande — inga kort, inga påhittade features. */
-.publik .modul-lista { display: flex; flex-direction: column; }
-.publik .modulrad {
-  display: grid;
-  grid-template-columns: clamp(40px, 6vw, 64px) minmax(0, 1fr);
-  grid-template-areas:
-    "nr namnrad"
-    "nr text";
-  gap: var(--sp-1) var(--sp-4);
-  border-top: 1px solid var(--linje);
-  padding-block: var(--sp-4);
+/* Ikonkort (v4) — live i full färg, kommande dämpade. */
+.publik .modul-grid { display: grid; gap: var(--sp-4); }
+@media (min-width: 680px) { .publik .modul-grid { grid-template-columns: 1fr 1fr; } }
+@media (min-width: 980px) { .publik .modul-grid { grid-template-columns: 1fr 1fr 1fr; } }
+.publik .modulkort-inre {
+  height: 100%;
+  background: var(--papper-elev);
+  border: 1px solid var(--linje);
+  border-radius: var(--r-lg);
+  padding: var(--sp-4) var(--sp-5);
 }
-.publik .modul-nr {
-  grid-area: nr;
-  font-family: var(--font-mono);
-  font-size: 12px;
-  letter-spacing: 0.08em;
-  color: var(--ink-svag);
-  padding-top: 9px;
-}
-.publik .modul-namnrad {
-  grid-area: namnrad;
+.publik .modulkort-inre[data-status="kommande"] .modul-ikon,
+.publik .modulkort-inre[data-status="kommande"] h3 { opacity: 0.55; }
+.publik .modul-ikon { margin-bottom: var(--sp-3); }
+.publik .modul-huvud {
   display: flex;
   align-items: baseline;
-  gap: var(--sp-4);
+  gap: var(--sp-3);
+  margin-bottom: var(--sp-1);
 }
-.publik .modulrad h3 {
+.publik .modulkort h3 {
   font-weight: 600;
-  font-size: clamp(18px, 2.4vw, 22px);
+  font-size: 17px;
   letter-spacing: var(--tracking-snug);
   margin: 0;
 }
@@ -620,12 +613,10 @@ main.publik {
   white-space: nowrap;
 }
 .publik .modul-status[data-live="true"] { color: var(--rost); font-weight: 700; }
-.publik .modulrad p {
-  grid-area: text;
-  font-size: 14.5px;
-  line-height: 1.6;
+.publik .modulkort p {
+  font-size: 13.5px;
+  line-height: 1.55;
   color: var(--ink-mjuk);
-  max-width: 62ch;
   margin: 0;
 }
 

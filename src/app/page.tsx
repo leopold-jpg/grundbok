@@ -7,6 +7,14 @@ import KedjeScen from "./_publik/KedjeScen";
 import ArkitekturFigur from "./_publik/ArkitekturFigur";
 import AttestSimulator from "./_publik/AttestSimulator";
 import { PanelAvvikelse, PanelKontering, PanelUnderlag } from "./_publik/StegPaneler";
+import {
+  IkonBokforing,
+  IkonBokslut,
+  IkonKundapp,
+  IkonLoner,
+  IkonRadgivning,
+  IkonSkatt,
+} from "./_publik/ModulIkoner";
 import { plexMono } from "./_publik/fonter";
 import { useSpelar } from "./_publik/useSpelar";
 import "./publik.css";
@@ -174,55 +182,72 @@ function Fortroende() {
   );
 }
 
-const MODULER: { namn: string; status: "live" | "kommande"; text: string }[] = [
+// Moduler som ikonkort (v4 §7) i panelernas illustrationsspråk —
+// live i full färg, kommande dämpade. Max en mening per modul; samma
+// ärliga innehåll som tidigare, bara kortare.
+const MODULER = [
   {
     namn: "Bokföring",
     status: "live",
-    text: "Underlag in → tolkning, BAS-kontering och momssats med lagrum → förslag i attestkön. Momsreglerna är versionerade: satsen följer affärshändelsedatumet.",
+    text: "Underlag in — BAS-kontering och momssats med lagrum, direkt i attestkön.",
+    Ikon: IkonBokforing,
   },
   {
     namn: "Rådgivning",
     status: "live",
-    text: "Frågor om konton, moms och lagrum — svar med källhänvisning och konfidens, aldrig utan.",
+    text: "Svar om konton, moms och lagrum — alltid med källa och konfidens.",
+    Ikon: IkonRadgivning,
   },
   {
     namn: "Kundappen",
     status: "kommande",
-    text: "Era kunder fotar kvittot — det bokför sig självt. Byråns klienter följer status och ställer frågor i en egen app, en förmån byrån ger sina klienter.",
+    text: "Era kunder fotar kvittot — det bokför sig självt.",
+    Ikon: IkonKundapp,
   },
   {
     namn: "Löner",
     status: "kommande",
-    text: "Stegvis: rådgivning först, kontering sen. Ingen egen beräkningsmotor — vi integrerar.",
+    text: "Rådgivning först, kontering sen — vi integrerar i stället för att bygga en egen beräkningsmotor.",
+    Ikon: IkonLoner,
   },
   {
     namn: "Bokslut",
     status: "kommande",
-    text: "Periodiseringar och avstämningar som förslag, samma attestväg som allt annat.",
+    text: "Periodiseringar och avstämningar som förslag i samma attestväg.",
+    Ikon: IkonBokslut,
   },
   {
     namn: "Skatt & juridik",
     status: "kommande",
     text: "Fler rättskällor på samma rådgivningsgrund — alltid med lagrum.",
+    Ikon: IkonSkatt,
   },
-];
+] as const;
 
 function Moduler() {
   return (
     <section id="moduler">
       <div className="inre">
         <SektionHuvud nr="03" titel="Moduler" />
-        <div className="modul-lista">
+        <div className="modul-grid">
           {MODULER.map((modul, i) => (
-            <Reveal key={modul.namn} className="modulrad" delay={i * 0.04}>
-              <span className="modul-nr">{String(i + 1).padStart(2, "0")}</span>
-              <div className="modul-namnrad">
-                <h3>{modul.namn}</h3>
-                <span className="modul-status" data-live={modul.status === "live"}>
-                  {modul.status === "live" ? "Live" : "Kommande"}
-                </span>
+            <Reveal
+              key={modul.namn}
+              className="modulkort"
+              delay={i * 0.05}
+            >
+              <div data-status={modul.status} className="modulkort-inre">
+                <div className="modul-ikon" aria-hidden="true">
+                  <modul.Ikon />
+                </div>
+                <div className="modul-huvud">
+                  <h3>{modul.namn}</h3>
+                  <span className="modul-status" data-live={modul.status === "live"}>
+                    {modul.status === "live" ? "Live" : "Kommande"}
+                  </span>
+                </div>
+                <p>{modul.text}</p>
               </div>
-              <p>{modul.text}</p>
             </Reveal>
           ))}
         </div>
