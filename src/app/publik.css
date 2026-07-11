@@ -247,7 +247,9 @@ main.publik {
      ett eget mörkt block kant i kant med sektionen ovanför. */
   margin-top: 0;
   border-top: none;
-  background: var(--marin);
+  background:
+    radial-gradient(900px 340px at 18% 0%, rgba(37, 99, 235, 0.16), transparent 60%),
+    var(--marin);
   color: var(--marin-mjuk);
   padding-block: var(--sp-10) var(--sp-6);
   font-size: 14px;

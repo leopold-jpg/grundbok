@@ -4,7 +4,8 @@ import { motion } from "framer-motion";
 
 // Ambient bakgrund i hero (v4): pixelblock i D1-märkets språk
 // (docs/brand/BRAND.md — pixelkvitto 3×5, perforeringen i botten,
-// rust ENDAST på beloppsraden, som får blinka lugnt). Lösa pixlar
+// accentpixeln ENDAST på beloppsraden, som får blinka lugnt; blå
+// variant enligt riktningsbytet). Lösa pixlar
 // driver långsamt; två gånger per cykel monteras de ihop till
 // kvittoformer i kanterna. Mycket låg opacitet — levande system,
 // aldrig distraherande. `spelar` kommer från useSpelar (mounted &&
@@ -15,7 +16,7 @@ const CELL = 13;
 const PITCH = 15; // cell 13 + mellanrum 2 — märkets proportioner
 
 // 3×5-rutnätet minus mittenpixeln i bottenraden = perforeringen.
-// Rust = beloppsraden (rad 1, mitten), enligt BRAND.md.
+// Accentpixeln = beloppsraden (rad 1, mitten), enligt BRAND.md.
 const KVITTO: { kol: number; rad: number; rust?: boolean }[] = [
   { kol: 0, rad: 0 }, { kol: 1, rad: 0 }, { kol: 2, rad: 0 },
   { kol: 0, rad: 1 }, { kol: 1, rad: 1, rust: true }, { kol: 2, rad: 1 },

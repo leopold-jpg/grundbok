@@ -18,3 +18,10 @@ aldrig bort den.
 - Rust används ENDAST på beloppsraden. Aldrig fler färgade pixlar.
 - Märket är namnoberoende: ordmärke sätts bredvid (vänster om eller
   under), aldrig inuti.
+
+## Blå variant (riktningsbytet 2026-07-11)
+
+Sajten kör vit/blå SaaS-system: mark-blue.svg / mark-blue-paper.svg
+har beloppsraden i klarblått (#2563EB) i stället för rust. Samma
+regler gäller — accentfärg ENDAST på beloppsraden, perforeringen
+kvar. Rust-varianterna behålls tills namn-/märkesbeslutet är taget.
