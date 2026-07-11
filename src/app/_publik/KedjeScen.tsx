@@ -11,15 +11,73 @@ import { useSpelar } from "./useSpelar";
 // src/lib/exempel.ts) och samma visuella språk som /byra — scenen ÄR
 // produkten. Vid prefers-reduced-motion visas ett stilla slutläge.
 
-const TOLKNING: { etikett: string; varde: string; mono?: boolean }[] = [
-  { etikett: "Motpart", varde: "Kafferosteriet Exempel AB" },
-  { etikett: "Konto", varde: "4010 · 2641 · 2440", mono: true },
-  { etikett: "Moms", varde: "12 % · livsmedel", mono: true },
-  { etikett: "Lagrum", varde: "ML (2023:200) 9 kap.", mono: true },
-  { etikett: "Konfidens", varde: "0,94", mono: true },
-];
+type Variant = {
+  id: "attest" | "policy";
+  kvitto: { motpart: string; rader: [string, string?][]; };
+  tolkning: { etikett: string; varde: string; mono?: boolean }[];
+  verNr: string;
+  verBeskr: string;
+  verRader: [string, string][];
+  stampel: string;
+  stampelTon: "gron" | "stilla";
+  not: string;
+  hash: string;
+};
 
-const HASH = "9f2c81d4a0b36e75c48d";
+// Två cykler om vartannat: människan beslutar om avvikelsen,
+// rutinen bokförs bara — autonomin syns genom att flödet sker.
+const VARIANTER: [Variant, Variant] = [
+  {
+    id: "attest",
+    kvitto: {
+      motpart: "Kafferosteriet Exempel AB",
+      rader: [["Kaffebönor, mörkrost 20 kg"], ["Netto", "1 000,00"], ["Moms (12 %)", "120,00"], ["Att betala", "1 120,00 kr"]],
+    },
+    tolkning: [
+      { etikett: "Motpart", varde: "Kafferosteriet Exempel AB" },
+      { etikett: "Konto", varde: "4010 · 2641 · 2440", mono: true },
+      { etikett: "Moms", varde: "12 % · livsmedel", mono: true },
+      { etikett: "Lagrum", varde: "ML (2023:200) 9 kap.", mono: true },
+      { etikett: "Konfidens", varde: "0,94", mono: true },
+    ],
+    verNr: "V47",
+    verBeskr: "Kaffebönor, mörkrost 20 kg",
+    verRader: [
+      ["4010 Inköp material och varor", "1 000,00"],
+      ["2641 Debiterad ingående moms", "120,00"],
+      ["2440 Leverantörsskulder", "1 120,00"],
+    ],
+    stampel: "Attesterad",
+    stampelTon: "gron",
+    not: "binds till förslagets hash och er identitet",
+    hash: "9f2c81d4a0b36e75c48d",
+  },
+  {
+    id: "policy",
+    kvitto: {
+      motpart: "Kontorsmaterial Exempel AB",
+      rader: [["Kontorsmaterial, påfyllnad"], ["Netto", "250,00"], ["Moms (25 %)", "62,50"], ["Att betala", "312,50 kr"]],
+    },
+    tolkning: [
+      { etikett: "Motpart", varde: "Kontorsmaterial Exempel AB" },
+      { etikett: "Avser", varde: "Återkommande inköp" },
+      { etikett: "Belopp", varde: "312,50 kr", mono: true },
+      { etikett: "Policy", varde: "känd motpart · inom era gränser" },
+      { etikett: "Konfidens", varde: "0,97", mono: true },
+    ],
+    verNr: "V48",
+    verBeskr: "Kontorsmaterial, påfyllnad",
+    verRader: [
+      ["Netto", "250,00"],
+      ["Moms (25 %)", "62,50"],
+      ["Att betala", "312,50"],
+    ],
+    stampel: "Enligt er policy",
+    stampelTon: "stilla",
+    not: "loggas som policybeslut — rättas alltid av människa",
+    hash: "4b7e02c9d1a58f36e20b",
+  },
+];
 
 // Tidslinjen: steg → millisekunder in i cykeln. Layouten är statisk
 // (allt upptar sin plats från start, bara opacity/transform ändras) så
@@ -40,7 +98,16 @@ const TIDSLINJE: [steg: number, vidMs: number][] = [
 
 const LUGN = { duration: 0.5, ease: [0.22, 1, 0.36, 1] as const };
 
-function Kvitto({ synligt, tillbakadraget }: { synligt: boolean; tillbakadraget?: boolean }) {
+function Kvitto({
+  variant,
+  synligt,
+  tillbakadraget,
+}: {
+  variant: Variant;
+  synligt: boolean;
+  tillbakadraget?: boolean;
+}) {
+  const sista = variant.kvitto.rader.length - 1;
   return (
     <motion.div
       className="kvitto"
@@ -53,31 +120,22 @@ function Kvitto({ synligt, tillbakadraget }: { synligt: boolean; tillbakadraget?
       transition={{ ...LUGN, duration: 0.6 }}
     >
       <div className="kvitto-titel">Faktura</div>
-      <div className="kvitto-motpart">Kafferosteriet Exempel AB</div>
+      <div className="kvitto-motpart">{variant.kvitto.motpart}</div>
       <div className="perforering" />
-      <div className="kvitto-rad">
-        <span>Kaffebönor, mörkrost 20 kg</span>
-      </div>
-      <div className="kvitto-rad">
-        <span>Netto</span>
-        <span>1 000,00</span>
-      </div>
-      <div className="kvitto-rad">
-        <span>Moms (12 %)</span>
-        <span>120,00</span>
-      </div>
-      <div className="kvitto-rad summa">
-        <span>Att betala</span>
-        <span>1 120,00 kr</span>
-      </div>
+      {variant.kvitto.rader.map(([vanster, hoger], i) => (
+        <div key={i} className={i === sista ? "kvitto-rad summa" : "kvitto-rad"}>
+          <span>{vanster}</span>
+          {hoger && <span>{hoger}</span>}
+        </div>
+      ))}
     </motion.div>
   );
 }
 
-function Tolkning({ steg }: { steg: number }) {
+function Tolkning({ variant, steg }: { variant: Variant; steg: number }) {
   return (
     <div className="tolkning">
-      {TOLKNING.map((rad, i) => {
+      {variant.tolkning.map((rad, i) => {
         const synlig = steg >= 2 + i;
         const aktiv = steg === 2 + i;
         return (
@@ -98,7 +156,7 @@ function Tolkning({ steg }: { steg: number }) {
   );
 }
 
-function AttestRad({ steg }: { steg: number }) {
+function AttestRad({ variant, steg }: { variant: Variant; steg: number }) {
   const tryckt = steg >= 8;
   return (
     <motion.div
@@ -107,20 +165,40 @@ function AttestRad({ steg }: { steg: number }) {
       animate={steg >= 7 ? { opacity: 1, y: 0 } : { opacity: 0, y: 6 }}
       transition={LUGN}
     >
-      <motion.span
-        className="scen-knapp"
-        data-tryckt={tryckt}
-        animate={tryckt ? { scale: [1, 0.95, 1] } : { scale: 1 }}
-        transition={{ duration: 0.3, times: [0, 0.4, 1], ease: "easeOut" }}
-      >
-        {tryckt ? "Attesterad" : "Attestera"}
-      </motion.span>
-      <span className="scen-attest-not">binds till förslagets hash och er identitet</span>
+      {variant.id === "attest" ? (
+        <motion.span
+          className="scen-knapp"
+          data-tryckt={tryckt}
+          animate={tryckt ? { scale: [1, 0.95, 1] } : { scale: 1 }}
+          transition={{ duration: 0.3, times: [0, 0.4, 1], ease: "easeOut" }}
+        >
+          {tryckt ? "Attesterad" : "Attestera"}
+        </motion.span>
+      ) : (
+        // Rutinen annonserar sig inte — den bara sker, stillsamt.
+        <motion.span
+          className="scen-policyrad"
+          initial={false}
+          animate={{ opacity: tryckt ? 1 : 0.55 }}
+          transition={LUGN}
+        >
+          inom er policy — bokförs
+        </motion.span>
+      )}
+      <span className="scen-attest-not">{variant.not}</span>
     </motion.div>
   );
 }
 
-function Verifikation({ steg, statisk }: { steg: number; statisk?: boolean }) {
+function Verifikation({
+  variant,
+  steg,
+  statisk,
+}: {
+  variant: Variant;
+  steg: number;
+  statisk?: boolean;
+}) {
   const synlig = statisk || steg >= 9;
   const hashFram = statisk || steg >= 10;
   return (
@@ -134,6 +212,7 @@ function Verifikation({ steg, statisk }: { steg: number; statisk?: boolean }) {
     >
       <motion.span
         className="stampel"
+        data-ton={variant.stampelTon}
         initial={false}
         animate={
           synlig ? { opacity: 1, scale: 1, rotate: -8 } : { opacity: 0, scale: 1.22, rotate: -11 }
@@ -144,30 +223,24 @@ function Verifikation({ steg, statisk }: { steg: number; statisk?: boolean }) {
           delay: synlig && !statisk ? 0.85 : 0,
         }}
       >
-        Attesterad
+        {variant.stampel}
       </motion.span>
       <div className="ver-huvud">
-        <span className="ver-nr">V47</span>
-        <span className="ver-beskr">Kaffebönor, mörkrost 20 kg</span>
+        <span className="ver-nr">{variant.verNr}</span>
+        <span className="ver-beskr">{variant.verBeskr}</span>
       </div>
       <div className="ver-rader">
-        <div className="ver-rad">
-          <span>4010 Inköp material och varor</span>
-          <span>1 000,00</span>
-        </div>
-        <div className="ver-rad">
-          <span>2641 Debiterad ingående moms</span>
-          <span>120,00</span>
-        </div>
-        <div className="ver-rad">
-          <span>2440 Leverantörsskulder</span>
-          <span>1 120,00</span>
-        </div>
+        {variant.verRader.map(([namn, belopp], i) => (
+          <div key={i} className="ver-rad">
+            <span>{namn}</span>
+            <span>{belopp}</span>
+          </div>
+        ))}
       </div>
       <div className="perforering" />
       <div className="ver-hash">
         <span>hash&nbsp;</span>
-        {HASH.split("").map((tecken, i) => (
+        {variant.hash.split("").map((tecken, i) => (
           <motion.span
             key={i}
             initial={false}
@@ -231,21 +304,24 @@ export default function KedjeScen() {
     setPausad(!pausad);
   }
 
+  const variant = VARIANTER[cykel % 2];
+
   // Fruset slutläge: kvitto, färdig tolkning (ingen aktiv rad — ingen
   // caret) och stämplad verifikation. Visas vid SSR, före montering och
   // för prefers-reduced-motion.
   if (!spelar) {
+    const stilla = VARIANTER[0];
     return (
       <div className="scen" role="img" aria-label={SCEN_BESKRIVNING}>
         <div aria-hidden="true" className="scen-inre">
           <ScenHuvud />
           <div className="scen-kropp">
             <div className="scen-flode" style={{ opacity: 0.15 }}>
-              <Kvitto synligt />
-              <Tolkning steg={7} />
-              <AttestRad steg={8} />
+              <Kvitto variant={stilla} synligt />
+              <Tolkning variant={stilla} steg={7} />
+              <AttestRad variant={stilla} steg={8} />
             </div>
-            <Verifikation steg={10} statisk />
+            <Verifikation variant={stilla} steg={10} statisk />
           </div>
         </div>
       </div>
@@ -274,11 +350,11 @@ export default function KedjeScen() {
               }
               transition={{ ...LUGN, duration: 0.45 }}
             >
-              <Kvitto synligt={steg >= 1} tillbakadraget={steg >= 2} />
-              <Tolkning steg={steg} />
-              <AttestRad steg={steg} />
+              <Kvitto variant={variant} synligt={steg >= 1} tillbakadraget={steg >= 2} />
+              <Tolkning variant={variant} steg={steg} />
+              <AttestRad variant={variant} steg={steg} />
             </motion.div>
-            <Verifikation steg={steg} />
+            <Verifikation variant={variant} steg={steg} />
           </motion.div>
         </div>
       </div>
@@ -301,6 +377,8 @@ function ScenHuvud() {
 }
 
 const SCEN_BESKRIVNING =
-  "Produktscen med exempeldata: ett kvitto från Kafferosteriet Exempel AB tolkas — " +
-  "konto 4010, moms 12 procent enligt ML (2023:200) 9 kap., konfidens 0,94 — " +
-  "attesteras och bokförs som verifikation 47, stämplad med sin hash.";
+  "Produktscen med exempeldata, två växlande förlopp: en faktura från Kafferosteriet " +
+  "Exempel AB tolkas (konto 4010, moms 12 procent enligt ML (2023:200) 9 kap.) och " +
+  "attesteras av en människa som verifikation 47 — och ett återkommande rutinkvitto " +
+  "från Kontorsmaterial Exempel AB bokförs stillsamt enligt er policy som verifikation 48. " +
+  "Båda stämplas med sin hash.";

@@ -458,6 +458,22 @@ main.publik {
   color: var(--gron);
   background: var(--kort);
 }
+/* Rutinens stämpel är stilla — dämpad, inte firande. */
+.publik .scen-verifikation .stampel[data-ton="stilla"] {
+  color: var(--ink-svag);
+  border-width: 1.5px;
+}
+.publik .scen-policyrad {
+  display: inline-block;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-svag);
+  border: 1px solid var(--linje-stark);
+  border-radius: var(--r-pill);
+  padding: 6px 14px;
+}
 .publik .ver-huvud {
   display: flex;
   align-items: baseline;
