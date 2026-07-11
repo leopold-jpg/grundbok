@@ -11,7 +11,7 @@ import {
   IllustrationSparbart,
 } from "./_publik/TrygghetsIllustrationer";
 import AttestSimulator from "./_publik/AttestSimulator";
-import { PanelAvvikelse, PanelKontering, PanelUnderlag } from "./_publik/StegPaneler";
+import { ScenAgenterna, ScenSistaOrdet, ScenSlappIn } from "./_publik/StegScener";
 import BentoModuler from "./_publik/BentoModuler";
 import { RegTicker } from "./_publik/TickerOchLogotyper";
 import { plexMono } from "./_publik/fonter";
@@ -111,19 +111,19 @@ function Reveal({
 // mening var — illustrationerna bär berättelsen, texten kvitterar.
 const STEGEN = [
   {
-    rubrik: "Släpp in underlaget",
-    text: "Klistra in i dag — mejl, foto och uppladdning är på väg; varje kanal är bara en källa in.",
-    Panel: PanelUnderlag,
+    rubrik: "Släpp in allt",
+    text: "Mejl, foton och ert bokföringssystem flödar in — klistra in i dag, fler kanaler på väg.",
+    Panel: ScenSlappIn,
   },
   {
-    rubrik: "Agenterna tolkar och konterar",
-    text: "BAS-kontering och momssats med lagrum, konfidens och modellversion på varje förslag.",
-    Panel: PanelKontering,
+    rubrik: "Agenterna gör jobbet",
+    text: "Verifikatet byggs rad för rad — kontering, moms och lagrum på plats.",
+    Panel: ScenAgenterna,
   },
   {
-    rubrik: "Ni attesterar bara avvikelserna",
-    text: "Rutinen bokför sig själv inom er policy — kön krymper, kontrollen består.",
-    Panel: PanelAvvikelse,
+    rubrik: "Ni har sista ordet",
+    text: "Rutinen glider igenom enligt er policy — avvikelsen väntar på er.",
+    Panel: ScenSistaOrdet,
   },
 ] as const;
 
