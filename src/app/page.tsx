@@ -131,7 +131,7 @@ const STEGEN = [
 function SaFunkarDet() {
   const spelar = useSpelar();
   return (
-    <section id="sa-funkar-det">
+    <section id="sa-funkar-det" className="is-yta">
       <div className="inre">
         <SektionHuvud nr="01" titel="Så funkar det" />
         <div className="panel-grid">
@@ -226,7 +226,7 @@ const MODULER = [
 
 function Moduler() {
   return (
-    <section id="moduler">
+    <section id="moduler" className="is-yta">
       <div className="inre">
         <SektionHuvud nr="03" titel="Moduler" />
         <div className="modul-grid">
@@ -266,9 +266,9 @@ function NrTicker({ aktiv }: { aktiv: boolean }) {
     const t = setInterval(() => setTick((n) => n + 1), 60);
     return () => clearInterval(t);
   }, [aktiv]);
-  if (!aktiv) return <span>№ —</span>;
+  if (!aktiv) return <span className="ticker-nr">reg —</span>;
   const siffror = [0, 1, 2, 3].map((pos) => (tick * 7 + pos * 3) % 10);
-  return <span>№ {siffror.join("")}</span>;
+  return <span className="ticker-nr">reg {siffror.join("")}</span>;
 }
 
 function KontaktBox() {

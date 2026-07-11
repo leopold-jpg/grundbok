@@ -64,17 +64,17 @@ main.publik {
 }
 
 .publik .overline {
-  font-family: var(--font-mono);
   font-size: 11px;
-  letter-spacing: 0.16em;
+  font-weight: 600;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
   color: var(--ink-svag);
 }
 
-/* Löpnumret — verifikationens formvärld som sektionsmarkör. */
+/* Sektionsmarkören — grotesk, blå. */
 .publik .lopnr {
-  font-family: var(--font-mono);
   font-size: 12px;
+  font-weight: 600;
   letter-spacing: 0.08em;
   color: var(--bla);
 }
@@ -106,10 +106,9 @@ main.publik {
   );
 }
 
-/* Stämpeln — mono i ram, lätt vriden. Färgen sätts av sammanhanget. */
+/* Stämpeln — status i ram, lätt vriden. Grön = attest/registrerad. */
 .publik .stampel {
   display: inline-block;
-  font-family: var(--font-mono);
   font-size: 12px;
   font-weight: 700;
   letter-spacing: 0.14em;
@@ -286,16 +285,6 @@ main.publik {
    animeras) så loopen aldrig ändrar sidans höjd. */
 
 .publik .scen-yta { position: relative; }
-/* Pappersbunten bakom scenen — ett ark till i högen. */
-.publik .scen-yta::before {
-  content: "";
-  position: absolute;
-  inset: 14px -8px -14px 12px;
-  border: 1px solid var(--linje);
-  border-radius: var(--r-lg);
-  background: var(--yta-is);
-  transform: rotate(1.1deg);
-}
 
 .publik .scen {
   position: relative;
@@ -327,9 +316,9 @@ main.publik {
 }
 .publik .scen-titel { font-weight: 600; font-size: 15px; }
 .publik .scen-not {
-  font-family: var(--font-mono);
   font-size: 10px;
-  letter-spacing: 0.14em;
+  font-weight: 600;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
   color: var(--ink-svag);
 }
@@ -390,9 +379,9 @@ main.publik {
   border-top: 1px solid var(--linje);
 }
 .publik .tolk-etikett {
-  font-family: var(--font-mono);
-  font-size: 9.5px;
-  letter-spacing: 0.14em;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
   color: var(--ink-svag);
 }
@@ -464,7 +453,7 @@ main.publik {
   position: absolute;
   top: -13px;
   right: -8px;
-  color: var(--bla);
+  color: var(--gron);
   background: var(--kort);
 }
 .publik .ver-huvud {
@@ -497,8 +486,10 @@ main.publik {
 }
 .publik .ver-appendonly {
   margin-left: auto;
+  font-family: var(--font-sans);
   font-size: 10px;
-  letter-spacing: 0.12em;
+  font-weight: 600;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
   padding-left: var(--sp-3);
 }
@@ -522,8 +513,8 @@ main.publik {
   margin-bottom: var(--sp-3);
 }
 .publik .panel-nr {
-  font-family: var(--font-mono);
   font-size: 11px;
+  font-weight: 600;
   letter-spacing: 0.1em;
   color: var(--ink-svag);
 }
@@ -611,14 +602,14 @@ main.publik {
   margin: 0;
 }
 .publik .modul-status {
-  font-family: var(--font-mono);
   font-size: 10px;
-  letter-spacing: 0.16em;
+  font-weight: 600;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
   color: var(--ink-svag);
   white-space: nowrap;
 }
-.publik .modul-status[data-live="true"] { color: var(--bla); font-weight: 700; }
+.publik .modul-status[data-live="true"] { color: var(--gron); font-weight: 700; }
 .publik .modulkort p {
   font-size: 13.5px;
   line-height: 1.55;
@@ -645,40 +636,28 @@ main.publik {
   display: flex;
   justify-content: space-between;
   gap: var(--sp-3);
-  font-family: var(--font-mono);
-  font-size: 10px;
-  letter-spacing: 0.16em;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--ink-svag);
   border-bottom: 1px solid var(--linje);
   padding-bottom: var(--sp-3);
   margin-bottom: var(--sp-6);
 }
+.publik .kontakt-topp .ticker-nr { font-family: var(--font-mono); text-transform: none; }
 
 .publik .kontakt form { display: grid; gap: var(--sp-5); }
 .publik .falt-par { display: grid; gap: var(--sp-5); }
 @media (min-width: 720px) { .publik .falt-par { grid-template-columns: 1fr 1fr; } }
 
 .publik .kontakt label { display: block; }
-/* Fokusliv (v4): etiketten färgas och en rust-linje sveper in under
-   fältet — utöver (inte i stället för) fokus-outlinen. */
-.publik .kontakt label::after {
-  content: "";
-  display: block;
-  height: 2px;
-  margin-top: -2px;
-  background: var(--bla);
-  transform: scaleX(0);
-  transform-origin: left;
-  transition: transform 0.28s var(--ease-out);
-}
-.publik .kontakt label:focus-within::after { transform: scaleX(1); }
 .publik .kontakt label:focus-within .falt-etikett { color: var(--bla); }
 .publik .falt-etikett {
   display: block;
-  font-family: var(--font-mono);
-  font-size: 10px;
-  letter-spacing: 0.14em;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--ink-svag);
   margin-bottom: var(--sp-1);
@@ -690,19 +669,18 @@ main.publik {
   font-family: var(--font-sans);
   font-size: 16px;
   color: var(--ink);
-  background: transparent;
-  border: none;
-  border-bottom: 1px solid var(--linje-stark);
-  border-radius: 0;
-  padding: var(--sp-2) 2px;
+  background: var(--kort);
+  border: 1px solid var(--linje-stark);
+  border-radius: var(--r-md);
+  padding: var(--sp-2) var(--sp-3);
+  transition: border-color var(--dur-fast) var(--ease-out), box-shadow var(--dur-fast) var(--ease-out);
 }
 .publik .kontakt textarea { min-height: 96px; resize: vertical; }
 .publik .kontakt input:focus,
 .publik .kontakt textarea:focus {
-  outline: 2px solid var(--bla);
-  outline-offset: 3px;
-  border-bottom: 2px solid var(--bla);
-  padding-bottom: calc(var(--sp-2) - 1px);
+  outline: none;
+  border-color: var(--bla);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.18);
 }
 
 .publik .kontakt-skicka {
@@ -726,7 +704,7 @@ main.publik {
 .publik .kontakt-not { margin: var(--sp-4) 0 0; }
 
 /* Tack-vyn — kvittensen: stämpeln slår, mottagningstiden är verklig. */
-.publik .kontakt .stampel { color: var(--bla); margin-bottom: var(--sp-4); }
+.publik .kontakt .stampel { color: var(--gron); margin-bottom: var(--sp-4); }
 .publik .stampel-in { animation: publik-stampel-in 0.3s var(--ease-out) both; }
 @keyframes publik-stampel-in {
   from { opacity: 0; transform: rotate(-11deg) scale(1.25); }
@@ -749,6 +727,7 @@ main.publik {
 /* ============================ sektionsytor ============================ */
 
 .publik section { padding-block: clamp(40px, 5.5vw, 72px); }
+.publik section.is-yta { background: var(--yta-is); }
 .publik .fel { color: var(--fel); font-size: 13px; margin-top: var(--sp-2); }
 .publik .tyst { color: var(--ink-svag); font-size: 13px; }
 
@@ -766,6 +745,5 @@ main.publik {
     animation: none;
     opacity: 0;
   }
-  .publik .kontakt label::after { transition: none; }
   .publik .stampel-in { animation: none; }
 }
