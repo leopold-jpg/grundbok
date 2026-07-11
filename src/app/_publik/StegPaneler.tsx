@@ -91,7 +91,7 @@ export function PanelUnderlag({ spelar }: { spelar: boolean }) {
             width={56}
             height={26}
             rx={3}
-            fill="var(--papper-elev)"
+            fill="var(--kort)"
             stroke="var(--linje-stark)"
             strokeWidth={1}
           />
@@ -115,7 +115,7 @@ export function PanelUnderlag({ spelar }: { spelar: boolean }) {
         width={76}
         height={52}
         rx={3}
-        fill="var(--papper-elev)"
+        fill="var(--kort)"
         stroke="var(--linje-stark)"
         strokeWidth={1}
       />
@@ -148,7 +148,7 @@ export function PanelUnderlag({ spelar }: { spelar: boolean }) {
             width={9}
             height={9}
             rx={2}
-            fill="var(--papper-elev)"
+            fill="var(--kort)"
             stroke="var(--ink-mjuk)"
             strokeWidth={1}
             x={spelar ? 73.5 : PAKET_STATISK_X[i]}
@@ -220,7 +220,7 @@ export function PanelKontering({ spelar }: { spelar: boolean }) {
         width={180}
         height={180}
         rx={3}
-        fill="var(--papper-elev)"
+        fill="var(--kort)"
         stroke="var(--linje-stark)"
         strokeWidth={1}
       />
@@ -251,7 +251,7 @@ export function PanelKontering({ spelar }: { spelar: boolean }) {
             width={6}
             height={6}
             rx={1.5}
-            fill="var(--papper-djup)"
+            fill="var(--yta-is)"
             stroke="var(--ink-svag)"
             strokeWidth={1}
           />
@@ -329,8 +329,8 @@ export function PanelKontering({ spelar }: { spelar: boolean }) {
           width={92}
           height={20}
           rx={3}
-          fill="var(--papper)"
-          stroke="var(--rost)"
+          fill="var(--yta)"
+          stroke="var(--bla)"
           strokeWidth={1}
         />
         <text
@@ -338,7 +338,7 @@ export function PanelKontering({ spelar }: { spelar: boolean }) {
           y={169}
           textAnchor="middle"
           fontSize={9}
-          fill="var(--rost)"
+          fill="var(--bla)"
           style={MONO}
         >
           ML (2023:200)
@@ -388,7 +388,7 @@ export function PanelAvvikelse({ spelar }: { spelar: boolean }) {
         width={6}
         height={6}
         rx={1.5}
-        fill="var(--papper-djup)"
+        fill="var(--yta-is)"
         stroke="var(--ink-mjuk)"
         strokeWidth={1}
       />
@@ -406,7 +406,7 @@ export function PanelAvvikelse({ spelar }: { spelar: boolean }) {
         width={6}
         height={6}
         rx={1.5}
-        fill="var(--papper-djup)"
+        fill="var(--yta-is)"
         stroke="var(--ink-mjuk)"
         strokeWidth={1}
       />
@@ -475,7 +475,7 @@ export function PanelAvvikelse({ spelar }: { spelar: boolean }) {
               width={14}
               height={14}
               rx={2}
-              fill="var(--papper-elev)"
+              fill="var(--kort)"
               stroke="var(--ink-mjuk)"
               strokeWidth={1}
             />
@@ -512,7 +512,7 @@ export function PanelAvvikelse({ spelar }: { spelar: boolean }) {
           width={14}
           height={14}
           rx={2}
-          fill="var(--papper-elev)"
+          fill="var(--kort)"
           stroke="var(--ink-mjuk)"
           strokeWidth={1}
         />
@@ -523,7 +523,7 @@ export function PanelAvvikelse({ spelar }: { spelar: boolean }) {
           height={18}
           rx={3}
           fill="none"
-          stroke="var(--rost)"
+          stroke="var(--bla)"
           strokeWidth={1.5}
           initial={spelar ? { opacity: 0 } : false}
           animate={spelar ? { opacity: [0, 0, 1, 1, 1, 0] } : undefined}

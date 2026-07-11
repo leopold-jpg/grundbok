@@ -57,7 +57,7 @@ function PixelKvitto({
               width: CELL,
               height: CELL,
               borderRadius: 2,
-              background: p.rust ? "var(--rost)" : "var(--ink)",
+              background: p.rust ? "var(--bla)" : "var(--ink)",
               left: malX,
               top: malY,
             }}

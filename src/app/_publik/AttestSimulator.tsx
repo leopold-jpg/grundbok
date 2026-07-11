@@ -12,7 +12,7 @@
  *
  * Klassnamn som integratören stylar i publik.css (komponenten skriver ingen CSS själv):
  *   .sim-reglage — de två range-inputarna (hover/fokusring, ev. thumb-styling).
- *     Baseline-utseende finns redan via inline `accentColor: var(--rost)`.
+ *     Baseline-utseende finns redan via inline `accentColor: var(--bla)`.
  *
  * Allt som visas är ren aritmetik på besökarens reglagevärden — inga hårdkodade
  * procentsatser, timbesparingar eller kundpåståenden.
@@ -68,8 +68,8 @@ export default function AttestSimulator({ spelar }: AttestSimulatorProps) {
               borderRadius: 3,
               boxSizing: "border-box",
               border: "1px solid",
-              borderColor: arRutin ? "var(--linje)" : "var(--rost)",
-              backgroundColor: arRutin ? "var(--papper-djup)" : "var(--rost)",
+              borderColor: arRutin ? "var(--linje)" : "var(--bla)",
+              backgroundColor: arRutin ? "var(--yta-is)" : "var(--bla)",
               transition: rutTransition,
             }}
           />
@@ -124,7 +124,7 @@ export default function AttestSimulator({ spelar }: AttestSimulatorProps) {
               display: "block",
               width: "100%",
               margin: 0,
-              accentColor: "var(--rost)",
+              accentColor: "var(--bla)",
             }}
           />
         </div>
@@ -164,7 +164,7 @@ export default function AttestSimulator({ spelar }: AttestSimulatorProps) {
               display: "block",
               width: "100%",
               margin: 0,
-              accentColor: "var(--rost)",
+              accentColor: "var(--bla)",
             }}
           />
         </div>
@@ -210,7 +210,7 @@ export default function AttestSimulator({ spelar }: AttestSimulatorProps) {
               width: 10,
               height: 10,
               borderRadius: 3,
-              backgroundColor: "var(--rost)",
+              backgroundColor: "var(--bla)",
               flexShrink: 0,
             }}
           />
@@ -229,7 +229,7 @@ export default function AttestSimulator({ spelar }: AttestSimulatorProps) {
               borderRadius: 3,
               boxSizing: "border-box",
               border: "1px solid var(--linje)",
-              backgroundColor: "var(--papper-djup)",
+              backgroundColor: "var(--yta-is)",
               flexShrink: 0,
             }}
           />
@@ -259,7 +259,7 @@ export default function AttestSimulator({ spelar }: AttestSimulatorProps) {
           <path
             d={kurvaD}
             fill="none"
-            stroke="var(--rost)"
+            stroke="var(--bla)"
             strokeWidth={1.5}
           />
         </svg>

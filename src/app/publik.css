@@ -1,27 +1,33 @@
-/* grundbok — publika sajten. Identitet: varm ljus produktförst-
-   minimalism (DESIGN-BRIEF v3, låst mot facit i docs/design-referens/
-   publik/). Scopad under .publik, ovanpå Gesso-tokens: papper #F7F3EA,
-   bläck #2C2A26, rust #A4502E som varm accent. Grotesk bär rubriker
-   och gränssnitt; serifen är varumärkeskrydda (ordmärket, kursiva
-   betoningar); mono för siffror/konton/lagrum. Mobil först. */
+/* grundbok — publika sajten. Identitet: vit/blå SaaS-produkt
+   (riktningsbyte 2026-07-11 + DESIGN-INSPO v2; struktur-facit i
+   docs/design-referens/saas/). Kallvitt med isblå sektionsvariant,
+   EN klarblå accent, marinblå kontrastyta, grön endast som status.
+   Grotesk bär rubriker; serifen är varumärkeskrydda (ordmärket,
+   kursiva betoningar); mono ENDAST siffror/konton/hash. Skuggor får
+   ge djup — mjukvara, inte papper. Mobil först. */
 
 main.publik {
-  /* Palett per brief v3 — scopade slots ovanpå studio-skinnet. */
-  --papper: #F7F3EA;
-  --papper-elev: #FCFAF3;
-  --papper-djup: #EFE7D6;
-  --ink: #2C2A26;
-  --ink-mjuk: #5f5a4f; /* 6,2:1 på papper */
-  --ink-svag: #766a54; /* AA: 4,8:1 på papper */
-  --linje: #ddd6c8; /* briefens kortkant */
-  --linje-stark: #c9bda2;
-  --rost: #A4502E; /* 5,0:1 på papper, vit text 5,6:1 */
-  --rost-djup: #8a4226;
-  --rost-ljus: #cf8a64; /* smågradstext på mörkt: 5,1:1 */
-  --morkt-bg: #2C2A26;
-  --morkt-fg: #f3edde;
-  --morkt-mjuk: #b3a78e;
-  --morkt-linje: rgba(243, 237, 222, 0.18);
+  /* Färgsystem: vit/blå SaaS (riktningsbytet 2026-07-11). Kontraster
+     räknade: blå 5,2:1 åt båda håll, grön text 5,0:1, marin ≥6,7:1. */
+  --yta: #FFFFFF;
+  --yta-is: #F5F8FC;
+  --kort: #FFFFFF;
+  --ink: #0F172A;
+  --ink-mjuk: #475569;
+  --ink-svag: #64748B;
+  --linje: #E3E9F2;
+  --linje-stark: #CBD5E1;
+  --bla: #2563EB;
+  --bla-djup: #1D4ED8;
+  --bla-ljus: #60A5FA;
+  --gron: #15803D; /* status: attest/registrerad/live */
+  --marin: #0B1B34;
+  --marin-fg: #F8FAFC;
+  --marin-mjuk: #94A3B8;
+  --marin-linje: rgba(148, 163, 184, 0.22);
+  --fel: #DC2626;
+  --skugga-kort: 0 1px 2px rgba(15, 23, 42, 0.05), 0 1px 0 rgba(15, 23, 42, 0.02);
+  --skugga-lyft: 0 12px 32px rgba(15, 23, 42, 0.08), 0 2px 6px rgba(15, 23, 42, 0.05);
 
   /* Typografin (brief v3 + prov i docs/design-referens/typografiprov/):
      Inter bär rubrikerna; Instrument Serif (layoutens --font-app-serif)
@@ -36,7 +42,7 @@ main.publik {
      main-måtten gäller inte här. */
   max-width: none;
   padding: 0;
-  background: var(--papper);
+  background: var(--yta);
   color: var(--ink);
   font-size: 16px;
 }
@@ -70,7 +76,7 @@ main.publik {
   font-family: var(--font-mono);
   font-size: 12px;
   letter-spacing: 0.08em;
-  color: var(--rost);
+  color: var(--bla);
 }
 
 .publik .sektion-huvud {
@@ -130,7 +136,7 @@ main.publik {
   position: sticky;
   top: 0;
   z-index: 10;
-  background: color-mix(in srgb, var(--papper) 88%, transparent);
+  background: color-mix(in srgb, var(--yta) 88%, transparent);
   backdrop-filter: blur(10px);
   border-bottom: 1px solid var(--linje);
 }
@@ -147,7 +153,7 @@ main.publik {
   color: var(--ink);
   text-decoration: none;
 }
-.publik .sajt-topp .wordmark em { color: var(--rost); }
+.publik .sajt-topp .wordmark em { color: var(--bla); }
 .publik .sajt-topp nav {
   display: flex;
   align-items: baseline;
@@ -163,15 +169,15 @@ main.publik {
 .publik .sajt-topp nav a.topp-cta {
   font-size: 13px;
   font-weight: 600;
-  color: var(--accent-fg);
-  background: var(--rost);
+  color: #ffffff;
+  background: var(--bla);
   border-radius: var(--r-pill);
   padding: 7px 16px;
   transition: background var(--dur-fast) var(--ease-out);
 }
 .publik .sajt-topp nav a.topp-cta:hover {
-  color: var(--accent-fg);
-  background: var(--rost-djup);
+  color: #ffffff;
+  background: var(--bla-djup);
 }
 
 /* ================================ hero ================================ */
@@ -206,7 +212,7 @@ main.publik {
 .publik .hero h1 em {
   font-family: var(--font-serif);
   font-weight: var(--serifvikt-display);
-  color: var(--rost);
+  color: var(--bla);
 }
 .publik .hero .ingress {
   font-size: 17px;
@@ -225,15 +231,15 @@ main.publik {
   display: inline-block;
   font-size: 16px;
   font-weight: 600;
-  color: var(--accent-fg);
-  background: var(--rost);
-  border: 1px solid var(--rost);
+  color: #ffffff;
+  background: var(--bla);
+  border: 1px solid var(--bla);
   border-radius: var(--r-md);
   padding: var(--sp-3) var(--sp-6);
   text-decoration: none;
   transition: background var(--dur-fast) var(--ease-out);
 }
-.publik .cta:hover { background: var(--rost-djup); border-color: var(--rost-djup); }
+.publik .cta:hover { background: var(--bla-djup); border-color: var(--bla-djup); }
 
 /* ============================== sidfot ================================ */
 
@@ -242,8 +248,8 @@ main.publik {
      ett eget mörkt block kant i kant med sektionen ovanför. */
   margin-top: 0;
   border-top: none;
-  background: var(--morkt-bg);
-  color: var(--morkt-mjuk);
+  background: var(--marin);
+  color: var(--marin-mjuk);
   padding-block: var(--sp-10) var(--sp-6);
   font-size: 14px;
   line-height: 1.7;
@@ -251,25 +257,25 @@ main.publik {
 .publik .sajt-fot .wordmark {
   font-weight: var(--serifvikt-display);
   font-size: 30px;
-  color: var(--morkt-fg);
+  color: var(--marin-fg);
   margin-bottom: var(--sp-4);
 }
-.publik .sajt-fot .wordmark em { color: var(--rost); }
+.publik .sajt-fot .wordmark em { color: var(--bla); }
 .publik .sajt-fot p { max-width: 62ch; margin: 0 0 var(--sp-5); }
 .publik .sajt-fot nav {
   display: flex;
   flex-wrap: wrap;
   gap: var(--sp-2) var(--sp-6);
-  border-top: 1px solid var(--morkt-linje);
+  border-top: 1px solid var(--marin-linje);
   padding-top: var(--sp-5);
 }
-.publik .sajt-fot a { color: var(--morkt-fg); text-decoration: none; }
+.publik .sajt-fot a { color: var(--marin-fg); text-decoration: none; }
 .publik .sajt-fot a:hover { text-decoration: underline; }
 .publik .sajt-fot .upphov {
   font-family: var(--font-mono);
   font-size: 11px;
   letter-spacing: 0.06em;
-  color: var(--morkt-mjuk);
+  color: var(--marin-mjuk);
   margin-left: auto;
 }
 
@@ -287,7 +293,7 @@ main.publik {
   inset: 14px -8px -14px 12px;
   border: 1px solid var(--linje);
   border-radius: var(--r-lg);
-  background: var(--papper-djup);
+  background: var(--yta-is);
   transform: rotate(1.1deg);
 }
 
@@ -295,8 +301,8 @@ main.publik {
   position: relative;
   border: 1px solid var(--linje);
   border-radius: var(--r-lg);
-  background: var(--papper-elev);
-  box-shadow: var(--shadow-md);
+  background: var(--kort);
+  box-shadow: var(--skugga-lyft);
   padding: var(--sp-4) var(--sp-5);
 }
 .publik .scen-inre {
@@ -333,14 +339,14 @@ main.publik {
   position: relative;
   align-self: center;
   width: min(300px, 94%);
-  background: #fffdf6;
+  background: var(--kort);
   border: 1px solid var(--linje);
   border-bottom: none;
   padding: 14px 18px;
   font-family: var(--font-mono);
   font-size: 11.5px;
   line-height: 1.5;
-  box-shadow: var(--shadow-sm);
+  box-shadow: var(--skugga-kort);
 }
 .publik .kvitto::after {
   content: "";
@@ -350,8 +356,8 @@ main.publik {
   right: -1px;
   height: 7px;
   background-image:
-    linear-gradient(45deg, #fffdf6 34%, transparent 34%),
-    linear-gradient(-45deg, #fffdf6 34%, transparent 34%);
+    linear-gradient(45deg, var(--kort) 34%, transparent 34%),
+    linear-gradient(-45deg, var(--kort) 34%, transparent 34%);
   background-size: 14px 14px;
   background-position: 0 0, 7px 0;
   background-repeat: repeat-x;
@@ -398,7 +404,7 @@ main.publik {
   width: 7px;
   height: 12px;
   margin-left: 6px;
-  background: var(--rost);
+  background: var(--bla);
   vertical-align: baseline;
   animation: publik-caret 1.15s steps(2, start) infinite;
 }
@@ -412,13 +418,13 @@ main.publik {
   display: inline-block;
   font-size: 13.5px;
   font-weight: 600;
-  color: var(--accent-fg);
-  background: var(--rost);
+  color: #ffffff;
+  background: var(--bla);
   border-radius: var(--r-md);
   padding: var(--sp-2) var(--sp-5);
-  box-shadow: var(--shadow-sm);
+  box-shadow: var(--skugga-kort);
 }
-.publik .scen-knapp[data-tryckt="true"] { background: var(--rost-djup); }
+.publik .scen-knapp[data-tryckt="true"] { background: var(--bla-djup); }
 .publik .scen-attest-not { font-size: 12px; color: var(--ink-svag); max-width: 24ch; }
 
 /* Pausmekanismen (WCAG 2.2.2) — stillsam, under scenkortet. */
@@ -439,7 +445,7 @@ main.publik {
   text-underline-offset: 3px;
 }
 .publik .scen-paus:hover { color: var(--ink); }
-.publik .scen-paus:focus-visible { outline: 2px solid var(--rost); outline-offset: 2px; }
+.publik .scen-paus:focus-visible { outline: 2px solid var(--bla); outline-offset: 2px; }
 
 /* Verifikationen — slutet på kedjan, stämplad med hash. */
 .publik .scen-verifikation {
@@ -448,18 +454,18 @@ main.publik {
   top: 50%;
   translate: -50% -50%;
   width: min(400px, 96%);
-  background: var(--papper-elev);
+  background: var(--kort);
   border: 1px solid var(--linje);
   border-radius: var(--r-md);
-  box-shadow: var(--shadow-lg);
+  box-shadow: var(--skugga-lyft);
   padding: var(--sp-4) var(--sp-5);
 }
 .publik .scen-verifikation .stampel {
   position: absolute;
   top: -13px;
   right: -8px;
-  color: var(--rost);
-  background: var(--papper-elev);
+  color: var(--bla);
+  background: var(--kort);
 }
 .publik .ver-huvud {
   display: flex;
@@ -509,7 +515,7 @@ main.publik {
   .publik .panel-grid { grid-template-columns: 1fr 1fr 1fr; }
 }
 .publik .panel-bild {
-  background: var(--papper-elev);
+  background: var(--kort);
   border: 1px solid var(--linje);
   border-radius: var(--r-lg);
   padding: var(--sp-3);
@@ -552,10 +558,10 @@ main.publik {
 .publik .krymper-rad em {
   font-family: var(--font-serif);
   font-weight: var(--serifvikt-rubrik);
-  color: var(--rost);
+  color: var(--bla);
 }
 .publik .sim-reglage:focus-visible {
-  outline: 2px solid var(--rost);
+  outline: 2px solid var(--bla);
   outline-offset: 3px;
 }
 
@@ -584,7 +590,7 @@ main.publik {
 @media (min-width: 980px) { .publik .modul-grid { grid-template-columns: 1fr 1fr 1fr; } }
 .publik .modulkort-inre {
   height: 100%;
-  background: var(--papper-elev);
+  background: var(--kort);
   border: 1px solid var(--linje);
   border-radius: var(--r-lg);
   padding: var(--sp-4) var(--sp-5);
@@ -612,7 +618,7 @@ main.publik {
   color: var(--ink-svag);
   white-space: nowrap;
 }
-.publik .modul-status[data-live="true"] { color: var(--rost); font-weight: 700; }
+.publik .modul-status[data-live="true"] { color: var(--bla); font-weight: 700; }
 .publik .modulkort p {
   font-size: 13.5px;
   line-height: 1.55;
@@ -627,10 +633,10 @@ main.publik {
 .publik .kontakt {
   position: relative;
   max-width: 760px;
-  background: var(--papper-elev);
+  background: var(--kort);
   border: 1px solid var(--linje);
   border-radius: var(--r-lg);
-  box-shadow: var(--shadow-sm);
+  box-shadow: var(--skugga-kort);
   padding: var(--sp-6);
 }
 @media (min-width: 720px) { .publik .kontakt { padding: var(--sp-8); } }
@@ -661,13 +667,13 @@ main.publik {
   display: block;
   height: 2px;
   margin-top: -2px;
-  background: var(--rost);
+  background: var(--bla);
   transform: scaleX(0);
   transform-origin: left;
   transition: transform 0.28s var(--ease-out);
 }
 .publik .kontakt label:focus-within::after { transform: scaleX(1); }
-.publik .kontakt label:focus-within .falt-etikett { color: var(--rost); }
+.publik .kontakt label:focus-within .falt-etikett { color: var(--bla); }
 .publik .falt-etikett {
   display: block;
   font-family: var(--font-mono);
@@ -693,9 +699,9 @@ main.publik {
 .publik .kontakt textarea { min-height: 96px; resize: vertical; }
 .publik .kontakt input:focus,
 .publik .kontakt textarea:focus {
-  outline: 2px solid var(--rost);
+  outline: 2px solid var(--bla);
   outline-offset: 3px;
-  border-bottom: 2px solid var(--rost);
+  border-bottom: 2px solid var(--bla);
   padding-bottom: calc(var(--sp-2) - 1px);
 }
 
@@ -704,23 +710,23 @@ main.publik {
   font-family: var(--font-sans);
   font-size: 16px;
   font-weight: 600;
-  color: var(--accent-fg);
-  background: var(--rost);
-  border: 1px solid var(--rost);
+  color: #ffffff;
+  background: var(--bla);
+  border: 1px solid var(--bla);
   border-radius: var(--r-md);
   padding: var(--sp-3) var(--sp-8);
   cursor: pointer;
   transition: background var(--dur-fast) var(--ease-out);
   margin-top: var(--sp-2);
 }
-.publik .kontakt-skicka:hover:not(:disabled) { background: var(--rost-djup); }
+.publik .kontakt-skicka:hover:not(:disabled) { background: var(--bla-djup); }
 .publik .kontakt-skicka:disabled { opacity: 0.55; cursor: not-allowed; }
 @media (max-width: 600px) { .publik .kontakt-skicka { justify-self: stretch; width: 100%; } }
 
 .publik .kontakt-not { margin: var(--sp-4) 0 0; }
 
 /* Tack-vyn — kvittensen: stämpeln slår, mottagningstiden är verklig. */
-.publik .kontakt .stampel { color: var(--rost); margin-bottom: var(--sp-4); }
+.publik .kontakt .stampel { color: var(--bla); margin-bottom: var(--sp-4); }
 .publik .stampel-in { animation: publik-stampel-in 0.3s var(--ease-out) both; }
 @keyframes publik-stampel-in {
   from { opacity: 0; transform: rotate(-11deg) scale(1.25); }
@@ -743,7 +749,7 @@ main.publik {
 /* ============================ sektionsytor ============================ */
 
 .publik section { padding-block: clamp(40px, 5.5vw, 72px); }
-.publik .fel { color: var(--danger); font-size: 13px; margin-top: var(--sp-2); }
+.publik .fel { color: var(--fel); font-size: 13px; margin-top: var(--sp-2); }
 .publik .tyst { color: var(--ink-svag); font-size: 13px; }
 
 /* ========================= reduced motion ============================ */

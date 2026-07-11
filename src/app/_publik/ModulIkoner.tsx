@@ -27,11 +27,11 @@ function Svg({ children }: { children: React.ReactNode }) {
 export function IkonBokforing() {
   return (
     <Svg>
-      <rect x="10" y="6" width="28" height="36" rx="3" {...bas} fill="var(--papper-elev)" />
+      <rect x="10" y="6" width="28" height="36" rx="3" {...bas} fill="var(--kort)" />
       <line x1="16" y1="15" x2="32" y2="15" stroke="var(--linje-stark)" strokeWidth="1.5" />
       <line x1="16" y1="22" x2="28" y2="22" stroke="var(--ink-svag)" strokeWidth="1.5" />
       <line x1="16" y1="28" x2="28" y2="28" stroke="var(--ink-svag)" strokeWidth="1.5" />
-      <rect x="30" y="25.5" width="5" height="5" rx="1" fill="var(--rost)" />
+      <rect x="30" y="25.5" width="5" height="5" rx="1" fill="var(--bla)" />
       <line x1="16" y1="35" x2="32" y2="35" stroke="var(--ink)" strokeWidth="1.5" />
     </Svg>
   );
@@ -40,8 +40,8 @@ export function IkonBokforing() {
 export function IkonRadgivning() {
   return (
     <Svg>
-      <rect x="7" y="9" width="34" height="24" rx="6" {...bas} fill="var(--papper-elev)" />
-      <path d="M 16 33 L 16 40 L 24 33" {...bas} fill="var(--papper-elev)" />
+      <rect x="7" y="9" width="34" height="24" rx="6" {...bas} fill="var(--kort)" />
+      <path d="M 16 33 L 16 40 L 24 33" {...bas} fill="var(--kort)" />
       <text
         x="24"
         y="26"
@@ -59,10 +59,10 @@ export function IkonRadgivning() {
 export function IkonKundapp() {
   return (
     <Svg>
-      <rect x="14" y="5" width="20" height="38" rx="4" {...bas} fill="var(--papper-elev)" />
+      <rect x="14" y="5" width="20" height="38" rx="4" {...bas} fill="var(--kort)" />
       <rect x="19" y="12" width="10" height="14" rx="1" fill="none" stroke="var(--ink-svag)" strokeWidth="1.2" />
       <line x1="21" y1="17" x2="27" y2="17" stroke="var(--ink-svag)" strokeWidth="1.2" />
-      <line x1="21" y1="21" x2="27" y2="21" stroke="var(--rost)" strokeWidth="1.2" />
+      <line x1="21" y1="21" x2="27" y2="21" stroke="var(--bla)" strokeWidth="1.2" />
       <line x1="21" y1="37" x2="27" y2="37" stroke="var(--ink)" strokeWidth="1.5" />
     </Svg>
   );
@@ -71,7 +71,7 @@ export function IkonKundapp() {
 export function IkonLoner() {
   return (
     <Svg>
-      <rect x="7" y="8" width="34" height="32" rx="3" {...bas} fill="var(--papper-elev)" />
+      <rect x="7" y="8" width="34" height="32" rx="3" {...bas} fill="var(--kort)" />
       <line x1="7" y1="16" x2="41" y2="16" stroke="var(--linje-stark)" strokeWidth="1.5" />
       <line x1="13" y1="24" x2="24" y2="24" stroke="var(--ink-svag)" strokeWidth="1.5" />
       <line x1="13" y1="31" x2="24" y2="31" stroke="var(--ink-svag)" strokeWidth="1.5" />
@@ -92,7 +92,7 @@ export function IkonLoner() {
 export function IkonBokslut() {
   return (
     <Svg>
-      <rect x="9" y="7" width="30" height="34" rx="3" {...bas} fill="var(--papper-elev)" />
+      <rect x="9" y="7" width="30" height="34" rx="3" {...bas} fill="var(--kort)" />
       <line x1="15" y1="15" x2="33" y2="15" stroke="var(--ink-svag)" strokeWidth="1.5" />
       <line x1="15" y1="21" x2="33" y2="21" stroke="var(--ink-svag)" strokeWidth="1.5" />
       <line x1="15" y1="27" x2="33" y2="27" stroke="var(--ink-svag)" strokeWidth="1.5" />
@@ -105,7 +105,7 @@ export function IkonBokslut() {
 export function IkonSkatt() {
   return (
     <Svg>
-      <rect x="8" y="8" width="32" height="32" rx="16" {...bas} fill="var(--papper-elev)" />
+      <rect x="8" y="8" width="32" height="32" rx="16" {...bas} fill="var(--kort)" />
       <text
         x="24"
         y="30"
