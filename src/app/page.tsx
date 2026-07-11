@@ -4,6 +4,7 @@ import { useState } from "react";
 import { motion } from "framer-motion";
 import HeroPixlar from "./_publik/HeroPixlar";
 import KedjeScen from "./_publik/KedjeScen";
+import ArkitekturFigur from "./_publik/ArkitekturFigur";
 import AttestSimulator from "./_publik/AttestSimulator";
 import { PanelAvvikelse, PanelKontering, PanelUnderlag } from "./_publik/StegPaneler";
 import { plexMono } from "./_publik/fonter";
@@ -150,50 +151,24 @@ function SaFunkarDet() {
   );
 }
 
-// Det som säljer till en försiktig byrå — varje ruta pekar på en
-// mekanism i systemet (hash-beslut, RLS, autonomipolicy) eller ett
-// uttryckligt åtagande. Inga påhittade garantier.
-const FAKTA: { rubrik: string; text: string }[] = [
-  {
-    rubrik: "Hash-bundna beslut",
-    text: "Varje förslag hashas, och attesten binds till hashen och beslutsfattarens identitet. En ändrad rad gör förslaget obeslutbart. Huvudboken är append-only — fel rättas med rättelsepost, aldrig genom ändring.",
-  },
-  {
-    rubrik: "Radnivå-isolering per kund",
-    text: "Varje klients data ligger bakom radnivåsäkerhet i databasen. En byrå ser aldrig en annan byrås värld — och operatören ser drift, aldrig kvitton eller kunddata.",
-  },
-  {
-    rubrik: "Ingen träning på er data",
-    text: "Era underlag och beslut används till er bokföring — ingenting används för att träna modeller.",
-  },
-  {
-    rubrik: "Mänsklig kontroll som mekanism",
-    text: "Human oversight enligt AI-förordningen är en konfigurerbar policy per kund och modul, inte en policytext. Varje förslag bär modell, promptversion, konfidens och lagrum.",
-  },
-];
-
-// Mörk/ljus-jämförelsen: brief v3 säger ljus (typografiskt buren).
-// Växla till "mork" här — eller checka ut commiten före denna — för
-// att se den inverterade varianten sida vid sida i browsern.
-const FORTROENDE_VARIANT: "mork" | "ljus" = "ljus";
-
+// Förtroendesektionen (v4 §5): EN ritad arkitekturfigur bär de fyra
+// poängerna som etiketter i flödet förslag → hash → attest/policy →
+// append-only huvudbok. En rad brödtext under — inte fyra stycken.
+// (Mörk/ljus-jämförelsen från v3 är avgjord: ljus; historiken finns i git.)
 function Fortroende() {
+  const spelar = useSpelar();
   return (
-    <section
-      id="fortroende"
-      className={FORTROENDE_VARIANT === "mork" ? "morkt" : "fortroende-ljus"}
-    >
+    <section id="fortroende">
       <div className="inre">
         <SektionHuvud nr="02" titel="Förtroende är arkitektur" />
-        <div className="fakta-grid">
-          {FAKTA.map((fakta, i) => (
-            <Reveal key={fakta.rubrik} className="faktaruta" delay={i * 0.05}>
-              <span className="fakta-nr">№ 0{i + 1}</span>
-              <h3>{fakta.rubrik}</h3>
-              <p>{fakta.text}</p>
-            </Reveal>
-          ))}
-        </div>
+        <Reveal>
+          <ArkitekturFigur spelar={spelar} />
+        </Reveal>
+        <p className="fortroende-rad">
+          Hash-bundna beslut, radnivå-isolering per kund, ingen träning på er
+          data och mänsklig kontroll som konfigurerbar mekanism — spårbarheten
+          AI-förordningen kräver är arkitektur här, inte efterhandskonstruktion.
+        </p>
       </div>
     </section>
   );

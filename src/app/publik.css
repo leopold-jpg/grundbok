@@ -559,68 +559,22 @@ main.publik {
   outline-offset: 3px;
 }
 
-/* ======================= förtroende (inverterad) ====================== */
+/* ============================= förtroende ============================= */
 
-/* Ljus variant (brief v3): typografiskt buren — papper rakt igenom,
-   tunna linjer, mono-detaljer, ljusa kort. Mörka varianten (.morkt)
-   behålls nedanför för jämförelsen; växla i page.tsx. */
-.publik .fortroende-ljus .sektion-huvud { border-top-color: var(--linje-stark); }
-.publik .fortroende-ljus .faktaruta {
-  background: var(--papper-elev);
-  border-color: var(--linje);
-}
-.publik .fortroende-ljus .fakta-nr {
-  color: var(--ink-svag);
-  border-bottom-color: var(--linje);
-}
-.publik .fortroende-ljus .faktaruta p { color: var(--ink-mjuk); }
-
-.publik .morkt {
-  background: var(--morkt-bg);
-  color: var(--morkt-fg);
-}
-.publik .morkt .sektion-huvud { border-top-color: var(--morkt-linje); }
-.publik .morkt .lopnr { color: var(--rost-ljus); }
-
-.publik .fakta-grid {
-  display: grid;
-  gap: var(--sp-4);
-  margin-bottom: var(--sp-8);
-}
+/* EN ritad arkitekturfigur (v4) — bred variant ≥760px, smal under. */
+.publik .ark-bred { display: none; }
+.publik .ark-smal { display: block; max-width: 420px; margin-inline: auto; }
 @media (min-width: 760px) {
-  .publik .fakta-grid { grid-template-columns: 1fr 1fr; gap: var(--sp-5); }
+  .publik .ark-bred { display: block; }
+  .publik .ark-smal { display: none; }
 }
-
-/* Faktarutan — verifikationens formvärld: löpnummer, hårfina linjer. */
-.publik .faktaruta {
-  background: rgba(252, 250, 243, 0.05);
-  border: 1px solid var(--morkt-linje);
-  border-radius: var(--r-lg);
-  padding: var(--sp-5) var(--sp-5) var(--sp-6);
-}
-.publik .fakta-nr {
-  display: block;
-  font-family: var(--font-mono);
-  font-size: 11px;
-  letter-spacing: 0.14em;
-  color: var(--morkt-mjuk);
-  border-bottom: 1px solid var(--morkt-linje);
-  padding-bottom: var(--sp-2);
-  margin-bottom: var(--sp-4);
-}
-.publik .faktaruta h3 {
-  font-weight: 600;
-  font-size: clamp(17px, 2.2vw, 19px);
-  letter-spacing: var(--tracking-snug);
-  margin: 0 0 var(--sp-2);
-}
-.publik .faktaruta p {
-  font-size: 14.5px;
+.publik .fortroende-rad {
+  font-size: 15px;
   line-height: 1.65;
-  color: var(--morkt-mjuk);
-  margin: 0;
+  color: var(--ink-mjuk);
+  max-width: 72ch;
+  margin: var(--sp-6) 0 0;
 }
-
 
 /* =============================== moduler =============================== */
 
