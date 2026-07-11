@@ -535,50 +535,28 @@ main.publik {
   max-width: 40ch;
 }
 
-/* Slutklämmen: raden + kurvan. */
+/* Slutklämmen: raden + den interaktiva simulatorn. */
 .publik .krymper {
-  display: grid;
-  gap: var(--sp-6);
-  align-items: end;
   border-top: 1px solid var(--linje-stark);
   padding-top: var(--sp-6);
   margin-top: var(--sp-2);
-}
-@media (min-width: 840px) {
-  .publik .krymper { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
 }
 .publik .krymper-rad {
   font-weight: 600;
   font-size: clamp(22px, 3.2vw, 32px);
   line-height: 1.2;
   letter-spacing: var(--tracking-tight);
-  max-width: 18ch;
-  margin: 0;
+  max-width: 24ch;
+  margin: 0 0 var(--sp-5);
 }
 .publik .krymper-rad em {
   font-family: var(--font-serif);
   font-weight: var(--serifvikt-rubrik);
+  color: var(--rost);
 }
-.publik .krymper-rad em { color: var(--rost); }
-.publik .kurva { margin: 0; }
-.publik .kurva svg { display: block; width: 100%; height: auto; }
-.publik .kurva-axel { stroke: var(--linje-stark); stroke-width: 1; }
-.publik .kurva-linje {
-  stroke: var(--rost);
-  stroke-width: 2.5;
-  fill: none;
-  stroke-linecap: round;
-}
-.publik .kurva figcaption {
-  display: flex;
-  justify-content: space-between;
-  gap: var(--sp-3);
-  font-family: var(--font-mono);
-  font-size: 10px;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--ink-svag);
-  margin-top: var(--sp-2);
+.publik .sim-reglage:focus-visible {
+  outline: 2px solid var(--rost);
+  outline-offset: 3px;
 }
 
 /* ======================= förtroende (inverterad) ====================== */
@@ -596,9 +574,6 @@ main.publik {
   border-bottom-color: var(--linje);
 }
 .publik .fortroende-ljus .faktaruta p { color: var(--ink-mjuk); }
-.publik .fortroende-ljus .oppen-karna { border-top-color: var(--linje-stark); }
-.publik .fortroende-ljus .oppen-karna a { color: var(--ink); }
-.publik .fortroende-ljus .oppen-karna a:hover { color: var(--rost-djup); }
 
 .publik .morkt {
   background: var(--morkt-bg);
@@ -646,28 +621,6 @@ main.publik {
   margin: 0;
 }
 
-.publik .oppen-karna {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: var(--sp-2) var(--sp-5);
-  border-top: 1px solid var(--morkt-linje);
-  padding-top: var(--sp-5);
-}
-.publik .oppen-karna p {
-  font-weight: 600;
-  font-size: clamp(17px, 2.2vw, 20px);
-  margin: 0;
-}
-.publik .oppen-karna a {
-  font-family: var(--font-mono);
-  font-size: 13px;
-  color: var(--morkt-fg);
-  text-decoration: underline;
-  text-underline-offset: 3px;
-}
-.publik .oppen-karna a:hover { color: #ffffff; }
 
 /* =============================== moduler =============================== */
 
@@ -832,7 +785,6 @@ main.publik {
     transform: none !important;
     transition: none !important;
   }
-  .publik .kurva-linje { stroke-dasharray: none !important; }
   .publik .tolkrad[data-aktiv="true"] .tolk-varde::after {
     animation: none;
     opacity: 0;

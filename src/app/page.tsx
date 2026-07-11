@@ -4,6 +4,7 @@ import { useState } from "react";
 import { motion } from "framer-motion";
 import HeroPixlar from "./_publik/HeroPixlar";
 import KedjeScen from "./_publik/KedjeScen";
+import AttestSimulator from "./_publik/AttestSimulator";
 import { PanelAvvikelse, PanelKontering, PanelUnderlag } from "./_publik/StegPaneler";
 import { plexMono } from "./_publik/fonter";
 import { useSpelar } from "./_publik/useSpelar";
@@ -98,31 +99,6 @@ function Reveal({
   );
 }
 
-// Kurvan som illustrerar att attesthögen krymper. Ren illustration —
-// inga påhittade siffror, därför inga skalstreck. Reduced motion får
-// hela linjen direkt via CSS (stroke-dasharray-överstyrning).
-function AttestKurva() {
-  return (
-    <figure className="kurva" aria-label="Illustration: andelen som kräver attest sjunker över tid">
-      <svg viewBox="0 0 560 150" role="presentation" focusable="false">
-        <line x1="4" y1="140" x2="556" y2="140" className="kurva-axel" />
-        <motion.path
-          d="M 8 24 C 120 32, 200 64, 290 96 S 470 126, 552 131"
-          className="kurva-linje"
-          initial={{ pathLength: 0 }}
-          whileInView={{ pathLength: 1 }}
-          viewport={{ once: true, margin: "-80px" }}
-          transition={{ duration: 1.4, ease: [0.22, 1, 0.36, 1] }}
-        />
-      </svg>
-      <figcaption>
-        <span>andel som kräver attest</span>
-        <span>tid →</span>
-      </figcaption>
-    </figure>
-  );
-}
-
 // Visuellt buren sekvens (v4): tre illustrerade paneler med max en
 // mening var — illustrationerna bär berättelsen, texten kvitterar.
 const STEGEN = [
@@ -165,7 +141,9 @@ function SaFunkarDet() {
           <p className="krymper-rad">
             Attesthögen krymper — <em>det är produkten.</em>
           </p>
-          <AttestKurva />
+          {/* Interaktiv: besökarens egna tal driver rutnät och kurva —
+              inga påhittade procentsatser (v4 §4). */}
+          <AttestSimulator spelar={spelar} />
         </Reveal>
       </div>
     </section>
@@ -215,10 +193,6 @@ function Fortroende() {
               <p>{fakta.text}</p>
             </Reveal>
           ))}
-        </div>
-        <div className="oppen-karna">
-          <p>Byggd på en öppen kärna — läs koden själv.</p>
-          <a href="https://github.com/leopold-jpg/grundbok">github.com/leopold-jpg/grundbok</a>
         </div>
       </div>
     </section>
