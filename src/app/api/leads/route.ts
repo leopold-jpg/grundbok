@@ -12,6 +12,8 @@ export async function POST(req: Request) {
   if (fel) return NextResponse.json({ fel }, { status: 400 });
 
   const db = await getDb();
-  await sparaLead(db, body as NyLead);
-  return NextResponse.json({ mottagen: true });
+  const { id } = await sparaLead(db, body as NyLead);
+  // id:t gör väntelistans kvittens verklig — ett registrerings-nr
+  // besökaren kan referera till, inget påhittat löpnummer.
+  return NextResponse.json({ mottagen: true, id });
 }

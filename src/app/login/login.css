@@ -1,0 +1,110 @@
+/* grundbok — inloggningen. Vit/blå SaaS-system (riktningsbytet),
+   samma formspråk som publika sajten: vitt kort med tunn kant och
+   svag skugga på isblå yta, grotesk-etiketter, blå accent. Scopad
+   under .login-sida; delade layout.tsx/globals.css rörs inte —
+   bakgrunden läggs med en fixed ::before bakom kortet. */
+
+main.login-sida {
+  --yta-is: #F5F8FC;
+  --kort: #FFFFFF;
+  --ink: #0F172A;
+  --ink-mjuk: #475569;
+  --ink-svag: #64748B;
+  --linje: #E3E9F2;
+  --linje-stark: #CBD5E1;
+  --bla: #2563EB;
+  --bla-djup: #1D4ED8;
+  --fel: #DC2626;
+  --skugga-kort: 0 1px 2px rgba(15, 23, 42, 0.05), 0 1px 0 rgba(15, 23, 42, 0.02);
+  --skugga-lyft: 0 12px 32px rgba(15, 23, 42, 0.08), 0 2px 6px rgba(15, 23, 42, 0.05);
+  --font-serif: var(--font-app-serif), "Instrument Serif", Georgia, serif;
+  --font-mono: var(--font-publik-mono), ui-monospace, "SF Mono", Menlo, monospace;
+  --serifvikt-display: 400;
+
+  max-width: 440px;
+  padding-top: 10vh;
+  color: var(--ink);
+}
+/* Kallvit yta bakom hela vyn utan att röra globals body. */
+main.login-sida::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background: var(--yta-is);
+}
+
+.login-sida .wordmark { font-weight: var(--serifvikt-display); margin-bottom: var(--sp-6); }
+.login-sida .wordmark a { color: var(--ink); text-decoration: none; }
+.login-sida .wordmark em { color: var(--bla); }
+
+.login-sida .dokument {
+  background: var(--kort);
+  border: 1px solid var(--linje);
+  border-radius: var(--r-lg);
+  box-shadow: var(--skugga-lyft);
+  padding: var(--sp-6);
+}
+@media (min-width: 520px) { .login-sida .dokument { padding: var(--sp-8); } }
+
+.login-sida h1 {
+  font-weight: 600;
+  font-size: 24px;
+  letter-spacing: var(--tracking-snug);
+  color: var(--ink);
+  margin: 0 0 var(--sp-6);
+}
+
+.login-sida form { display: grid; gap: var(--sp-4); }
+.login-sida label { display: block; }
+.login-sida .falt-etikett {
+  display: block;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-svag);
+  margin-bottom: var(--sp-1);
+}
+.login-sida input {
+  display: block;
+  width: 100%;
+  font-family: var(--font-sans);
+  font-size: 16px; /* ≥16px hindrar iOS-zoom vid fokus */
+  color: var(--ink);
+  background: var(--kort);
+  border: 1px solid var(--linje-stark);
+  border-radius: var(--r-md);
+  padding: var(--sp-2) var(--sp-3);
+  transition: border-color var(--dur-fast) var(--ease-out), box-shadow var(--dur-fast) var(--ease-out);
+}
+.login-sida input:focus {
+  outline: none;
+  border-color: var(--bla);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.18);
+}
+
+.login-sida .login-knapp {
+  width: 100%;
+  font-size: 16px;
+  font-weight: 600;
+  color: #ffffff;
+  background: var(--bla);
+  border: 1px solid var(--bla);
+  border-radius: var(--r-md);
+  padding: var(--sp-3) var(--sp-6);
+  margin-top: var(--sp-2);
+}
+.login-sida .login-knapp:hover:not(:disabled) {
+  background: var(--bla-djup);
+  border-color: var(--bla-djup);
+}
+.login-sida .login-knapp:disabled { opacity: 0.55; }
+
+.login-sida .fel { color: var(--fel); }
+.login-sida .tyst { color: var(--ink-svag); }
+.login-sida .dev-not {
+  border-top: 1px solid var(--linje);
+  padding-top: var(--sp-4);
+  margin-top: var(--sp-6);
+}
