@@ -7,36 +7,11 @@
    ge djup — mjukvara, inte papper. Mobil först. */
 
 main.publik {
-  /* Färgsystem: vit/blå SaaS (riktningsbytet 2026-07-11). Kontraster
-     räknade: blå 5,2:1 åt båda håll, grön text 5,0:1, marin ≥6,7:1. */
-  --yta: #FFFFFF;
-  --yta-is: #F5F8FC;
-  --kort: #FFFFFF;
-  --ink: #0F172A;
-  --ink-mjuk: #475569;
-  --ink-svag: #64748B;
-  --linje: #E3E9F2;
-  --linje-stark: #CBD5E1;
-  --bla: #2563EB;
-  --bla-djup: #1D4ED8;
-  --bla-ljus: #60A5FA;
-  --gron: #15803D; /* status: attest/registrerad/live */
-  --marin: #0B1B34;
-  --marin-fg: #F8FAFC;
-  --marin-mjuk: #94A3B8;
-  --marin-linje: rgba(148, 163, 184, 0.22);
-  --fel: #DC2626;
-  --skugga-kort: 0 1px 2px rgba(15, 23, 42, 0.05), 0 1px 0 rgba(15, 23, 42, 0.02);
-  --skugga-lyft: 0 12px 32px rgba(15, 23, 42, 0.08), 0 2px 6px rgba(15, 23, 42, 0.05);
-
-  /* Typografin (brief v3 + prov i docs/design-referens/typografiprov/):
-     Inter bär rubrikerna; Instrument Serif (layoutens --font-app-serif)
-     är varumärkeskryddan i sin enda vikt; IBM Plex Mono för siffror/
-     konton/lagrum via _publik/fonter.ts. */
-  --font-serif: var(--font-app-serif), "Instrument Serif", Georgia, serif;
-  --font-mono: var(--font-publik-mono), ui-monospace, "SF Mono", Menlo, monospace;
-  --serifvikt-display: 400;
-  --serifvikt-rubrik: 400;
+  /* Tokens (färg, skuggor, serifvikter, mono-kedjan) bor i
+     design.tokens.css — grundbok-skinnet. Här endast ytans layoutmått.
+     --font-serif kommer ur globals.css (samma kedja som tidigare låg
+     duplicerad här); mono-kedjan scopas i tokenfilen till ytor som
+     fäster --font-publik-mono (fonter.ts). */
 
   /* Full bredd — sektionerna hanterar sina egna ytor; globals
      main-måtten gäller inte här. */
@@ -620,12 +595,12 @@ main.publik {
   .publik .trygghet-grid { grid-template-columns: 1fr 1fr 1fr; }
 }
 .publik .glass-kort {
-  background: rgba(255, 255, 255, 0.55);
-  backdrop-filter: blur(20px) saturate(1.4);
-  -webkit-backdrop-filter: blur(20px) saturate(1.4);
-  border: 1px solid rgba(255, 255, 255, 0.75);
+  background: var(--glass-bg);
+  backdrop-filter: blur(var(--glass-blur)) saturate(1.4);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(1.4);
+  border: 1px solid var(--glass-border);
   border-radius: var(--r-xl);
-  box-shadow: var(--skugga-lyft);
+  box-shadow: var(--glass-shadow);
   padding: var(--sp-5);
 }
 @supports not (backdrop-filter: blur(1px)) {
@@ -807,6 +782,8 @@ main.publik {
 
 .publik section { padding-block: clamp(40px, 5.5vw, 72px); }
 .publik section.is-yta { background: var(--yta-is); }
+/* Sticky-navet täcker annars ankarmålens topp vid #-navigering. */
+.publik section[id] { scroll-margin-top: 72px; }
 .publik .fel { color: var(--fel); font-size: 13px; margin-top: var(--sp-2); }
 .publik .tyst { color: var(--ink-svag); font-size: 13px; }
 
