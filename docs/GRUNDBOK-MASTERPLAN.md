@@ -1,6 +1,6 @@
 # GRUNDBOK — MASTERPLAN
 
-*Uppdaterad 2026-07-08 kväll, efter modul-plattform (PR #1).*
+*Uppdaterad 2026-07-14, efter publika sajtens design-pass (PR #3).*
 *Detta dokument är kartan. Kickoff-filerna är sessionerna. ADR:erna är besluten.*
 
 ## Visionen i en mening
@@ -53,10 +53,11 @@ som idag kommer på sms/telefon samlas därmed i byråns kö.
 4. **Intag** ⬜ — mejladress per byrå (vidarebefordra faktura → förslag),
    foto/upload, chatbot-intag, POST /api/intake för externa botar (OpenClaw
    blir dum kurir: underlag in, inget mer).
-5. **Ytorna** ⬜ — se ovan. Attestkö-koden FINNS (v0-admin) men bor hos fel
-   person; flyttas, inte byggs om.
-6. **Auth** ⬜ — Supabase Auth, två roller: operator, byrå-konsult (per
-   tenant). decided_by = verifierad identitet. Krav innan första riktiga kund.
+5. **Ytorna** ✅ *byggda (PR #2)* — publika sajten omdesignad (PR #3);
+   /byra, /operator, /login designas om i D2 (auditlistan i
+   docs/design-system.md).
+6. **Auth** ✅ *byggd (PR #2)* — två roller: operator, byrå-konsult (per
+   tenant). decided_by = verifierad identitet.
 7. **Kommersialisering** ⬜ — branschmallar för policys (bygg: omvänd
    betalningsskyldighet förifylld; restaurang: livsmedelskonton),
    Stripe-checkout → provisionAgent-webhook, prissättning per agent/modul.
@@ -65,14 +66,17 @@ som idag kommer på sms/telefon samlas därmed i byråns kö.
 
 | # | Session | Innehåll | Status |
 |---|---|---|---|
-| S1 | Modulplattform | Kärna + runtime + 2 moduler (WP0–WP10) | ✅ ikväll, PR #1 |
-| S2 | **Ytor + auth** | WP11–WP15: auth, publik sajt, byråns arbetsyta, bantad operatörskonsol | → KICKOFF-YTOR.md |
-| S3 | Intag + kundkanal | /api/intake, mejladress per klient (inbound webhook), kundappen (PWA: fota kvitto, kvittens/status, kundassistent-chatt med eskalering till byrån), OpenClaw-skill | efter S2 |
-| S4 | Deploy | Supabase-moln (pgmq-adapter klar), Vercel, domän, env | efter S2/S3 |
-| S5 | Mallar + Stripe | branschpolicys, checkout → webhook → provisionAgent | inför försäljning |
+| S1 | Modulplattform | Kärna + runtime + 2 moduler (WP0–WP10) | ✅ PR #1 |
+| S2 | **Ytor + auth** | WP11–WP15: auth, publik sajt, byråns arbetsyta, bantad operatörskonsol | ✅ PR #2 |
+| D1 | Design: publik sajt | DESIGN-BRIEF v2→v4, publika sajten v2→v7 (vit/blå), designsystemet extraherat till docs/design-system.md + tokens konsoliderade | ✅ PR #3 |
+| S5 | Mallar + Stripe | branschpolicys, checkout → webhook → provisionAgent | 🔜 **nästa** |
+| D2 | Design: arbetsytor | /byra, /operator, /login in i designsystemet — auditlistan i docs/design-system.md är arbetslistan | efter mallarna |
+| S4 | Deploy | Supabase-moln (pgmq-adapter klar), Vercel, domän, env | efter arbetsytorna |
+| S3 | Intag + kundkanal | /api/intake, mejladress per klient (inbound webhook), kundappen (PWA: fota kvitto, kvittens/status, kundassistent-chatt med eskalering till byrån), OpenClaw-skill | efter deploy |
 | S6+ | Moduler | loner steg 1–2, bokslut, skatt-juridik (fler källor på rådgivnings-RAG) | efter pilotfeedback |
 
-Merge-ordning: PR #1 granskas och mergas FÖRE S2 startar.
+Ordningen framåt (beslut 2026-07-14): **mallar → arbetsytor → deploy.**
+Tabellen står i den ordningen; sessionsnumren är historiska och byter inte namn.
 
 ## Demo för Mats (efter S2)
 
