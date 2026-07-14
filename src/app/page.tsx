@@ -149,8 +149,9 @@ function SaFunkarDet() {
           <p className="krymper-rad">
             Attesthögen krymper — <em>det är produkten.</em>
           </p>
-          {/* Interaktiv (v6): EN slider + öppna antaganden; utfallet är
-              ren aritmetik märkt räkneexempel. Ingen kurva. */}
+          {/* Interaktiv (v7): EN dragbar + tre utfallskort som tickar
+              medan man drar; antagandena i diskret utfällning. Utfallet
+              är ren aritmetik märkt räkneexempel. Ingen kurva. */}
           <AttestSimulator spelar={spelar} />
         </Reveal>
       </div>

@@ -574,6 +574,28 @@ main.publik {
   outline-offset: 3px;
 }
 
+/* Simulatorns utfallskort (v7) — 1 kolumn som grid-default (mobil),
+   3 kolumner vid brytpunkten; basstilen ligger inline i komponenten. */
+@media (min-width: 680px) {
+  .publik .sim-kort-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+
+/* Antagande-utfällningen — samma diskreta manér som teknik-utfällningen. */
+.publik .sim-utfallning summary {
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-svag);
+  padding: var(--sp-1) 0;
+}
+.publik .sim-utfallning summary:hover { color: var(--bla); }
+.publik .sim-utfallning summary:focus-visible {
+  outline: 2px solid var(--bla);
+  outline-offset: 3px;
+}
+
 /* ============================= förtroende ============================= */
 
 /* Trygghetskorten (v6) — glass ENDAST här + navets blur. Flytande blå
