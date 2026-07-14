@@ -231,14 +231,17 @@ function Moduler() {
 // Löpnummer-tickern (v4 §8): rullar medan inskrivningen pågår. Inget
 // påhittat nummer landas — API:t exponerar inget id (och API:er ligger
 // utanför den hårda gränsen), så kvittensen är verklig mottagningstid.
-function NrTicker({ aktiv }: { aktiv: boolean }) {
+// Reduced motion (v7): spelar=false ⇒ stilla "reg …" i stället för rullning.
+function NrTicker({ aktiv, spelar }: { aktiv: boolean; spelar: boolean }) {
   const [tick, setTick] = useState(0);
+  const rullar = aktiv && spelar;
   useEffect(() => {
-    if (!aktiv) return;
+    if (!rullar) return;
     const t = setInterval(() => setTick((n) => n + 1), 60);
     return () => clearInterval(t);
-  }, [aktiv]);
+  }, [rullar]);
   if (!aktiv) return <span className="ticker-nr">reg —</span>;
+  if (!rullar) return <span className="ticker-nr">reg …</span>;
   const siffror = [0, 1, 2, 3].map((pos) => (tick * 7 + pos * 3) % 10);
   return <span className="ticker-nr">reg {siffror.join("")}</span>;
 }
@@ -300,7 +303,7 @@ function KontaktBox() {
     <div className="kontakt">
       <div className="kontakt-topp">
         <span>Väntelistan</span>
-        <NrTicker aktiv={skickar} />
+        <NrTicker aktiv={skickar} spelar={spelar} />
       </div>
       <form onSubmit={skicka}>
         <div className="falt-par">
