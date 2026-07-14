@@ -5,9 +5,10 @@
  * förtroendesektionens trygghetskort på publika sajten.
  *
  *   IllustrationErData    — "Er data är er": ett dokumentkort vilar tryggt
- *                           innanför en mjukt rundad ram (er värld); utanför
- *                           antyds träning/utsidan som en bruten, avvisad
- *                           bana — en kort streckad pil som stannar mot ramen.
+ *                           innanför en mjukt rundad ram (er värld); en
+ *                           streckad pil försöker UT mot "modellträning"
+ *                           och överkorsas direkt utanför ramen — läses på
+ *                           en sekund: datan lämnar aldrig er värld.
  *   IllustrationSistaOrdet — "En människa har sista ordet": en attest-knapp
  *                           med mänsklig silhuett-antydan (ren geometri) och
  *                           grön bock, över ett dokumentflöde; en liten
@@ -69,9 +70,9 @@ export function IllustrationErData({ spelar }: { spelar: boolean }) {
     >
       {/* er värld: mjukt tonad insida (halvtransparent is, ingen platta) */}
       <rect
-        x={58}
+        x={24}
         y={24}
-        width={172}
+        width={176}
         height={152}
         rx={8}
         fill="var(--yta-is)"
@@ -80,9 +81,9 @@ export function IllustrationErData({ spelar }: { spelar: boolean }) {
 
       {/* ramen — motivets enda blå accent; "andas" via subtil opacity-puls */}
       <motion.rect
-        x={58}
+        x={24}
         y={24}
-        width={172}
+        width={176}
         height={152}
         rx={8}
         fill="none"
@@ -105,7 +106,7 @@ export function IllustrationErData({ spelar }: { spelar: boolean }) {
 
       {/* dokumentkortet som vilar innanför ramen */}
       <rect
-        x={104}
+        x={70}
         y={56}
         width={80}
         height={76}
@@ -115,43 +116,43 @@ export function IllustrationErData({ spelar }: { spelar: boolean }) {
         strokeWidth={1}
       />
       <line
-        x1={116}
+        x1={82}
         y1={74}
-        x2={150}
+        x2={116}
         y2={74}
         stroke="var(--ink-svag)"
         strokeWidth={1.5}
         strokeLinecap="round"
       />
       <line
-        x1={116}
+        x1={82}
         y1={88}
-        x2={172}
+        x2={138}
         y2={88}
         stroke="var(--linje-stark)"
         strokeWidth={1}
         strokeLinecap="round"
       />
       <line
-        x1={116}
+        x1={82}
         y1={100}
-        x2={164}
+        x2={130}
         y2={100}
         stroke="var(--linje-stark)"
         strokeWidth={1}
         strokeLinecap="round"
       />
       <line
-        x1={116}
+        x1={82}
         y1={112}
-        x2={169}
+        x2={135}
         y2={112}
         stroke="var(--linje-stark)"
         strokeWidth={1}
         strokeLinecap="round"
       />
       <text
-        x={144}
+        x={110}
         y={158}
         textAnchor="middle"
         fontSize={9}
@@ -161,51 +162,94 @@ export function IllustrationErData({ spelar }: { spelar: boolean }) {
         ER DATA
       </text>
 
-      {/* utsidan: bruten, avvisad bana som stannar mot ramen — tonar lugnt */}
+      {/* försöket ut: streckad pil FRÅN datan mot modellträning — glider
+          fram och tonar in i loopen; statiskt läge visar hela slutbilden */}
       <motion.g
         opacity={spelar ? undefined : 0.9}
-        initial={spelar ? { opacity: 0.9 } : false}
-        animate={spelar ? { opacity: [0.35, 0.9, 0.35] } : undefined}
+        initial={spelar ? { opacity: 0, x: -14 } : false}
+        animate={
+          spelar ? { opacity: [0, 0.9, 0.9, 0, 0], x: [-14, 0, 0, 0, -14] } : undefined
+        }
         transition={
           spelar
             ? {
                 duration: 7.5,
                 repeat: Infinity,
                 ease: "easeInOut",
-                times: [0, 0.5, 1],
+                times: [0, 0.18, 0.62, 0.78, 1],
               }
             : undefined
         }
       >
         <line
-          x1={302}
-          y1={96}
-          x2={250}
-          y2={96}
+          x1={154}
+          y1={94}
+          x2={200}
+          y2={94}
           stroke="var(--ink-svag)"
           strokeWidth={1.25}
           strokeLinecap="round"
           strokeDasharray="5 5"
         />
         <path
-          d="M 246 89 L 238 96 L 246 103"
+          d="M 200 87 L 208 94 L 200 101"
           fill="none"
           stroke="var(--ink-svag)"
           strokeWidth={1.25}
           strokeLinecap="round"
           strokeLinejoin="round"
         />
-        <text
-          x={272}
-          y={78}
-          textAnchor="middle"
-          fontSize={9}
-          fill="var(--ink-svag)"
-          style={ETIKETT}
-        >
-          TRÄNING
-        </text>
       </motion.g>
+
+      {/* klippet: pilen överkorsas direkt utanför ramen — tänds när
+          pilen nått fram, håller, och släcks med den */}
+      <motion.g
+        opacity={spelar ? undefined : 1}
+        initial={spelar ? { opacity: 0 } : false}
+        animate={spelar ? { opacity: [0, 0, 1, 1, 0, 0] } : undefined}
+        transition={
+          spelar
+            ? {
+                duration: 7.5,
+                repeat: Infinity,
+                ease: "easeInOut",
+                times: [0, 0.18, 0.26, 0.62, 0.78, 1],
+              }
+            : undefined
+        }
+      >
+        <line
+          x1={206}
+          y1={86}
+          x2={222}
+          y2={102}
+          stroke="var(--ink-mjuk)"
+          strokeWidth={1.5}
+          strokeLinecap="round"
+        />
+        <line
+          x1={222}
+          y1={86}
+          x2={206}
+          y2={102}
+          stroke="var(--ink-mjuk)"
+          strokeWidth={1.5}
+          strokeLinecap="round"
+        />
+      </motion.g>
+
+      {/* utsidan: dit datan aldrig når */}
+      <text
+        x={260}
+        y={76}
+        textAnchor="middle"
+        fontSize={8.5}
+        fill="var(--ink-svag)"
+        opacity={0.9}
+        style={ETIKETT}
+      >
+        MODELLTRÄNING
+      </text>
     </svg>
   );
 }
