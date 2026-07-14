@@ -286,14 +286,16 @@ export default function KedjeScen() {
     return () => document.removeEventListener("visibilitychange", synlighet);
   }, [spelar, pausad]);
 
+  // Gate:as på pausad — paus mitt i utoningsfönstret får inte låta
+  // reseten flippa steg/variant i tysthet medan scenen står stilla.
   useEffect(() => {
-    if (steg !== 11) return;
+    if (steg !== 11 || pausad) return;
     const t = setTimeout(() => {
       setSteg(0);
       setCykel((c) => c + 1);
     }, 650);
     return () => clearTimeout(t);
-  }, [steg]);
+  }, [steg, pausad]);
 
   function vaxlaPaus() {
     if (pausad) {

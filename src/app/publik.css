@@ -782,6 +782,8 @@ main.publik {
 
 .publik section { padding-block: clamp(40px, 5.5vw, 72px); }
 .publik section.is-yta { background: var(--yta-is); }
+/* Sticky-navet täcker annars ankarmålens topp vid #-navigering. */
+.publik section[id] { scroll-margin-top: 72px; }
 .publik .fel { color: var(--fel); font-size: 13px; margin-top: var(--sp-2); }
 .publik .tyst { color: var(--ink-svag); font-size: 13px; }
 
