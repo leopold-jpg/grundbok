@@ -50,17 +50,91 @@
   display: inline-block;
 }
 
-/* Kö-kortet — flyttat från v0-admin. */
-.byra .ko-kort {
+/* Attestkön (WP26): radlista + detaljpanel i sidled — kön förblir
+   synlig medan detaljen läses; nästa förslag är redan i klienten. */
+.byra .attest-layout {
+  display: grid;
+  gap: var(--sp-4);
+  grid-template-columns: 1fr; /* mobil: kö överst, detalj under */
+  align-items: start;
+}
+@media (min-width: 900px) {
+  .byra .attest-layout { grid-template-columns: minmax(260px, 340px) 1fr; }
+}
+
+.byra .ko-lista {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--bg-elev);
+  box-shadow: var(--skugga-kort);
+  max-height: 64vh;
+  overflow-y: auto;
+}
+.byra .ko-rad {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: none;
+  border-radius: 0;
+  border-bottom: 1px solid var(--divider);
+  padding: var(--sp-3);
+  cursor: pointer;
+}
+.byra .ko-lista li:last-child .ko-rad { border-bottom: none; }
+.byra .ko-rad:hover:not(:disabled) { background: var(--bg-tint); border-color: var(--divider); }
+.byra .ko-rad[data-vald="true"] {
+  background: var(--bg-tint);
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+.byra .ko-rad:focus-visible { outline: 2px solid var(--bla); outline-offset: -2px; }
+.byra .ko-rad .ko-rad-summary {
+  display: block;
+  font-size: 14px;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.byra .ko-rad .ko-rad-meta {
+  display: flex;
+  gap: var(--sp-2);
+  flex-wrap: wrap;
+  margin-top: var(--sp-1);
+}
+
+.byra .ko-detalj {
   border: 1px solid var(--border);
   border-radius: var(--r-md);
   background: var(--bg-elev);
   padding: var(--sp-4);
-  margin-bottom: var(--sp-3);
+  box-shadow: var(--skugga-kort);
 }
+.byra .ko-detalj:focus-visible { outline: 2px solid var(--bla); outline-offset: 2px; }
 .byra .ko-huvud { display: flex; align-items: baseline; gap: var(--sp-3); flex-wrap: wrap; }
 .byra .ko-summary { font-size: 15px; font-weight: 500; }
 .byra .ko-huvud .tid { margin-left: auto; }
+
+/* Ångra-fönstret: blå informationskant (ingen status har inträffat än). */
+.byra .angra-rad {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  flex-wrap: wrap;
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
+  border-radius: var(--r-md);
+  background: var(--bg-elev);
+  padding: var(--sp-3) var(--sp-4);
+  margin-bottom: var(--sp-3);
+  box-shadow: var(--skugga-kort);
+  font-size: 14px;
+}
+
+.byra .kortkommandon { margin: var(--sp-2) 0 0; }
 
 .byra .lagrum-lista {
   margin: var(--sp-2) 0 0;
@@ -229,7 +303,6 @@ body:has(main.byra) {
 
 /* Kortreceptet: vit yta, hårfin kant, vilande skugga (kanon §4). */
 .byra .steg,
-.byra .ko-kort,
 .byra .verifikation,
 .byra .bokford {
   box-shadow: var(--skugga-kort);

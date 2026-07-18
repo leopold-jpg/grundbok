@@ -1,17 +1,30 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { EXEMPEL } from "@/lib/exempel";
 import { plexMono } from "../_publik/fonter";
+import {
+  attestMaskin,
+  nyttLage,
+  type AttestBeslut,
+  type AttestHandelse,
+  type AttestLage,
+} from "@/ytor/komponenter/attest-tangentbord";
+import { byggKommandon, type Kommando } from "@/ytor/komponenter/kommandon";
+import { KommandoPalett } from "@/ytor/komponenter/KommandoPalett";
+import { Chip } from "@/ytor/komponenter/Chip";
+import { StatusPunkt, type AgentStatus } from "@/ytor/komponenter/StatusPunkt";
+import { TomtLage } from "@/ytor/komponenter/TomtLage";
+import "../../ytor/komponenter/komponenter.css";
 import "./byra.css";
 
-// Byråns arbetsyta (WP13) — produkten. Inloggad konsult ser SIN byrås
-// värld: attestkön (flyttad från v0-admin), manuellt intag (flyttat från
-// gamla startsidan), chatten, beslutsloggen och klientvyn. Allt scopas
-// genom sessionens byrå server-side; klientväljaren styr bara vyn.
-// Attest-språk genomgående: "att attestera", "attesterad" — aldrig
-// "proposals".
+// Byråns arbetsyta (WP13, ombyggd attestkö i WP26) — produkten.
+// Inloggad konsult ser SIN byrås värld: attestkön (radlista +
+// detaljpanel i sidled, tangentbordsstyrd), manuellt intag, chatten,
+// beslutsloggen och klientvyn. Allt scopas genom sessionens byrå
+// server-side; klientväljaren styr bara vyn. Attest-språk genomgående:
+// "att attestera", "attesterad" — aldrig "proposals".
 
 type Klient = { id: string; namn: string; mall: string };
 type Sessionsvy = { byra: string; konsult: { id: string; namn: string }; klienter: Klient[] };
@@ -182,174 +195,349 @@ type FlikId = (typeof FLIKAR)[number]["id"];
 
 // ---------------------------------------------------------------- attest
 
+/** Ångra-fönstret: ett stagat beslut skickas när nästa fattas, när
+ *  fönstret löper ut eller när vyn lämnas — U innan dess återställer. */
+const ANGRA_FONSTER_MS = 6000;
+
+// WP26: radlista + detaljpanel i sidled (aldrig modal — kön förblir
+// synlig och nästa förslag är redan laddat i klienten). Tangentbordet
+// bär flödet: ↑↓ väljer, Enter fokuserar detaljen, A attesterar,
+// X öppnar motiveringsfältet, U ångrar senaste innan det skickats.
+// Själva maskinen är ren och testad (attest-tangentbord.ts).
 function AttestSektion({
   ko,
   visaKlient,
   onBeslutad,
+  fokusRad,
+  onFokusKlar,
 }: {
   ko: KoRad[];
   visaKlient: boolean;
   onBeslutad: () => Promise<void>;
+  fokusRad: string | null;
+  onFokusKlar: () => void;
 }) {
+  const [lage, setLage] = useState<AttestLage>(() => nyttLage(ko.map((k) => k.id)));
   const [fel, setFel] = useState("");
   const [bekraftelse, setBekraftelse] = useState("");
-  const [beslutarId, setBeslutarId] = useState<string | null>(null);
-  const [avvisarId, setAvvisarId] = useState<string | null>(null);
   const [motivering, setMotivering] = useState("");
+  const detaljRef = useRef<HTMLDivElement>(null);
+  const motiveringRef = useRef<HTMLInputElement>(null);
 
-  async function attestera(rad: KoRad, beslut: "godkand" | "avvisad", reason?: string) {
-    setBeslutarId(rad.id);
-    setFel("");
-    setBekraftelse("");
-    try {
-      const r = await post<{
-        status: string;
-        verifikation?: { nummer: number; extern_ref: string } | null;
-      }>("/api/beslut", {
-        tenant_id: rad.tenant_id,
-        proposal_id: rad.id,
-        beslut,
-        reason,
-      });
-      if (beslut === "godkand") {
+  // Radcache: en stagad rad har lämnat props-kön men behövs för
+  // ångra-bannern (och för commit:ens tenant_id).
+  const cacheRef = useRef(new Map<string, KoRad>());
+  for (const k of ko) cacheRef.current.set(k.id, k);
+  const rad = (id: string) => cacheRef.current.get(id);
+
+  const lageRef = useRef(lage);
+  lageRef.current = lage;
+
+  const skicka = useCallback(
+    async (id: string, beslut: AttestBeslut, reason?: string) => {
+      const r = cacheRef.current.get(id);
+      if (!r) return;
+      try {
+        const svar = await post<{
+          status: string;
+          verifikation?: { nummer: number; extern_ref: string } | null;
+        }>("/api/beslut", { tenant_id: r.tenant_id, proposal_id: id, beslut, reason });
         setBekraftelse(
-          r.verifikation
-            ? `Attesterad — bokförd som verifikation ${r.verifikation.nummer} (append-only, kvitterad: ${r.verifikation.extern_ref}).`
-            : "Attesterad — utan ledger-effekt (rådgivningssvar bokförs inte).",
+          beslut === "godkand"
+            ? svar.verifikation
+              ? `Attesterad — bokförd som verifikation ${svar.verifikation.nummer} (append-only, kvitterad: ${svar.verifikation.extern_ref}).`
+              : "Attesterad — utan ledger-effekt (rådgivningssvar bokförs inte)."
+            : "Avvisad — beslutet och motiveringen är loggade, inget bokfördes.",
         );
-      } else {
-        setBekraftelse("Avvisad — beslutet och motiveringen är loggade, inget bokfördes.");
+        await onBeslutad();
+      } catch (e) {
+        setFel(e instanceof Error ? e.message : String(e));
+        // Resynka mot servern — raden är kvar som pending och ska synas.
+        await onBeslutad();
       }
-      setAvvisarId(null);
-      setMotivering("");
-      await onBeslutad();
-    } catch (e) {
-      setFel(e instanceof Error ? e.message : String(e));
-    } finally {
-      setBeslutarId(null);
+    },
+    [onBeslutad],
+  );
+
+  // Effekterna verkställs UTANFÖR setState-uppdateraren (StrictMode
+  // dubbelkör uppdaterare — en POST i den vore ett dubbelbeslut).
+  const dispatch = useCallback(
+    (h: AttestHandelse) => {
+      const steg = attestMaskin(lageRef.current, h);
+      lageRef.current = steg.lage;
+      setLage(steg.lage);
+      setFel("");
+      for (const e of steg.effekter) {
+        if (e.typ === "skicka") void skicka(e.id, e.beslut, e.motivering);
+      }
+    },
+    [skicka],
+  );
+
+  // Färsk serverdata in i maskinen (stagad rad filtreras där).
+  const koIds = ko.map((k) => k.id).join(",");
+  useEffect(() => {
+    dispatch({ typ: "rader", rader: koIds ? koIds.split(",") : [] });
+  }, [koIds, dispatch]);
+
+  // Ångra-fönstret: committa när tiden gått.
+  const vantandeId = lage.vantande?.id ?? null;
+  useEffect(() => {
+    if (!vantandeId) return;
+    const t = setTimeout(() => dispatch({ typ: "commit" }), ANGRA_FONSTER_MS);
+    return () => clearTimeout(t);
+  }, [vantandeId, dispatch]);
+
+  // Lämnas vyn (flikbyte, stängning) skickas ett väntande beslut direkt —
+  // ångra-fönstret är bekvämlighet, aldrig en väg att tappa ett beslut.
+  useEffect(() => {
+    return () => {
+      const v = lageRef.current.vantande;
+      const r = v ? cacheRef.current.get(v.id) : undefined;
+      if (v && r) {
+        void fetch("/api/beslut", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          keepalive: true,
+          body: JSON.stringify({
+            tenant_id: r.tenant_id,
+            proposal_id: v.id,
+            beslut: v.beslut,
+            reason: v.motivering,
+          }),
+        });
+      }
+    };
+  }, []);
+
+  // Tangentbordet — globalt i attest-fliken; fält och dialoger äger
+  // sina egna tangenter (target-vakten släpper igenom dem).
+  useEffect(() => {
+    function pa(e: KeyboardEvent) {
+      const mal = e.target as HTMLElement | null;
+      if (mal?.closest("input, textarea, select, [role=dialog]")) return;
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        dispatch({ typ: "ner" });
+      } else if (e.key === "ArrowUp") {
+        e.preventDefault();
+        dispatch({ typ: "upp" });
+      } else if (e.key === "Enter") {
+        e.preventDefault();
+        detaljRef.current?.focus();
+      } else if (e.key === "Escape") {
+        dispatch({ typ: "avbryt" });
+      } else {
+        const k = e.key.toLowerCase();
+        if (k === "a") {
+          e.preventDefault();
+          dispatch({ typ: "attestera" });
+        } else if (k === "x") {
+          e.preventDefault();
+          dispatch({ typ: "avvisa-oppna" });
+        } else if (k === "u") {
+          e.preventDefault();
+          dispatch({ typ: "angra" });
+        }
+      }
     }
-  }
+    window.addEventListener("keydown", pa);
+    return () => window.removeEventListener("keydown", pa);
+  }, [dispatch]);
+
+  // X öppnar motiveringsfältet — töm och fokusera.
+  useEffect(() => {
+    if (lage.avvisar) {
+      setMotivering("");
+      motiveringRef.current?.focus();
+    }
+  }, [lage.avvisar]);
+
+  // Cmd+K:s motpartssök landar här: välj raden och visa detaljen.
+  useEffect(() => {
+    if (!fokusRad) return;
+    const i = lageRef.current.rader.indexOf(fokusRad);
+    if (i >= 0) dispatch({ typ: "valj", index: i });
+    onFokusKlar();
+  }, [fokusRad, dispatch, onFokusKlar]);
+
+  const valdId = lage.index >= 0 ? lage.rader[lage.index] : null;
+  const vald = valdId ? rad(valdId) : null;
+  const vantandeRad = lage.vantande ? rad(lage.vantande.id) : null;
 
   return (
     <section className="steg">
       <div className="steg-rubrik">
         <h2 className="steg-titel">Att attestera</h2>
         <span className="steg-not">
-          {ko.length === 0 ? "inget väntar" : `${ko.length} väntar`} · avvikelsen mot er policy
-          räknas om vid varje hämtning
+          {lage.rader.length === 0 ? "inget väntar" : `${lage.rader.length} väntar`} ·
+          avvikelsen mot er policy räknas om vid varje hämtning
         </span>
       </div>
 
-      {bekraftelse && (
-        <div className="bokford" style={{ marginBottom: "var(--sp-3)" }}>
+      {lage.vantande && vantandeRad && (
+        <div className="angra-rad" role="status">
+          <span>
+            {lage.vantande.beslut === "godkand" ? "Attesteras" : "Avvisas"}:{" "}
+            {vantandeRad.summary}
+          </span>
+          <button onClick={() => dispatch({ typ: "angra" })}>Ångra (U)</button>
+          <span className="tyst">skickas om några sekunder eller vid nästa beslut</span>
+        </div>
+      )}
+
+      {bekraftelse && !lage.vantande && (
+        <div className="bokford" role="status" style={{ marginBottom: "var(--sp-3)" }}>
           {bekraftelse}
         </div>
       )}
 
-      {ko.length === 0 && (
-        <p className="tyst">
+      {lage.rader.length === 0 && !lage.vantande ? (
+        <TomtLage>
           Inget att attestera just nu — nya underlag och frågor dyker upp här när de
           faller utanför er policy.
-        </p>
+        </TomtLage>
+      ) : (
+        <div className="attest-layout">
+          <ul className="ko-lista" aria-label="Attestkön">
+            {lage.rader.map((id, i) => {
+              const k = rad(id);
+              if (!k) return null;
+              return (
+                <li key={id}>
+                  <button
+                    className="ko-rad"
+                    aria-current={i === lage.index ? "true" : undefined}
+                    data-vald={i === lage.index}
+                    onClick={() => {
+                      dispatch({ typ: "valj", index: i });
+                      if (window.innerWidth < 900) {
+                        detaljRef.current?.scrollIntoView({ block: "nearest" });
+                      }
+                    }}
+                  >
+                    <span className="ko-rad-summary">{k.summary}</span>
+                    <span className="ko-rad-meta">
+                      {visaKlient && <Chip>{k.tenant_namn}</Chip>}
+                      <Chip>{Math.round(k.confidence * 100)} %</Chip>
+                      {k.belopp_ore > 0 && <Chip tal>{kr(k.belopp_ore)} kr</Chip>}
+                      {k.missade_villkor.length > 0 && (
+                        <Chip varning>
+                          {k.missade_villkor.length} utanför policy
+                        </Chip>
+                      )}
+                    </span>
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+
+          <div
+            className="ko-detalj"
+            ref={detaljRef}
+            tabIndex={-1}
+            aria-label="Valt förslag"
+          >
+            {!vald ? (
+              <TomtLage>Välj en rad i kön — ↑↓ på tangentbordet räcker.</TomtLage>
+            ) : (
+              <>
+                <div className="ko-huvud">
+                  <span className="ko-summary">{vald.summary}</span>
+                  <span className="tyst tid">{tid(vald.created_at)}</span>
+                </div>
+
+                <div className="metarad">
+                  {visaKlient && <Chip>{vald.tenant_namn}</Chip>}
+                  <Chip>{vald.module}</Chip>
+                  <Chip>konfidens {Math.round(vald.confidence * 100)} %</Chip>
+                  <Chip tal>hash {vald.hash.slice(0, 12)}…</Chip>
+                  {vald.belopp_ore > 0 && <Chip tal>{kr(vald.belopp_ore)} kr</Chip>}
+                  {vald.motpart && <Chip>{vald.motpart}</Chip>}
+                </div>
+
+                {vald.legal.length > 0 && (
+                  <ul className="lagrum-lista">
+                    {vald.legal.map((l, i) => (
+                      <li key={i}>
+                        {l.lagrum} <span className="tyst">· {l.ruleset}</span>
+                        {l.note ? ` — ${l.note}` : ""}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+
+                {vald.flaggor.map((f) => (
+                  <div key={f.id} className={`flagga ${f.niva === "info" ? "info" : ""}`}>
+                    {f.text}
+                  </div>
+                ))}
+
+                <div className="diff-rubrik">Varför den väntar på er</div>
+                {vald.missade_villkor.length === 0 ? (
+                  <p className="diff-ok">
+                    Uppfyller numera er policy — väntar ändå på ert beslut.
+                  </p>
+                ) : (
+                  <div className="metarad" style={{ marginTop: 0 }}>
+                    {vald.missade_villkor.map((v, i) => (
+                      <Chip key={i} varning>
+                        {v}
+                      </Chip>
+                    ))}
+                  </div>
+                )}
+
+                {lage.avvisar ? (
+                  <div className="avvisa-rad">
+                    <input
+                      ref={motiveringRef}
+                      type="text"
+                      value={motivering}
+                      onChange={(e) => setMotivering(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          dispatch({ typ: "avvisa-skicka", motivering });
+                        } else if (e.key === "Escape") {
+                          e.preventDefault();
+                          dispatch({ typ: "avbryt" });
+                        }
+                      }}
+                      placeholder="Motivering (krävs för avvisning)"
+                      aria-label="Motivering för avvisning"
+                    />
+                    <button
+                      onClick={() => dispatch({ typ: "avvisa-skicka", motivering })}
+                      disabled={!motivering.trim()}
+                    >
+                      Skicka avvisning
+                    </button>
+                    <button onClick={() => dispatch({ typ: "avbryt" })}>Avbryt</button>
+                  </div>
+                ) : (
+                  <div className="beslutsrad">
+                    <button className="godkann" onClick={() => dispatch({ typ: "attestera" })}>
+                      Attestera
+                    </button>
+                    <button onClick={() => dispatch({ typ: "avvisa-oppna" })}>Avvisa</button>
+                    <span className="tyst" style={{ maxWidth: 380 }}>
+                      Attesten binds till förslagets hash och din identitet — inget når
+                      huvudboken utan den (ansvarsprincipen).
+                    </span>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        </div>
       )}
 
-      {ko.map((k) => (
-        <div key={k.id} className="ko-kort">
-          <div className="ko-huvud">
-            <span className="ko-summary">{k.summary}</span>
-            <span className="tyst tid">{tid(k.created_at)}</span>
-          </div>
-
-          <div className="metarad">
-            {visaKlient && <span className="chip">{k.tenant_namn}</span>}
-            <span className="chip">{k.module}</span>
-            <span className="chip">konfidens {Math.round(k.confidence * 100)} %</span>
-            <span className="chip tal">hash {k.hash.slice(0, 12)}…</span>
-            {k.belopp_ore > 0 && <span className="chip tal">{kr(k.belopp_ore)} kr</span>}
-            {k.motpart && <span className="chip">{k.motpart}</span>}
-          </div>
-
-          {k.legal.length > 0 && (
-            <ul className="lagrum-lista">
-              {k.legal.map((l, i) => (
-                <li key={i}>
-                  {l.lagrum} <span className="tyst">· {l.ruleset}</span>
-                  {l.note ? ` — ${l.note}` : ""}
-                </li>
-              ))}
-            </ul>
-          )}
-
-          {k.flaggor.map((f) => (
-            <div key={f.id} className={`flagga ${f.niva === "info" ? "info" : ""}`}>
-              {f.text}
-            </div>
-          ))}
-
-          <div className="diff-rubrik">Varför den väntar på er</div>
-          {k.missade_villkor.length === 0 ? (
-            <p className="diff-ok">
-              Uppfyller numera er policy — väntar ändå på ert beslut.
-            </p>
-          ) : (
-            <ul className="diff-lista">
-              {k.missade_villkor.map((v, i) => (
-                <li key={i}>{v}</li>
-              ))}
-            </ul>
-          )}
-
-          {avvisarId === k.id ? (
-            <div className="avvisa-rad">
-              <input
-                type="text"
-                value={motivering}
-                onChange={(e) => setMotivering(e.target.value)}
-                placeholder="Motivering (krävs för avvisning)"
-                autoFocus
-              />
-              <button
-                onClick={() => attestera(k, "avvisad", motivering)}
-                disabled={!motivering.trim() || beslutarId !== null}
-              >
-                {beslutarId === k.id ? "Avvisar …" : "Skicka avvisning"}
-              </button>
-              <button
-                onClick={() => {
-                  setAvvisarId(null);
-                  setMotivering("");
-                }}
-                disabled={beslutarId !== null}
-              >
-                Avbryt
-              </button>
-            </div>
-          ) : (
-            <div className="beslutsrad">
-              <button
-                className="godkann"
-                onClick={() => attestera(k, "godkand")}
-                disabled={beslutarId !== null}
-              >
-                {beslutarId === k.id ? "Bokför …" : "Attestera"}
-              </button>
-              <button
-                onClick={() => {
-                  setAvvisarId(k.id);
-                  setMotivering("");
-                }}
-                disabled={beslutarId !== null}
-              >
-                Avvisa
-              </button>
-              <span className="tyst" style={{ maxWidth: 380 }}>
-                Attesten binds till förslagets hash och din identitet — inget når
-                huvudboken utan den (ansvarsprincipen).
-              </span>
-            </div>
-          )}
-        </div>
-      ))}
+      <p className="kortkommandon tyst" aria-hidden="true">
+        ↑↓ välj · Enter detalj · A attestera · X avvisa · U ångra · ⌘K kommandon
+      </p>
 
       {fel && <p className="fel">{fel}</p>}
     </section>
@@ -399,7 +587,7 @@ function IntagSektion({
         <div className="steg-rubrik">
           <h2 className="steg-titel">Underlag in</h2>
         </div>
-        <p className="tyst">Välj en klient i väljaren uppe till höger för att ta in underlag.</p>
+        <TomtLage>Välj en klient i väljaren uppe till höger för att ta in underlag.</TomtLage>
       </section>
     );
   }
@@ -766,9 +954,9 @@ function ChattSektion({ klient, userId }: { klient: Klient | null; userId: strin
         <div className="steg-rubrik">
           <h2 className="steg-titel">Chatt</h2>
         </div>
-        <p className="tyst">
+        <TomtLage>
           Välj en klient — saldofrågor besvaras ur den valda klientens huvudbok.
-        </p>
+        </TomtLage>
       </section>
     );
   }
@@ -879,7 +1067,7 @@ function LoggSektion({ logg, visaKlient }: { logg: LoggRad[]; visaKlient: boolea
       </div>
 
       {logg.length === 0 ? (
-        <p className="tyst">Inga beslut ännu.</p>
+        <TomtLage>Inga beslut ännu.</TomtLage>
       ) : (
         <div style={{ overflowX: "auto" }}>
           <table className="rader">
@@ -995,7 +1183,7 @@ function KlientSektion({
         <div className="steg-rubrik">
           <h2 className="steg-titel">Klient</h2>
         </div>
-        <p className="tyst">Välj en klient i väljaren uppe till höger.</p>
+        <TomtLage>Välj en klient i väljaren uppe till höger.</TomtLage>
       </section>
     );
   }
@@ -1142,7 +1330,7 @@ function KlientSektion({
           </span>
         </div>
         {agenter.length === 0 ? (
-          <p className="tyst">Inga agenter är igång för {klient.namn}.</p>
+          <TomtLage>Inga agenter är igång för {klient.namn}.</TomtLage>
         ) : (
           <table className="rader">
             <thead>
@@ -1159,9 +1347,7 @@ function KlientSektion({
                   <td>{a.display_name}</td>
                   <td>{a.module}</td>
                   <td>
-                    {a.status === "active" && "aktiv"}
-                    {a.status === "paused" && <span className="tyst">pausad</span>}
-                    {a.status === "canceled" && <span className="tyst">avslutad</span>}
+                    <StatusPunkt status={a.status as AgentStatus} />
                   </td>
                   <td className="tal">{tid(a.created_at)}</td>
                 </tr>
@@ -1180,10 +1366,10 @@ function KlientSektion({
           </span>
         </div>
         {verifikationer.length === 0 && (
-          <p className="tyst">
+          <TomtLage>
             Inga verifikationer ännu för {klient.namn} — ta in det första underlaget
             under fliken Underlag in, eller vänta in att något attesteras.
-          </p>
+          </TomtLage>
         )}
         {verifikationer.map((v) => (
           <div key={v.id} className="verifikation">
@@ -1229,6 +1415,8 @@ export default function ByraSida() {
   const [flik, setFlik] = useState<FlikId>("attest");
   const [ko, setKo] = useState<KoRad[]>([]);
   const [logg, setLogg] = useState<LoggRad[]>([]);
+  const [palettOppen, setPalettOppen] = useState(false);
+  const [fokusRad, setFokusRad] = useState<string | null>(null);
 
   useEffect(() => {
     fetch("/api/byra/klienter").then(async (r) => {
@@ -1260,6 +1448,53 @@ export default function ByraSida() {
     await Promise.all([laddaKo(val), laddaLogg(val)]);
   }, [val, laddaKo, laddaLogg]);
 
+  // Cmd+K öppnar paletten (WP26). Kommandokatalogen byggs av den delade
+  // byggaren — konsultrollen ger ALDRIG operatörskommandon (WP29-regeln).
+  useEffect(() => {
+    function pa(e: KeyboardEvent) {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        setPalettOppen((o) => !o);
+      }
+    }
+    window.addEventListener("keydown", pa);
+    return () => window.removeEventListener("keydown", pa);
+  }, []);
+
+  const kommandon = useMemo(
+    () =>
+      byggKommandon({
+        roll: "konsult",
+        klienter: session?.klienter ?? [],
+        motparter: [
+          ...new Set(ko.map((k) => k.motpart).filter((m): m is string => Boolean(m))),
+        ],
+      }),
+    [session, ko],
+  );
+
+  const korKommando = useCallback(
+    (k: Kommando) => {
+      const skilj = k.id.indexOf(":");
+      const typ = k.id.slice(0, skilj);
+      const varde = k.id.slice(skilj + 1);
+      if (typ === "flik") {
+        setFlik(varde as FlikId);
+      } else if (typ === "klient") {
+        setVal(varde);
+      } else if (typ === "motpart") {
+        const traff = ko.find((r) => r.motpart === varde);
+        if (traff) {
+          setFlik("attest");
+          setFokusRad(traff.id);
+        }
+      }
+    },
+    [ko],
+  );
+
+  const fokusKlar = useCallback(() => setFokusRad(null), []);
+
   async function loggaUt() {
     await fetch("/api/auth/logout", { method: "POST" });
     router.push("/login");
@@ -1287,8 +1522,19 @@ export default function ByraSida() {
         </div>
         <div className="topbar-meta">
           <span className="tyst">{session.konsult.namn}</span>
+          <button
+            onClick={() => setPalettOppen(true)}
+            aria-label="Öppna kommandopaletten (Cmd+K)"
+            title="Kommandopaletten (Cmd+K)"
+          >
+            ⌘K
+          </button>
           <button onClick={loggaUt}>Logga ut</button>
-          <select value={val} onChange={(e) => setVal(e.target.value)}>
+          <select
+            value={val}
+            onChange={(e) => setVal(e.target.value)}
+            aria-label="Välj klient"
+          >
             <option value="alla">alla klienter</option>
             {session.klienter.map((k) => (
               <option key={k.id} value={k.id}>
@@ -1298,6 +1544,13 @@ export default function ByraSida() {
           </select>
         </div>
       </div>
+
+      <KommandoPalett
+        oppen={palettOppen}
+        kommandon={kommandon}
+        onVal={korKommando}
+        onStang={() => setPalettOppen(false)}
+      />
 
       <nav className="flikar">
         {FLIKAR.map((f) => (
@@ -1314,7 +1567,13 @@ export default function ByraSida() {
       </nav>
 
       {flik === "attest" && (
-        <AttestSektion ko={ko} visaKlient={val === "alla"} onBeslutad={uppdatera} />
+        <AttestSektion
+          ko={ko}
+          visaKlient={val === "alla"}
+          onBeslutad={uppdatera}
+          fokusRad={fokusRad}
+          onFokusKlar={fokusKlar}
+        />
       )}
       {flik === "intag" && <IntagSektion klient={valdKlient} onNyttForslag={uppdatera} />}
       {flik === "chatt" && <ChattSektion klient={valdKlient} userId={session.konsult.id} />}
