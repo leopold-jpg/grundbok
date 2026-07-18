@@ -39,6 +39,9 @@ export async function skapaAgentNyckel(
     namn: string;
     provisionedBy?: string;
     policyId?: string | null;
+    /** Agentmall ur mallregistret (WP12, ADR-0004): id + major-pekare.
+     *  Utelämnad = mall-lös modulagent (template_version får defaulten). */
+    template?: { id: string; major: string };
   },
 ): Promise<NyAgentNyckel> {
   const nyckel = NYCKELPREFIX + randomBytes(24).toString("base64url");
@@ -46,8 +49,11 @@ export async function skapaAgentNyckel(
 
   // Service-vägen: skrivning till agents sker aldrig via app-rollen.
   const r = await db.query<{ id: string }>(
-    `INSERT INTO agents (tenant_id, module, display_name, key_hash, scopes, policy_id, provisioned_by)
-     VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`,
+    `INSERT INTO agents
+       (tenant_id, module, display_name, key_hash, scopes, policy_id, provisioned_by,
+        template_id, template_version)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, COALESCE($9, '1'))
+     RETURNING id`,
     [
       input.tenantId,
       input.module,
@@ -56,6 +62,8 @@ export async function skapaAgentNyckel(
       input.scopes,
       input.policyId ?? null,
       input.provisionedBy ?? "admin-ui",
+      input.template?.id ?? null,
+      input.template?.major ?? null,
     ],
   );
   const id = r.rows[0].id;
@@ -113,6 +121,7 @@ export async function verifieraAgentNyckel(
       module: rad.module,
       scopes: rad.scopes,
       namn: `agent:${rad.display_name}`,
+      agent_id: rad.id,
     },
   };
 }

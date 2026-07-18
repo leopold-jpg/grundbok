@@ -1,5 +1,6 @@
 import type { PGlite } from "@electric-sql/pglite";
 import type { ModuleId, ProposalKind } from "@/contracts";
+import { hamtaMall, mallMajor, type MallId } from "@/mallar/registry";
 import { skapaAgentNyckel, sattAgentStatus, listaAgentNycklar, type AgentRad } from "./agent-auth";
 import { sparaPolicy } from "./decisions";
 import type { Scope } from "./decisions";
@@ -8,13 +9,22 @@ import type { Scope } from "./decisions";
 // databastransaktion. provisionAgent anropas av API-routen idag och av
 // en Stripe-webhook imorgon — provisioned_by bär källan ('konsult:…'
 // respektive 'stripe:<event_id>'), så self-service-köp är samma kodväg.
+//
+// WP12 (ADR-0004): en agent provisioneras helst ur en AGENTMALL — mallen
+// bestämmer modul och förvald autonomipolicy, agentraden pekar på mallens
+// major-version. module direkt är kvar för mall-lösa modulagenter.
 
 export type ProvisioneringsInput = {
   tenantId: string;
-  module: ModuleId;
+  /** Krävs om mall saknas; ignoreras när mall anger modulen. */
+  module?: ModuleId;
+  /** Agentmall ur mallregistret (WP11) — sätter modul, mallpekare och
+   *  förvald policy i samma svep. */
+  mall?: MallId;
   displayName: string;
   scopes?: Scope[];
-  /** Valfri autonomipolicy som sätts/uppdateras för tenant+modul i samma svep. */
+  /** Valfri autonomipolicy som sätts/uppdateras för tenant+modul i samma
+   *  svep — vinner över mallens förval. */
   policy?: {
     max_belopp_ore: number;
     min_confidence: number;
@@ -34,29 +44,37 @@ export async function provisionAgent(
   input: ProvisioneringsInput,
   provisionedBy: string,
 ): Promise<ProvisioneradAgent> {
-  let policyId: string | null = null;
+  const mall = input.mall ? hamtaMall(input.mall) : null;
+  if (input.mall && !mall) throw new Error(`agentmallen ${input.mall} finns inte i registret`);
+  const module = mall?.module ?? input.module;
+  if (!module) throw new Error("module eller mall krävs");
 
-  if (input.policy) {
+  // Explicit policy vinner; annars kopieras mallens förval till tenantens
+  // policyrad (samma princip som operatörens policy_mallar: mallen är
+  // startvärdet, kärnans rad är enda sanningen).
+  const policy = input.policy ?? mall?.defaultPolicy;
+  if (policy) {
     await sparaPolicy(db, {
       tenant_id: input.tenantId,
-      module: input.module,
-      ...input.policy,
+      module,
+      ...policy,
     });
   }
   // Länka agenten till modulens policyrad (finns via seed eller ovan).
   const p = await db.query<{ id: string }>(
     `SELECT id FROM autonomy_policies WHERE tenant_id = $1 AND module = $2`,
-    [input.tenantId, input.module],
+    [input.tenantId, module],
   );
-  policyId = p.rows[0]?.id ?? null;
+  const policyId = p.rows[0]?.id ?? null;
 
   const { id, nyckel } = await skapaAgentNyckel(db, {
     tenantId: input.tenantId,
-    module: input.module,
+    module,
     scopes: input.scopes ?? ["proposals:write"],
     namn: input.displayName,
     provisionedBy,
     policyId,
+    template: mall ? { id: mall.id, major: mallMajor(mall.version) } : undefined,
   });
 
   return { agent_id: id, nyckel };

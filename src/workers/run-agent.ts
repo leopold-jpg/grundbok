@@ -3,6 +3,7 @@ import type { ModuleId } from "@/contracts";
 import { withTenant } from "@/lib/db/tenant";
 import { handleProposal, type Principal, type Scope } from "@/lib/decisions";
 import { MODUL_REGISTRY } from "@/modules/registry";
+import { hamtaMallForMajor } from "@/mallar/registry";
 import { uuidv5 } from "@/lib/uuid5";
 import type { AgentJobb } from "@/lib/queue";
 
@@ -32,6 +33,8 @@ type AgentRad = {
   scopes: Scope[];
   status: "active" | "paused" | "canceled";
   max_concurrency: number;
+  template_id: string | null;
+  template_version: string;
 };
 
 export async function körJobb(db: PGlite, jobb: AgentJobb): Promise<JobbUtfall> {
@@ -73,6 +76,14 @@ export async function körJobb(db: PGlite, jobb: AgentJobb): Promise<JobbUtfall>
   // — omkörning ger duplicate i porten, aldrig dubbelbokföring.
   const proposalId = uuidv5(jobb.job_id);
 
+  // Mallstämpeln (WP12, ADR-0004): agentens major-pekare löses mot
+  // registrets aktuella version — den EXAKTA versionen stämplas på
+  // förslaget. null = mall-lös agent eller versionsdrift (borttagen
+  // major); förslaget byggs då ostämplat och driften syns i flottvyn.
+  const mall = agent.template_id
+    ? hamtaMallForMajor(agent.template_id, agent.template_version)
+    : null;
+
   const proposal = await runtime.buildProposal({
     db,
     tenantId: jobb.tenant_id,
@@ -80,6 +91,7 @@ export async function körJobb(db: PGlite, jobb: AgentJobb): Promise<JobbUtfall>
     underlagRef: underlag.id,
     proposalId,
     agentRuntime: WORKER_RUNTIME,
+    mall: mall ? { id: mall.id, version: mall.version } : undefined,
   });
 
   const principal: Principal = {
@@ -88,6 +100,7 @@ export async function körJobb(db: PGlite, jobb: AgentJobb): Promise<JobbUtfall>
     module: agent.module,
     scopes: agent.scopes,
     namn: `agent:${agent.display_name}`,
+    agent_id: agent.id,
   };
 
   const resultat = await handleProposal(db, principal, proposal);

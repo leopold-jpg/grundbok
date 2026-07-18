@@ -199,8 +199,11 @@ export async function roteraNyckel(
       status: string;
       policy_id: string | null;
       max_concurrency: number;
+      template_id: string | null;
+      template_version: string;
     }>(
-      `SELECT module, display_name, scopes, status, policy_id, max_concurrency
+      `SELECT module, display_name, scopes, status, policy_id, max_concurrency,
+              template_id, template_version
        FROM agents WHERE id = $1 AND tenant_id = $2 FOR UPDATE`,
       [agentId, tenantId],
     );
@@ -210,8 +213,9 @@ export async function roteraNyckel(
 
     const ny = await tx.query<{ id: string }>(
       `INSERT INTO agents
-         (tenant_id, module, display_name, key_hash, scopes, policy_id, max_concurrency, provisioned_by)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id`,
+         (tenant_id, module, display_name, key_hash, scopes, policy_id, max_concurrency,
+          provisioned_by, template_id, template_version)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING id`,
       [
         tenantId,
         a.module,
@@ -221,6 +225,8 @@ export async function roteraNyckel(
         a.policy_id,
         a.max_concurrency,
         provisionedBy,
+        a.template_id,
+        a.template_version,
       ],
     );
     const id = ny.rows[0].id;

@@ -35,6 +35,11 @@ GRANT SELECT, INSERT, UPDATE   ON autonomy_policies TO grundbok_app; -- policy-e
 -- kärnans service-väg (superuser-anslutningen utanför withTenant — den
 -- lokala motsvarigheten till Supabase service role).
 GRANT SELECT ON agents TO grundbok_app;
+-- agent_telemetry (WP12): vyn har security_invoker, så tenant_isolation
+-- på agents/proposals/verifications gäller rakt igenom — grant:en ger
+-- appen samma tenant-scopade läsning som agents. Vyn DROP+CREATE:as i
+-- schema.sql vid varje uppstart; grant:en här återställs direkt efter.
+GRANT SELECT ON agent_telemetry TO grundbok_app;
 
 -- RLS på varje kunddatabärande tabell: rad synlig/skrivbar ⇔ rätt tenant_id.
 -- current_setting(..., true) returnerar NULL om osatt → policyn nekar allt.
