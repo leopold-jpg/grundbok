@@ -689,21 +689,20 @@ function VantaSektion({
   const alderDagar = (iso: string) =>
     Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 86_400_000));
 
-  /** Påminn per klient: alla öppna rader markeras påminda och det
-   *  färdiga utkastet öppnas i konsultens mejlklient (mailto:). */
+  /** Påminn per klient: EN POST markerar alla öppna rader påminda
+   *  (atomärt server-side), sedan öppnas det färdiga utkastet i
+   *  konsultens mejlklient (mailto:). Öppnas mejlklienten inte (t.ex.
+   *  ingen konfigurerad) syns utkastet ändå via mailto-länken igen —
+   *  status i kön visar när senaste påminnelsen registrerades. */
   async function paminn(klient: KlientKompletteringar) {
     if (!klient.utkast) return;
     setFel("");
     setPaminner(klient.tenant_id);
     try {
-      const oppna = klient.rader.filter((r) => r.status !== "klar");
-      for (const rad of oppna) {
-        await post("/api/byra/kompletteringar", {
-          handling: "paminn",
-          tenant_id: klient.tenant_id,
-          komplettering_id: rad.id,
-        });
-      }
+      await post("/api/byra/kompletteringar", {
+        handling: "paminn",
+        tenant_id: klient.tenant_id,
+      });
       window.location.href =
         `mailto:?subject=${encodeURIComponent(klient.utkast.subject)}` +
         `&body=${encodeURIComponent(klient.utkast.body)}`;
@@ -1844,6 +1843,10 @@ export default function ByraSida() {
   }
 
   const valdKlient = session.klienter.find((k) => k.id === val) ?? null;
+  const oppnaKomp = komp.reduce(
+    (s, k) => s + k.rader.filter((r) => r.status !== "klar").length,
+    0,
+  );
 
   return (
     <main className={`byra ${plexMono.variable}`}>
@@ -1897,14 +1900,7 @@ export default function ByraSida() {
           >
             {f.namn}
             {f.id === "attest" && ko.length > 0 && <span className="antal">{ko.length}</span>}
-            {f.id === "vanta" &&
-              (() => {
-                const oppna = komp.reduce(
-                  (s, k) => s + k.rader.filter((r) => r.status !== "klar").length,
-                  0,
-                );
-                return oppna > 0 ? <span className="antal">{oppna}</span> : null;
-              })()}
+            {f.id === "vanta" && oppnaKomp > 0 && <span className="antal">{oppnaKomp}</span>}
           </button>
         ))}
       </nav>

@@ -1,6 +1,8 @@
 import type { PGlite } from "@electric-sql/pglite";
+import type { Transaction } from "@electric-sql/pglite";
 import { withTenant } from "./db/tenant";
 import { auditera } from "./ledger";
+import { fmtKr } from "./kontering";
 
 // Underlagsjakten (WP33) — kompletteringskön: det klienten är skyldig
 // byrån. Rader skapas automatiskt ur missing_receipt-flaggade förslag
@@ -34,7 +36,11 @@ export async function hamtaKompletteringar(
   db: PGlite,
   tenantId: string,
 ): Promise<Komplettering[]> {
-  return withTenant(db, tenantId, async (tx) => {
+  return withTenant(db, tenantId, (tx) => hamtaKompletteringarTx(tx));
+}
+
+async function hamtaKompletteringarTx(tx: Transaction): Promise<Komplettering[]> {
+  {
     const r = await tx.query<{
       id: string;
       proposal_id: string;
@@ -60,6 +66,32 @@ export async function hamtaKompletteringar(
       skapad: tillIso(row.skapad)!,
       senast_paminnd: tillIso(row.senast_paminnd),
     }));
+  }
+}
+
+/** Klientens hela kompletteringsläge i EN tenant-transaktion (WP34-
+ *  granskningsfynd: rader + månadsstatus hämtades förut i två
+ *  transaktioner, och öppna-räknaren var en COUNT av rader som redan
+ *  låg i handen). */
+export async function kompletteringsOversikt(
+  db: PGlite,
+  tenantId: string,
+): Promise<{ rader: Komplettering[]; manad: ManadsStatus }> {
+  return withTenant(db, tenantId, async (tx) => {
+    const rader = await hamtaKompletteringarTx(tx);
+    const attest = await tx.query<{ n: string }>(
+      `SELECT count(*) AS n FROM proposals WHERE status = 'pending'`,
+    );
+    const attestVantar = Number(attest.rows[0]?.n ?? 0);
+    const oppna = rader.filter((r) => r.status !== "klar").length;
+    return {
+      rader,
+      manad: {
+        attest_vantar: attestVantar,
+        kompletteringar_oppna: oppna,
+        gron: attestVantar === 0 && oppna === 0,
+      },
+    };
   });
 }
 
@@ -108,6 +140,31 @@ export async function markeraPamind(
       kompletteringId: input.kompletteringId,
       paminddAv: input.paminddAv,
     });
+  });
+}
+
+/** "Påminn"-knappen (WP34-granskningsfynd: en POST per rad var både
+ *  N round-trips och icke-atomärt): ALLA öppna rader för klienten
+ *  markeras påminda i en transaktion med en audit-händelse. Returnerar
+ *  antalet — 0 betyder att inget fanns att påminna om. */
+export async function paminnAllaOppna(
+  db: PGlite,
+  input: { tenantId: string; paminddAv: string },
+): Promise<number> {
+  return withTenant(db, input.tenantId, async (tx) => {
+    const r = await tx.query<{ id: string }>(
+      `UPDATE kompletteringar SET status = 'paminnd', senast_paminnd = now()
+       WHERE status <> 'klar' RETURNING id`,
+      [],
+    );
+    if (r.rows.length > 0) {
+      await auditera(tx, input.tenantId, "komplettering_paminnelse", {
+        kompletteringIds: r.rows.map((rad) => rad.id),
+        antal: r.rows.length,
+        paminddAv: input.paminddAv,
+      });
+    }
+    return r.rows.length;
   });
 }
 
@@ -161,10 +218,6 @@ export async function manadsStatus(db: PGlite, tenantId: string): Promise<Manads
     return { attest_vantar: attest, kompletteringar_oppna: komp, gron: attest === 0 && komp === 0 };
   });
 }
-
-const fmtKr = (ore: number) =>
-  (ore / 100).toLocaleString("sv-SE", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) +
-  " kr";
 
 /** Det färdiga, vänliga mejlutkastet för "Påminn" — konsulten ska aldrig
  *  formulera jakten själv. Returnerar subject + body för en mailto-länk

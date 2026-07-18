@@ -28,6 +28,9 @@ export type ModulInput = {
    *  branschpakets regler (byggSystemPrompt). Går till LLM-vägen och in i
    *  provenance.prompt_hash. Utelämnad för mall-lösa agenter. */
   systemPrompt?: string;
+  /** Granskningskontexten (WP34-granskningen): tenant-rad + aktiva paket,
+   *  uppslagen EN gång av runtime-lagret. */
+  granskningsKontext?: import("@/lib/granskning").GranskningsKontext;
 };
 
 /** Modulens utfall (WP32): förslaget + modulens granskningsflaggor.
@@ -48,7 +51,12 @@ const bokforing: ModulRuntime = {
     // Granskningsordningen (WP30/WP32) körs deterministiskt före
     // konteringen: mottagarkontroll först, sedan privat, förskott,
     // delmatchning, ÄTA, dubblett och anomali.
-    const granskning = await granskaUnderlag(input.db, input.tenantId, tolkning.extraktion);
+    const granskning = await granskaUnderlag(
+      input.db,
+      input.tenantId,
+      tolkning.extraktion,
+      input.granskningsKontext,
+    );
 
     if (granskning.eskalera) {
       const proposal = byggEskaleringsProposal({

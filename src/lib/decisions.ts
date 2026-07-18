@@ -154,9 +154,7 @@ export async function handleProposal(
   ].join("\n");
   const flaggor: Flagga[] = [
     // Runtime-lagrets granskningsflaggor först (dedupliceras på id) …
-    ...runtimeFlaggor.filter(
-      (f, i) => runtimeFlaggor.findIndex((andra) => andra.id === f.id) === i,
-    ),
+    ...new Map(runtimeFlaggor.map((f) => [f.id, f])).values(),
     // … sedan portens egen injection-screening.
     ...kontrolleraInjection(fritext).map((f) => ({
       id: `injection_${f.monster}`,
@@ -239,6 +237,18 @@ export async function handleProposal(
         principal.agent_id ?? null,
       ],
     );
+
+    // Telemetrisignalen för beloppsanomali (fall 7) skrivs HÄR — efter
+    // idempotenskontrollen och i samma transaktion som förslaget: en
+    // kö-omkörning av samma jobb blir 'duplicate' ovan och kan aldrig
+    // lämna dubbla anomalihändelser i den append-only-loggen.
+    const anomali = flaggor.find((f) => f.id === "anomaly_amount");
+    if (anomali) {
+      await auditera(tx, p.tenant_id, "telemetri_anomaly_amount", {
+        proposalId: p.id,
+        ...(anomali.data ?? {}),
+      });
+    }
 
     // Underlagsjakten (WP33): ett missing_receipt-flaggat förslag skapar
     // automatiskt en kompletteringsrad — restbeloppet jagas hos kunden i

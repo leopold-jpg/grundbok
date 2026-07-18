@@ -4,8 +4,7 @@ import { tenantsForSession } from "@/auth/session";
 import { withTenant } from "@/lib/db/tenant";
 import { hamtaKo, hamtaBeslutslogg, type KoRad, type LoggRad } from "@/lib/admin";
 import {
-  hamtaKompletteringar,
-  manadsStatus,
+  kompletteringsOversikt,
   byggPaminnelseUtkast,
   type Komplettering,
   type ManadsStatus,
@@ -123,8 +122,9 @@ export async function kompletteringarForByra(
   const klienter = await valdaKlienter(db, session, val);
   const resultat: KlientKompletteringar[] = [];
   for (const k of klienter) {
-    const rader = await hamtaKompletteringar(db, k.id);
-    const manad = await manadsStatus(db, k.id);
+    // En tenant-transaktion per klient: rader + månadsstatus i samma
+    // withTenant (WP34-granskningsfynd — halverar transaktionerna).
+    const { rader, manad } = await kompletteringsOversikt(db, k.id);
     const oppna = rader.filter((r) => r.status !== "klar");
     resultat.push({
       tenant_id: k.id,

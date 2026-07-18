@@ -88,10 +88,17 @@ export function tolkaMedFallback(text: string): Extraktion {
 
   // Observationsfälten (WP32): deterministiska motsvarigheter till det
   // riktiga LLM:et rapporterar — märkta rader i textrepresentationen.
+  // Radankrat (granskningsfynd WP34): "Betalningsmottagare: <leverantör>"
+  // i betalfoten får ALDRIG fångas som fakturamottagare — då hade
+  // leverantörens namn jämförts mot tenanten och falsklarmat wrong_tenant.
   const mottagare =
-    text.match(/(?:mottagare|fakturamottagare|faktura\s+till|köpare|ställd\s+till)\s*[:.]\s*(.+)/i)?.[1]?.trim() ??
+    text.match(/(?:^|\n)\s*(?:mottagare|fakturamottagare|faktura\s+till|köpare|ställd\s+till)\s*[:.]\s*(.+)/i)?.[1]?.trim() ??
     null;
-  const forskott = /förskott|a\s?conto|à\s?conto|deposition/i.test(text);
+  // Slut-/kreditfaktura som bara AVRÄKNAR ett tidigare a conto är inte
+  // ett förskott (granskningsfynd WP34) — kostnaden har levererats.
+  const forskott =
+    /förskott|a\s?conto|à\s?conto|deposition/i.test(text) &&
+    !/slutfaktura|kreditfaktura|avgår/i.test(text);
   const privatRad = text
     .split("\n")
     .map((l) => l.trim())

@@ -2,7 +2,12 @@ import { NextResponse } from "next/server";
 import { getDb } from "@/lib/db/client";
 import { kravKonsult, kravTenantIByra } from "@/auth/session";
 import { kompletteringarForByra } from "@/ytor/byra";
-import { skapaFraga, markeraPamind, registreraSvar } from "@/lib/kompletteringar";
+import {
+  skapaFraga,
+  markeraPamind,
+  paminnAllaOppna,
+  registreraSvar,
+} from "@/lib/kompletteringar";
 
 export const runtime = "nodejs";
 
@@ -62,15 +67,21 @@ export async function POST(req: Request) {
         return NextResponse.json({ ok: true, komplettering_id: r.id });
       }
       case "paminn": {
+        // Utan komplettering_id: ALLA öppna rader för klienten i en
+        // transaktion (Påminn-knappens flöde — atomärt, en audit-rad).
         if (!body.komplettering_id) {
-          return NextResponse.json({ fel: "komplettering_id krävs" }, { status: 400 });
+          const antal = await paminnAllaOppna(db, {
+            tenantId: body.tenant_id,
+            paminddAv: konsult,
+          });
+          return NextResponse.json({ ok: true, antal });
         }
         await markeraPamind(db, {
           tenantId: body.tenant_id,
           kompletteringId: body.komplettering_id,
           paminddAv: konsult,
         });
-        return NextResponse.json({ ok: true });
+        return NextResponse.json({ ok: true, antal: 1 });
       }
       case "svar": {
         if (!body.komplettering_id || !body.svar?.trim()) {

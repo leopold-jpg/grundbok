@@ -3,7 +3,8 @@ import type { ModuleId } from "@/contracts";
 import { withTenant } from "@/lib/db/tenant";
 import { handleProposal, type Principal, type Scope } from "@/lib/decisions";
 import { MODUL_REGISTRY } from "@/modules/registry";
-import { hamtaMallForMajor, byggSystemPrompt } from "@/mallar/registry";
+import { hamtaMallForMajor, byggSystemPrompt, aktivaBranschpaket } from "@/mallar/registry";
+import type { GranskningsKontext } from "@/lib/granskning";
 import { uuidv5 } from "@/lib/uuid5";
 import type { AgentJobb } from "@/lib/queue";
 
@@ -88,13 +89,21 @@ export async function körJobb(db: PGlite, jobb: AgentJobb): Promise<JobbUtfall>
   // (tenants.mall) aktiverar paketen, och den kompletta systemprompten
   // vävs ihop här — per jobb, aldrig lagrad på agentraden (en bransch-
   // ändring hos tenanten slår igenom utan agentmigration, ADR-0005).
-  let systemPrompt: string | undefined;
-  if (mall) {
-    const t = await db.query<{ mall: string }>(`SELECT mall FROM tenants WHERE id = $1`, [
-      jobb.tenant_id,
-    ]);
-    systemPrompt = byggSystemPrompt(mall, t.rows[0]?.mall ?? "");
-  }
+  // Tenant-raden slås upp EN gång och följer med som granskningskontext;
+  // paketaktiveringen är mall∩tenant-snittet — en mall-lös agent kör
+  // inga paketregler, varken i prompten eller i granskningsmotorn.
+  const t = await db.query<{ namn: string; mall: string }>(
+    `SELECT namn, mall FROM tenants WHERE id = $1`,
+    [jobb.tenant_id],
+  );
+  const tenantNamn = t.rows[0]?.namn ?? "";
+  const tenantMall = t.rows[0]?.mall ?? "";
+  const systemPrompt = mall ? byggSystemPrompt(mall, tenantMall) : undefined;
+  const granskningsKontext: GranskningsKontext = {
+    tenantNamn,
+    tenantMall,
+    aktivaPaket: mall ? aktivaBranschpaket(mall, tenantMall).map((p) => p.id) : [],
+  };
 
   const { proposal, flaggor } = await runtime.buildProposal({
     db,
@@ -105,6 +114,7 @@ export async function körJobb(db: PGlite, jobb: AgentJobb): Promise<JobbUtfall>
     agentRuntime: WORKER_RUNTIME,
     mall: mall ? { id: mall.id, version: mall.version } : undefined,
     systemPrompt,
+    granskningsKontext,
   });
 
   const principal: Principal = {

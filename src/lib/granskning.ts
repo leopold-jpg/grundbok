@@ -1,10 +1,9 @@
 import type { PGlite } from "@electric-sql/pglite";
 import { withTenant } from "./db/tenant";
-import { auditera } from "./ledger";
 import { loadKundConfig } from "./skills";
-import { paketForTenantMall } from "@/mallar/registry";
+import { paketForTenantMall, type BranschPaketId } from "@/mallar/registry";
 import type { Extraktion } from "./extract/schema";
-import type { Flagga } from "./kontering";
+import { fmtKr, type Flagga } from "./kontering";
 
 // Granskningsmotorn (WP32) — den DETERMINISTISKA implementationen av
 // systempromptarnas obligatoriska granskningsordning (WP30). LLM:en
@@ -23,21 +22,30 @@ export type GranskningsUtfall = {
   kostnadskontoOverride?: { konto: string; namn: string };
 };
 
-/** Normalisering för mottagarjämförelse: gemener, utan bolagsformssuffix
- *  och skiljetecken — "Café Exempel AB" ↔ "café exempel". */
-function normaliseraBolagsnamn(s: string): string {
+/** Normalisering för mottagarjämförelse: gemener, diakritik vikt bort
+ *  (OCR/LLM tappar ofta accenter: "Café" → "Cafe"), utan bolagsforms-
+ *  suffix och skiljetecken — "Café Exempel AB" ↔ "cafe exempel". */
+export function normaliseraBolagsnamn(s: string): string {
   return s
     .toLowerCase()
-    .replace(/\b(ab|hb|kb|ek\.?\s*för\.?|aktiebolag)\b/g, "")
+    .normalize("NFD")
+    .replace(/\p{M}+/gu, "")
+    .replace(/\b(ab|hb|kb|ek\.?\s*for\.?|aktiebolag)\b/g, "")
     .replace(/[^\p{L}\p{N}]+/gu, " ")
     .trim();
 }
 
-function mottagareMatchar(mottagare: string, tenantNamn: string): boolean {
-  const a = normaliseraBolagsnamn(mottagare);
-  const b = normaliseraBolagsnamn(tenantNamn);
-  if (!a || !b) return false;
-  return a.includes(b) || b.includes(a);
+/** Ordmängdsjämförelse, inte substring (granskningsfynd WP34): tenanten
+ *  "Bygg AB" får inte matcha mottagaren "Byggmax AB" bara för att
+ *  strängen råkar vara ett prefix. Match = ena namnets ord är en
+ *  delmängd av det andras. */
+export function mottagareMatchar(mottagare: string, tenantNamn: string): boolean {
+  const a = normaliseraBolagsnamn(mottagare).split(" ").filter(Boolean);
+  const b = normaliseraBolagsnamn(tenantNamn).split(" ").filter(Boolean);
+  if (a.length === 0 || b.length === 0) return false;
+  const aSet = new Set(a);
+  const bSet = new Set(b);
+  return a.every((ord) => bSet.has(ord)) || b.every((ord) => aSet.has(ord));
 }
 
 function median(tal: number[]): number {
@@ -48,9 +56,18 @@ function median(tal: number[]): number {
     : Math.round((sorterade[mitt - 1] + sorterade[mitt]) / 2);
 }
 
-const fmtKr = (ore: number) =>
-  (ore / 100).toLocaleString("sv-SE", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) +
-  " kr";
+/** Anropskontext (granskningsfynd WP34): tenant-raden är redan uppslagen
+ *  av workern och paketaktiveringen är mall∩tenant-snittet
+ *  (aktivaBranschpaket) — beslutet fattas EN gång hos anroparen, aldrig
+ *  om-härlett här. Utelämnad kontext (äldre anropare) → egen uppslagning
+ *  och tenant-härledd aktivering. */
+export type GranskningsKontext = {
+  tenantNamn?: string;
+  tenantMall?: string;
+  /** De paket som faktiskt är aktiva för (mall, tenant). Utelämnad =
+   *  härled ur tenantMall; tom lista = inga paket (t.ex. mall-lös agent). */
+  aktivaPaket?: BranschPaketId[];
+};
 
 /**
  * Kör hela granskningsordningen mot ett tolkat underlag. Ordningen är
@@ -63,15 +80,21 @@ export async function granskaUnderlag(
   db: PGlite,
   tenantId: string,
   extraktion: Extraktion,
+  kontext: GranskningsKontext = {},
 ): Promise<GranskningsUtfall> {
   const flaggor: Flagga[] = [];
 
-  const tenant = await db.query<{ namn: string; mall: string }>(
-    `SELECT namn, mall FROM tenants WHERE id = $1`,
-    [tenantId],
-  );
-  const tenantNamn = tenant.rows[0]?.namn ?? "";
-  const tenantMall = tenant.rows[0]?.mall ?? "";
+  let tenantNamn = kontext.tenantNamn;
+  let tenantMall = kontext.tenantMall;
+  if (tenantNamn === undefined || tenantMall === undefined) {
+    const tenant = await db.query<{ namn: string; mall: string }>(
+      `SELECT namn, mall FROM tenants WHERE id = $1`,
+      [tenantId],
+    );
+    tenantNamn ??= tenant.rows[0]?.namn ?? "";
+    tenantMall ??= tenant.rows[0]?.mall ?? "";
+  }
+  const aktivaPaket = kontext.aktivaPaket ?? paketForTenantMall(tenantMall);
 
   // 1. MOTTAGARKONTROLL FÖRST (fall 1). Anger underlaget en mottagare som
   // inte är tenantens bolag: flag_wrong_tenant, ingen kontering.
@@ -137,10 +160,11 @@ export async function granskaUnderlag(
   }
 
   // ÄTA-vaksamhet (fall 2) — branschpaketsregel: körs ENDAST när
-  // tenantens bransch aktiverar bygg-paketet (runtime-aktivt, WP31).
-  // Åberopar fakturan en känd order och beloppet överstiger det kända
+  // bygg-paketet är aktivt för körningen (mall∩tenant-snittet från
+  // anroparen — en mall-lös agent kör inga paketregler). Åberopar
+  // fakturan en känd order och beloppet överstiger det kända
   // ordervärdet → needs_review.
-  if (paketForTenantMall(tenantMall).includes("bygg") && extraktion.order_ref) {
+  if (aktivaPaket.includes("bygg") && extraktion.order_ref) {
     const kund = loadKundConfig(tenantId);
     const kantVarde = kund.ordrar?.[extraktion.order_ref];
     if (kantVarde !== undefined && extraktion.netto_ore > kantVarde) {
@@ -167,21 +191,30 @@ export async function granskaUnderlag(
 
   await withTenant(db, tenantId, async (tx) => {
     // 5. DUBBLETTDETEKTERING (fall 8): samma leverantör + belopp + period
-    // mot både tidigare förslag och bokförda verifikationer.
+    // mot både tidigare förslag och bokförda verifikationer. Beloppet
+    // jämförs mot BÅDE debetsumman och största kreditraden
+    // (granskningsfynd WP34): vid omvänd byggmoms är debetsumman
+    // netto+moms medan dokumentets totalbelopp är netto — leverantörs-
+    // skuldraden (största krediten) bär "att betala" i båda formerna.
     const dubblettForslag = await tx.query<{ id: string }>(
       `SELECT id FROM proposals
        WHERE payload->>'motpart' = $1
          AND substring(payload->>'affarshandelsedatum', 1, 7) = $2
          AND status <> 'rejected'
-         AND (SELECT coalesce(sum((l->>'debet_ore')::bigint), 0)
-              FROM jsonb_array_elements(payload->'lines') l) = $3`,
+         AND (
+           (SELECT coalesce(sum((l->>'debet_ore')::bigint), 0)
+            FROM jsonb_array_elements(payload->'lines') l) = $3
+           OR
+           (SELECT coalesce(max((l->>'kredit_ore')::bigint), 0)
+            FROM jsonb_array_elements(payload->'lines') l) = $3
+         )`,
       [extraktion.motpart, period, belopp],
     );
     const dubblettVerifikation = await tx.query<{ id: string }>(
       `SELECT v.id FROM verifications v
        JOIN verification_rows r ON r.verification_id = v.id
        WHERE v.motpart = $1 AND to_char(v.affarshandelsedatum, 'YYYY-MM') = $2
-       GROUP BY v.id HAVING sum(r.debet_ore) = $3`,
+       GROUP BY v.id HAVING sum(r.debet_ore) = $3 OR max(r.kredit_ore) = $3`,
       [extraktion.motpart, period, belopp],
     );
     const dubbletter = dubblettForslag.rows.length + dubblettVerifikation.rows.length;
@@ -197,12 +230,18 @@ export async function granskaUnderlag(
     }
 
     // 6. BELOPPSANOMALI (fall 7): >2× median för leverantör+tenant →
-    // telemetrisignal anomaly_amount. INFO-nivå: bokföringen hindras
-    // inte ("bokför men notifiera") — signalen går till audit-loggen.
+    // flagga anomaly_amount. INFO-nivå: bokföringen hindras inte
+    // ("bokför men notifiera"). Historiken avgränsas till 24 månader —
+    // en flerårig huvudbok ska inte läsas i sin helhet per jobb.
+    // Sjölva TELEMETRISIGNALEN (audit-händelsen) skrivs av PORTEN när
+    // förslaget tas emot (granskningsfynd WP34): där är den atomär med
+    // förslaget och idempotent vid kö-omkörning — härifrån hade varje
+    // retry lämnat en extra rad i den append-only-loggen.
     const historik = await tx.query<{ belopp: string }>(
       `SELECT sum(r.debet_ore) AS belopp FROM verifications v
        JOIN verification_rows r ON r.verification_id = v.id
        WHERE v.motpart = $1
+         AND v.affarshandelsedatum > (now() - interval '24 months')::date
        GROUP BY v.id`,
       [extraktion.motpart],
     );
@@ -216,13 +255,12 @@ export async function granskaUnderlag(
           text:
             `Beloppsanomali: ${fmtKr(belopp)} är mer än 2× medianen ` +
             `${fmtKr(med)} för ${extraktion.motpart}. Bokförs — konsulten notifieras.`,
-          data: { belopp_ore: belopp, median_ore: med, motpart: extraktion.motpart },
-        });
-        await auditera(tx, tenantId, "telemetri_anomaly_amount", {
-          motpart: extraktion.motpart,
-          belopp_ore: belopp,
-          median_ore: med,
-          datum: extraktion.datum,
+          data: {
+            belopp_ore: belopp,
+            median_ore: med,
+            motpart: extraktion.motpart,
+            datum: extraktion.datum,
+          },
         });
       }
     }

@@ -56,10 +56,22 @@ export function kontera(
   // Flagga om kvittots angivna moms avviker från regelverkets sats för
   // kategorin + datumet. Regelverket styr förslaget (lagen bestämmer satsen,
   // inte kvittot) — men avvikelsen ersätts aldrig tyst: konsulten avgör.
-  // Undantag (WP32-fynd): vid omvänd betalningsskyldighet SKA säljaren
-  // fakturera utan moms — dokumentets 0 kr är korrekt, aldrig en avvikelse.
-  if (
-    moms.typ !== "omvand" &&
+  // Vid omvänd betalningsskyldighet är förväntan i stället 0 kr (WP32-
+  // fynd, skärpt i WP34-granskningen): säljaren SKA fakturera utan moms —
+  // dokumentets 0 är korrekt, men DEBITERAD moms på en omvänd faktura är
+  // ett äkta avvikelselarm (fel hos säljaren, att-betala ≠ netto).
+  if (moms.typ === "omvand") {
+    if (extraktion.moms_ore !== null && extraktion.moms_ore !== 0) {
+      flaggor.push({
+        id: "momssats_avviker",
+        niva: "varning",
+        text:
+          `Dokumentet debiterar moms ${fmtKr(extraktion.moms_ore)} trots omvänd ` +
+          `betalningsskyldighet (${moms.lagrum}) — säljaren ska fakturera utan moms. ` +
+          `Stäm av fakturan med leverantören innan betalning.`,
+      });
+    }
+  } else if (
     extraktion.moms_ore !== null &&
     Math.abs(extraktion.moms_ore - moms_ore) > 1
   ) {
@@ -83,12 +95,12 @@ export function kontera(
   const kostnadDef =
     rules.kostnadskonton[kostnadsKey] ?? rules.kostnadskonton["ovrigt"];
   // Prioritet: granskningens override (förskott→1480) > kundens
-  // konto-overrides > skillens standard.
-  const kostnad = kostnadskontoOverride ?? kostnadDef;
-  const kostnadskonto =
-    kostnadskontoOverride?.konto ??
-    overrides.konto_overrides?.[kostnadsKey] ??
-    kostnadDef.konto;
+  // konto-overrides > skillens standard. Ett par (konto, namn) beräknas
+  // EN gång — ingen halvöverstyrd blandform.
+  const kostnad = kostnadskontoOverride ?? {
+    konto: overrides.konto_overrides?.[kostnadsKey] ?? kostnadDef.konto,
+    namn: kostnadDef.namn,
+  };
 
   const motkontoDef =
     extraktion.betalsatt === "direkt"
@@ -104,7 +116,7 @@ export function kontera(
     // vid full avdragsrätt. Rutor 24/30/48.
     brutto = netto;
     rader.push(
-      rad(kostnadskonto, kostnad.namn, netto, 0),
+      rad(kostnad.konto, kostnad.namn, netto, 0),
       rad(motkontoDef.konto, motkontoDef.namn, 0, netto),
       rad(moms.konton.omvand_utgaende!, "Utgående moms, omvänd betalningsskyldighet, 25 %", 0, moms_ore),
       rad(moms.konton.omvand_ingaende!, "Ingående moms, omvänd betalningsskyldighet", moms_ore, 0),
@@ -112,7 +124,7 @@ export function kontera(
   } else {
     brutto = netto + moms_ore;
     rader.push(
-      rad(kostnadskonto, kostnad.namn, netto, 0),
+      rad(kostnad.konto, kostnad.namn, netto, 0),
       rad(moms.konton.ingaende!, "Debiterad ingående moms", moms_ore, 0),
       rad(motkontoDef.konto, motkontoDef.namn, 0, brutto),
     );
