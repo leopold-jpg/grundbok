@@ -24,7 +24,7 @@ export type MomsRules = {
   konton: {
     utgaende: Record<string, string>;
     ingaende: string;
-    omvand: { utgaende_25: string; ingaende: string };
+    omvand: { utgaende_25: string; ingaende: string; ingaende_utland: string };
   };
   omvand_betalningsskyldighet: {
     bygg: {
@@ -34,6 +34,14 @@ export type MomsRules = {
       kostnadskonto: string;
       deklarationsrutor: { underlag: string; utgaende: string; ingaende: string };
       aktiveras_av_config: string;
+    };
+    /** Fall 6 (TESTUNDERLAG): tjänsteinköp från utlandet — aktiveras av
+     *  dokumentobservationen omvand_eu, aldrig av kundconfig. */
+    eu_tjanst: {
+      lagrum: string;
+      villkor: string;
+      sats: number;
+      deklarationsrutor: { underlag: string; utgaende: string; ingaende: string };
     };
   };
 };

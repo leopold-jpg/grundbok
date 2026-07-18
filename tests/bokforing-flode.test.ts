@@ -101,7 +101,7 @@ test("godkännande bokför: verifikation med löpnummer 1, balanserade rader, ex
     ),
   );
   assert.equal(spar.rows[0].proposal_id, proposal.id);
-  assert.equal(spar.rows[0].skill_versions["se/moms"], "1.0.0");
+  assert.equal(spar.rows[0].skill_versions["se/moms"], "1.1.0");
 });
 
 test("löpnummer är tenant-scopat: kund_b börjar på 1 oavsett kund_a", async () => {

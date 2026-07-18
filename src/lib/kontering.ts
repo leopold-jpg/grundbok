@@ -49,7 +49,9 @@ export function kontera(
   const datum = affarshandelsedatum ?? extraktion.datum;
   const flaggor: Flagga[] = [];
 
-  const moms = bestamMoms(extraktion.kategori, datum, tenantId);
+  const moms = bestamMoms(extraktion.kategori, datum, tenantId, {
+    omvandEu: extraktion.omvand_eu,
+  });
   const netto = extraktion.netto_ore;
   const moms_ore = Math.round((netto * moms.sats) / 100);
 
@@ -90,8 +92,12 @@ export function kontera(
     konto_overrides?: Record<string, string>;
     beloppsgrans_flagga_sek?: number;
   };
+  // Omvänd bygg konteras på det särskilda 4425; EU-tjänsteinköp (fall 6)
+  // behåller sin verkliga kostnadskategori (t.ex. it_tjanster → 6540).
   const kostnadsKey =
-    moms.typ === "omvand" ? "byggtjanst_omvand" : extraktion.kategori;
+    moms.typ === "omvand" && moms.kategori === "byggtjanst"
+      ? "byggtjanst_omvand"
+      : extraktion.kategori;
   const kostnadDef =
     rules.kostnadskonton[kostnadsKey] ?? rules.kostnadskonton["ovrigt"];
   // Prioritet: granskningens override (förskott→1480) > kundens
@@ -111,15 +117,21 @@ export function kontera(
   let brutto: number;
 
   if (moms.typ === "omvand") {
-    // Omvänd betalningsskyldighet (ML 16 kap. 13 §): säljaren fakturerar
-    // utan moms; köparen redovisar ut- OCH ingående moms. Nettoeffekt noll
-    // vid full avdragsrätt. Rutor 24/30/48.
+    // Omvänd betalnings-/skattskyldighet: säljaren fakturerar utan moms;
+    // köparen redovisar ut- OCH ingående moms. Nettoeffekt noll vid full
+    // avdragsrätt. Bygg (ML 16:13, rutor 24/30/48) och utländska
+    // tjänsteinköp (ML 16:9, rutor 21/30/48 — fall 6) delar form men
+    // skiljer sig i ingående konto och benämning (2647 resp. 2645).
+    const ingaendeBenamning =
+      moms.kategori === "eu_tjanst"
+        ? "Beräknad ingående moms på förvärv från utlandet"
+        : "Ingående moms, omvänd betalningsskyldighet";
     brutto = netto;
     rader.push(
       rad(kostnad.konto, kostnad.namn, netto, 0),
       rad(motkontoDef.konto, motkontoDef.namn, 0, netto),
       rad(moms.konton.omvand_utgaende!, "Utgående moms, omvänd betalningsskyldighet, 25 %", 0, moms_ore),
-      rad(moms.konton.omvand_ingaende!, "Ingående moms, omvänd betalningsskyldighet", moms_ore, 0),
+      rad(moms.konton.omvand_ingaende!, ingaendeBenamning, moms_ore, 0),
     );
   } else {
     brutto = netto + moms_ore;

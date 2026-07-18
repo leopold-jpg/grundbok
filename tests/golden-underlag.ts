@@ -107,6 +107,29 @@ Varav utan kvitto:    400,00 kr
 Betalningsvillkor: 20 dagar
 Bankgiro: 444-0505`;
 
+/** Fall 6 — momsundantag/omvänd skattskyldighet (kund_a): EU-köp av
+ *  programvarulicens med VAT-nr och reverse charge → utgående + beräknad
+ *  ingående moms på förvärv (2614/2645), hög konfidens — mönstret SKA
+ *  auto-bokas. (Verkliga fallet: Adobe; representerat med exempel-namn.) */
+export const FALL_6_EU_TJANST = `FAKTURA
+Programvarujätten Exempel Ltd
+Dublin, Irland
+VAT-nr: EU372999999
+
+Fakturadatum: 2026-07-14
+Fakturanr: PJ-2026-88410
+Mottagare: Café Exempel AB
+
+Avser: Licensabonnemang bildbehandling, juli 2026
+
+Nettobelopp:        1 200,00 kr
+Moms (0 %):             0,00 kr
+Att betala:         1 200,00 kr
+
+Omvänd skattskyldighet — Reverse charge.
+Köparen redovisar momsen enligt art. 196 i momsdirektivet.
+Betalningsvillkor: 14 dagar`;
+
 /** Fall 7 — elkostnad-anomali (kund_a): 3 800 kr mot historisk median
  *  ~1 216 kr (>2×) → telemetrisignal anomaly_amount; bokförs men
  *  konsulten notifieras. Historiken seedas i testet. */

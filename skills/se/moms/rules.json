@@ -1,6 +1,6 @@
 {
   "skill": "se/moms",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "beskrivning": "Svenska momssatser med giltighetsdatum, momskonton och omvänd betalningsskyldighet i byggsektorn. Maskinläsbar motsvarighet till SKILL.md — exekveras av den deterministiska regelmotorn.",
   "verifierad_mot_primarkallor": "2026-07-08",
   "kategorier": {
@@ -58,8 +58,8 @@
   "konton": {
     "utgaende": { "25": "2611", "12": "2621", "6": "2631" },
     "ingaende": "2641",
-    "omvand": { "utgaende_25": "2614", "ingaende": "2647" },
-    "not": "Kontonamn verifierade mot officiella BAS 2025-tabellen (bas.se). Ingående moms delas inte upp per sats i BAS — 2641 gäller alla satser. 2617 finns inte i officiella BAS (programvarukonvention)."
+    "omvand": { "utgaende_25": "2614", "ingaende": "2647", "ingaende_utland": "2645" },
+    "not": "Kontonamn verifierade mot officiella BAS 2025-tabellen (bas.se). Ingående moms delas inte upp per sats i BAS — 2641 gäller alla satser. 2617 finns inte i officiella BAS (programvarukonvention). 2645 'Beräknad ingående moms på förvärv från utlandet' används vid omvänd skattskyldighet för utländska tjänsteinköp (fall 6); 2647 gäller omvänd betalningsskyldighet i Sverige (bygg)."
   },
   "omvand_betalningsskyldighet": {
     "bygg": {
@@ -71,6 +71,13 @@
       "deklarationsrutor": { "underlag": "24", "utgaende": "30", "ingaende": "48" },
       "saljarens_intaktskonto": "3231",
       "aktiveras_av_config": "omvand_bygg"
+    },
+    "eu_tjanst": {
+      "lagrum": "ML (2023:200) 16 kap. 9 §",
+      "term": "omvänd skattskyldighet (förvärvsbeskattning av tjänster från utlandet)",
+      "villkor": "Tjänsteinköp från utländsk beskattningsbar person (huvudregeln för B2B-tjänster, t.ex. programvarulicens från EU-leverantör med EU-VAT-nr): säljaren fakturerar utan moms ('reverse charge'), förvärvaren redovisar utgående OCH ingående moms. Aktiveras av dokumentobservationen omvand_eu — aldrig av kundconfig.",
+      "sats": 25,
+      "deklarationsrutor": { "underlag": "21", "utgaende": "30", "ingaende": "48" }
     }
   },
   "deklarationsperioder": {

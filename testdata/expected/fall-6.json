@@ -1,6 +1,24 @@
 {
   "fall": 6,
-  "titel": "BLOCKERAD — ej implementerad",
-  "blockerad": true,
-  "skal": "TESTUNDERLAG-GOLDEN.md finns varken i docs/, repo-roten, git-historiken eller stasharna, och kickoffen beskriver inte fall 6. Regeln 'gissa aldrig vidare' gäller: fallet implementeras när dokumentet landar. Se docs/SESSIONSRAPPORT-innehall.md."
+  "titel": "EU-tjänsteinköp med omvänd skattskyldighet (reverse charge) — 2614/2645, auto-mönster",
+  "tenant": "kund_a",
+  "forvantat": {
+    "kind": "journal_entry",
+    "eskalerad": false,
+    "lines": [
+      ["6540", 120000, 0],
+      ["2440", 0, 120000],
+      ["2614", 0, 30000],
+      ["2645", 30000, 0]
+    ],
+    "flaggor_kravs": [],
+    "flaggor_forbjudna": [
+      "momssats_avviker",
+      "flag_wrong_tenant",
+      "dubblett_misstankt",
+      "forskott_1480"
+    ],
+    "status": "pending",
+    "auto_monster": true
+  }
 }

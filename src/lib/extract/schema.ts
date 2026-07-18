@@ -89,6 +89,12 @@ export const ExtraktionSchema = z.object({
     .describe(
       "Belopp i ören som enligt dokumentet SAKNAR kvitto/underlag (t.ex. 'varav utan kvitto: 400,00 kr'), annars null",
     ),
+  omvand_eu: z
+    .boolean()
+    .default(false)
+    .describe(
+      "true när dokumentet anger omvänd skattskyldighet för utländskt tjänsteinköp: 'reverse charge'/'omvänd skattskyldighet' med utländsk säljare (EU-VAT-nr) och 0 % moms. Gäller INTE svensk omvänd byggmoms",
+    ),
 });
 
 export type Extraktion = z.infer<typeof ExtraktionSchema>;
@@ -97,11 +103,17 @@ export type Extraktion = z.infer<typeof ExtraktionSchema>;
  *  äldre anropare som bygger Extraktion för hand. */
 export const OBSERVATIONS_DEFAULTS: Pick<
   Extraktion,
-  "mottagare" | "forskott" | "privat_indikation" | "order_ref" | "rest_utan_underlag_ore"
+  | "mottagare"
+  | "forskott"
+  | "privat_indikation"
+  | "order_ref"
+  | "rest_utan_underlag_ore"
+  | "omvand_eu"
 > = {
   mottagare: null,
   forskott: false,
   privat_indikation: null,
   order_ref: null,
   rest_utan_underlag_ore: null,
+  omvand_eu: false,
 };

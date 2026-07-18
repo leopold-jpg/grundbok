@@ -95,7 +95,7 @@ test("invarianter: debet = kredit och skill-versioner stämplas på förslaget",
   const debet = f.rader.reduce((s, r) => s + r.debet_ore, 0);
   const kredit = f.rader.reduce((s, r) => s + r.kredit_ore, 0);
   assert.equal(debet, kredit);
-  assert.equal(f.skill_versions["se/moms"], "1.0.0");
+  assert.equal(f.skill_versions["se/moms"], "1.1.0");
   assert.equal(f.skill_versions["se/bas-kontering"], "1.0.0");
 });
 
