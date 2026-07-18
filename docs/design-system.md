@@ -392,6 +392,10 @@ står medvetet kvar på studio-skinnet; /login-punkterna är öppna.*
   adminkonsolen ligger kvar på studio-skinnet tills sitt eget pass.
   Varm papper/terracotta/varmgrön försvann därmed från båda ytorna i
   ett slag; flaggor/varningar använder kanonens nya `--varning` (§2).
+  html/body ligger utanför `<main>` och bär studio-bakgrunden för
+  adminens skull — ytorna tar sidbasen med `html:has(main.byra)`/
+  `body:has(main.byra)` (resp. operator) och sätter `color` på main
+  så studio-bläcket inte ärvs in.
 - **LÖST (CSS-ändringarna omskinningen inte nådde):** serif som
   bärande rubrikfont (`.steg-titel`/`.steg-nr` → Inter 600; ordmärket
   behåller serifen som varumärkeskrydda enligt §3), mono-chips för

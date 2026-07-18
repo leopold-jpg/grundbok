@@ -160,11 +160,20 @@
 /* ------------------------------------------------------------------
    Grundbok-passet (D2): det skin-mappningen inte når. */
 
+/* Sidbasen är kallvit. body ligger utanför main och bär studio-skinnet
+   för adminens skull — därför :has-scopat härifrån (globals orörd). */
+html:has(main.byra),
+body:has(main.byra) {
+  background: var(--yta);
+}
+
 /* Basstorlek 16px och innehållsbredd 1120px — D2-beslutet: arbetsytan
-   följer publika ytans mått, inte studio-arvets 15px/980px. */
+   följer publika ytans mått, inte studio-arvets 15px/980px. Färgen
+   sätts här: utan den ärver ytan studio-bodyns brunsvarta text. */
 .byra {
   font-size: 16px;
   max-width: 1120px;
+  color: var(--ink);
 }
 
 /* Rubrikhierarki: Inter bär rubrikerna (kanon §3) — serifen är ENDAST
