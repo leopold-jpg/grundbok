@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { plexMono } from "../_publik/fonter";
-import { MALL_IDS, mallRegistret } from "@/mallar/registry";
 import "./operator.css";
 
 // Operatörskonsolen (WP14) — grundarens vy: bolag → agenter → status,
@@ -91,6 +90,10 @@ type AgentDetalj = {
   }[];
 };
 
+/** Katalogmetadata från /api/operator/agentmallar — aldrig registret
+ *  självt i klienten: systemPrompt/regler ska inte in i en publik bundle. */
+type AgentmallVal = { id: string; displayName: string; version: string };
+
 const VARNINGSTEXT: Record<FlottVarning, string> = {
   inaktiv_7d: "ingen aktivitet 7 d",
   hog_korrigeringsandel: "hög korrigeringsandel",
@@ -159,6 +162,7 @@ export default function OperatorSida() {
   const [filtStatus, setFiltStatus] = useState("");
   const [valdAgent, setValdAgent] = useState<string | null>(null);
   const [detalj, setDetalj] = useState<AgentDetalj | null>(null);
+  const [agentmallar, setAgentmallar] = useState<AgentmallVal[]>([]);
 
   // Provisioneringsflödet: mall → namn → nyckel (visas en gång).
   const [nyMall, setNyMall] = useState<string>("");
@@ -216,6 +220,11 @@ export default function OperatorSida() {
     if (f) setFlotta(f);
   }, []);
 
+  const laddaAgentmallar = useCallback(async () => {
+    const m = await hamta<AgentmallVal[]>("/api/operator/agentmallar");
+    if (m) setAgentmallar(m);
+  }, []);
+
   const laddaDetalj = useCallback(async (agentId: string) => {
     const d = await hamta<AgentDetalj>(`/api/operator/flotta/${agentId}`);
     setDetalj(d);
@@ -228,9 +237,10 @@ export default function OperatorSida() {
         laddaMallar();
         laddaHalsa();
         laddaFlotta();
+        laddaAgentmallar();
       }
     })();
-  }, [laddaBolag, laddaMallar, laddaHalsa, laddaFlotta]);
+  }, [laddaBolag, laddaMallar, laddaHalsa, laddaFlotta, laddaAgentmallar]);
 
   useEffect(() => {
     setVisadNyckel(null);
@@ -266,7 +276,7 @@ export default function OperatorSida() {
       });
       setVisadNyckel({ rubrik: `Nyckel för ${nyNamn.trim()}`, nyckel: r.nyckel });
       setNyNamn("");
-      await Promise.all([laddaAgenter(valtBolag), laddaBolag()]);
+      await Promise.all([laddaAgenter(valtBolag), laddaBolag(), laddaFlotta()]);
     } catch (e) {
       setFel(e instanceof Error ? e.message : String(e));
     } finally {
@@ -288,7 +298,7 @@ export default function OperatorSida() {
         { tenant_id: valtBolag },
       );
       setVisadNyckel({ rubrik: `Ny nyckel för ${agent.namn} (rotation)`, nyckel: r.nyckel });
-      await Promise.all([laddaAgenter(valtBolag), laddaBolag()]);
+      await Promise.all([laddaAgenter(valtBolag), laddaBolag(), laddaFlotta()]);
     } catch (e) {
       setFel(e instanceof Error ? e.message : String(e));
     } finally {
@@ -302,6 +312,8 @@ export default function OperatorSida() {
     try {
       await post(`/api/agents/${agentId}`, { tenant_id: valtBolag, status }, metod);
       await Promise.all([laddaAgenter(valtBolag), laddaBolag(), laddaFlotta()]);
+      // Samma agent kan stå öppen i flottans detaljpanel — håll den synkad.
+      if (valdAgent === agentId) await laddaDetalj(agentId);
     } catch (e) {
       setFel(e instanceof Error ? e.message : String(e));
     }
@@ -505,7 +517,10 @@ export default function OperatorSida() {
           </div>
         )}
 
-        {valdAgent && detalj && (
+        {/* Renderingsvakt mot stale-response-racen: en detalj som hann
+            hämtas för en TIDIGARE vald rad renderas aldrig — knapparna
+            kan därmed aldrig agera på fel agent. */}
+        {valdAgent && detalj && detalj.agent.agent_id === valdAgent && (
           <div className="flotta-detalj">
             <div className="detalj-rubrik">
               <strong>{detalj.agent.display_name}</strong>
@@ -671,9 +686,9 @@ export default function OperatorSida() {
               <select value={nyMall} onChange={(e) => setNyMall(e.target.value)}>
                 <option value="">utan mall (bokforing, manuell policy)</option>
                 <optgroup label="agentmallar — versionerade hjärnor (ADR-0004)">
-                  {MALL_IDS.map((id) => (
-                    <option key={id} value={`agentmall:${id}`}>
-                      {mallRegistret[id].displayName} · {mallRegistret[id].version}
+                  {agentmallar.map((m) => (
+                    <option key={m.id} value={`agentmall:${m.id}`}>
+                      {m.displayName} · {m.version}
                     </option>
                   ))}
                 </optgroup>

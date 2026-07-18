@@ -11,13 +11,22 @@ import { provisionAgent, pausaAgent } from "../src/lib/provisioning";
 import { proposalsPort } from "../src/lib/proposals-port";
 import { decideProposal } from "../src/lib/decisions";
 import { flottoversikt, agentDetalj, KORRIGERINGSTROSKEL } from "../src/ytor/operator";
+import { mallRegistret } from "../src/mallar/registry";
 import { exempelProposal } from "./helpers";
 
 const db = await createDb();
 
+// Explicit policy (upsert): kund_a:s seedade bokforing-policy är fullt
+// manuell, och mallförval seedar bara saknade rader — sekvensens auto-
+// godkännande kräver att restaurangnivån sätts uttryckligen.
 const resto = await provisionAgent(
   db,
-  { tenantId: "kund_a", mall: "bokforing-restaurang", displayName: "Flottans restoagent" },
+  {
+    tenantId: "kund_a",
+    mall: "bokforing-restaurang",
+    displayName: "Flottans restoagent",
+    policy: mallRegistret["bokforing-restaurang"].defaultPolicy,
+  },
   "test:wp13",
 );
 
@@ -142,4 +151,30 @@ test("operatörsregeln: varken flottan eller detaljen läcker förslags-innehål
   assert.ok(!JSON.stringify(flotta).includes("Kafferosteriet"));
   assert.ok(!JSON.stringify(detalj).includes("Kaffebönor"));
   assert.ok(!JSON.stringify(detalj).includes("Kafferosteriet"));
+});
+
+// Sist i filen: backdateringen ändrar restoagentens telemetri för allt
+// som körs efteråt.
+test("7-dagarsfönstret: gamla förslag lämnar räknarna men inte senaste aktivitet", async () => {
+  // Service-vägen backdaterar agentens samtliga förslag till dag -9 —
+  // det låser BÅDE vyns SQL-fönster (created_at > now() - 7 dagar) och
+  // JS-sidans inaktivitetströskel i flottoversikt.
+  await db.query(
+    `UPDATE proposals SET created_at = now() - interval '9 days' WHERE agent_id = $1`,
+    [resto.agent_id],
+  );
+  const flotta = await flottoversikt(db);
+  const rad = flotta.find((r) => r.agent_id === resto.agent_id);
+  assert.ok(rad);
+  assert.equal(rad.forslag_7d, 0);
+  assert.equal(rad.auto_7d, 0);
+  assert.equal(rad.rejected_7d, 0);
+  assert.equal(rad.andel_auto, null);
+  assert.equal(rad.andel_korrigerade, null);
+  // Senaste aktivitet är historik utan fönster — 9 dagar gammal, inte null.
+  assert.ok(rad.senaste_aktivitet !== null);
+  // Aktiv agent vars senaste aktivitet passerat 7 dagar → varningen tänds,
+  // och korrigeringsvarningen släcks med fönstret.
+  assert.ok(rad.varningar.includes("inaktiv_7d"));
+  assert.ok(!rad.varningar.includes("hog_korrigeringsandel"));
 });

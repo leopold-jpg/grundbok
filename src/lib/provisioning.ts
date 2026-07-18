@@ -49,16 +49,29 @@ export async function provisionAgent(
   const module = mall?.module ?? input.module;
   if (!module) throw new Error("module eller mall krävs");
 
-  // Explicit policy vinner; annars kopieras mallens förval till tenantens
-  // policyrad (samma princip som operatörens policy_mallar: mallen är
-  // startvärdet, kärnans rad är enda sanningen).
-  const policy = input.policy ?? mall?.defaultPolicy;
-  if (policy) {
+  // Explicit policy vinner (upsert — anroparen har uttryckligen valt en
+  // autonominivå). Mallens förval är däremot ett STARTVÄRDE (ADR-0004:
+  // kundunikhet bor i autonomipolicyn): det seedar en SAKNAD policyrad
+  // men skriver aldrig över en befintlig — en byrå-tunad policy får inte
+  // tyst ersättas av att operatören provisionerar ytterligare en agent.
+  if (input.policy) {
     await sparaPolicy(db, {
       tenant_id: input.tenantId,
       module,
-      ...policy,
+      ...input.policy,
     });
+  } else if (mall) {
+    const befintlig = await db.query(
+      `SELECT 1 FROM autonomy_policies WHERE tenant_id = $1 AND module = $2`,
+      [input.tenantId, module],
+    );
+    if (!befintlig.rows[0]) {
+      await sparaPolicy(db, {
+        tenant_id: input.tenantId,
+        module,
+        ...mall.defaultPolicy,
+      });
+    }
   }
   // Länka agenten till modulens policyrad (finns via seed eller ovan).
   const p = await db.query<{ id: string }>(

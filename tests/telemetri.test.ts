@@ -14,6 +14,7 @@ import { proposalsPort } from "../src/lib/proposals-port";
 import { handleProposal, decideProposal, type Principal } from "../src/lib/decisions";
 import { körJobb } from "../src/workers/run-agent";
 import { roteraNyckel } from "../src/ytor/operator";
+import { mallRegistret } from "../src/mallar/registry";
 import { kaffefaktura } from "../src/lib/exempel";
 import { exempelProposal } from "./helpers";
 
@@ -48,14 +49,22 @@ async function post(nyckel: string, proposal: Proposal) {
 
 // Restaurangagenten för kund_a — provisioneras EN gång och bär hela
 // telemetrisekvensen nedan (testerna i filen är avsiktligt sekventiella,
-// samma mönster som bokforing-flode.test.ts).
+// samma mönster som bokforing-flode.test.ts). Policyn sätts EXPLICIT
+// (upsert-vägen): kund_a har en seedad fullt-manuell bokforing-policy,
+// och mallens förval seedar bara SAKNADE rader — utan explicit policy
+// hade sekvensens auto-godkännande aldrig kunnat inträffa.
 const resto = await provisionAgent(
   db,
-  { tenantId: "kund_a", mall: "bokforing-restaurang", displayName: "Restoagenten" },
+  {
+    tenantId: "kund_a",
+    mall: "bokforing-restaurang",
+    displayName: "Restoagenten",
+    policy: mallRegistret["bokforing-restaurang"].defaultPolicy,
+  },
   "test:wp12",
 );
 
-test("provisionering ur agentmall: raden pekar på mall + major, policyn kopieras", async () => {
+test("provisionering ur agentmall: raden pekar på mall + major, explicit policy upsertas", async () => {
   const rad = await db.query<{
     module: string;
     template_id: string | null;
@@ -72,6 +81,36 @@ test("provisionering ur agentmall: raden pekar på mall + major, policyn kopiera
   );
   assert.equal(Number(policy.rows[0].max_belopp_ore), 200_000);
   assert.equal(Number(policy.rows[0].min_confidence), 0.85);
+});
+
+test("mallens förval seedar bara SAKNAD policy — en tunad rad skrivs aldrig över", async () => {
+  // kund_a:s bokforing-policy är nu 200 000/0.85 (satt explicit ovan).
+  // Byggmallens förval (0/1) får INTE ersätta den vid mall-provisionering
+  // utan explicit policy — det vore en tyst autonomiändring för tenantens
+  // samtliga bokforing-agenter.
+  await provisionAgent(
+    db,
+    { tenantId: "kund_a", mall: "bokforing-bygg", displayName: "Byggkollegan" },
+    "test:wp12",
+  );
+  const bokforing = await db.query<{ max_belopp_ore: string }>(
+    `SELECT max_belopp_ore FROM autonomy_policies
+     WHERE tenant_id = 'kund_a' AND module = 'bokforing'`,
+  );
+  assert.equal(Number(bokforing.rows[0].max_belopp_ore), 200_000);
+
+  // loner saknar policyrad hos kund_a → lönmallens förval seedas.
+  await provisionAgent(
+    db,
+    { tenantId: "kund_a", mall: "lon", displayName: "Lönagenten" },
+    "test:wp12",
+  );
+  const loner = await db.query<{ max_belopp_ore: string; min_confidence: string }>(
+    `SELECT max_belopp_ore, min_confidence FROM autonomy_policies
+     WHERE tenant_id = 'kund_a' AND module = 'loner'`,
+  );
+  assert.equal(Number(loner.rows[0].max_belopp_ore), 0);
+  assert.equal(Number(loner.rows[0].min_confidence), 1);
 });
 
 test("porten stämplar agent_id ur principalen — aldrig ur payloaden", async () => {
@@ -176,7 +215,10 @@ test("agent_telemetry: pending/auto/rejected/corrected räknas ur proposals", as
     reason: "Fel underlag",
   });
 
-  // 4) p1:s verifikation rättas → p1 räknas som korrigerad.
+  // 4) p1:s verifikation rättas → p1 räknas som korrigerad. Rättelsen
+  //    postas via det INTERNA flödet (agent_id null): corrected_7d = 1
+  //    kan då bara vara originalet p1, aldrig korrektionsförslaget självt
+  //    — räkningens riktning är låst, inte bara dess antal.
   const rattelse = exempelProposal({
     kind: "correction",
     summary: "Rättelse: fel kostnadskonto",
@@ -193,7 +235,15 @@ test("agent_telemetry: pending/auto/rejected/corrected räknas ur proposals", as
       injection_screened: true,
     },
   });
-  await post(resto.nyckel, rattelse);
+  const internPrincipal: Principal = {
+    typ: "intern",
+    tenant_id: "kund_a",
+    module: "*",
+    scopes: ["proposals:write"],
+    namn: "test:rattelse",
+  };
+  const rattelseResultat = await handleProposal(db, internPrincipal, rattelse);
+  assert.equal(rattelseResultat.status, "pending");
   await decideProposal(db, {
     tenantId: "kund_a",
     proposalId: rattelse.id,
@@ -202,7 +252,8 @@ test("agent_telemetry: pending/auto/rejected/corrected räknas ur proposals", as
   });
 
   const efter = await telemetri(resto.agent_id);
-  assert.equal(Number(efter.proposals_7d), forePropos + 4);
+  // p1 + p2 + p3 bär agentens id; rättelsen är intern och räknas inte.
+  assert.equal(Number(efter.proposals_7d), forePropos + 3);
   assert.equal(Number(efter.auto_7d), 1);
   assert.equal(Number(efter.rejected_7d), 1);
   assert.equal(Number(efter.corrected_7d), 1);
