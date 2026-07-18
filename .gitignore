@@ -10,3 +10,4 @@ node_modules/
 # Claude Code-arbetsyta (agent-worktrees m.m.)
 .claude/
 tsconfig.tsbuildinfo
+testdata/underlag/
