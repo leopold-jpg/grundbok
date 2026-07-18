@@ -4,6 +4,13 @@
 **Status**: accepted
 **Beslutsfattare**: Leopold + Claude
 
+> **Not (2026-07-18)**: Release-ett-katalogens mallista (branschmallarna
+> bokforing-bygg/-restaurang/-konsult + lon, WP11) ersätts av
+> funktionsroller med branschpaket — se
+> [ADR-0005](./0005-funktionsmallar-med-branschpaket.md). Kärnbesluten i
+> detta ADR — fast versionerad katalog, ingen fritext per agent,
+> telemetri via vy — gäller oförändrat.
+
 ## Context
 
 Agenter provisioneras ur mallar (ADR-0003). Öppen fråga: får mallens
