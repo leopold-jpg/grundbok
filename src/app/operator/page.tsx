@@ -218,6 +218,10 @@ export default function OperatorSida() {
   const [provKlient, setProvKlient] = useState("");
   const [provMall, setProvMall] = useState("");
   const [provNamn, setProvNamn] = useState("");
+  // AgentDraft: fri beskrivning → serverns regelbaserade rollförslag.
+  const [draftText, setDraftText] = useState("");
+  const [draftSvar, setDraftSvar] = useState("");
+  const [draftArbetar, setDraftArbetar] = useState(false);
   const [provNyckel, setProvNyckel] = useState<{ rubrik: string; nyckel: string } | null>(null);
   const [arbetar, setArbetar] = useState(false);
 
@@ -393,6 +397,34 @@ export default function OperatorSida() {
       setFel(e instanceof Error ? e.message : String(e));
     } finally {
       setArbetar(false);
+    }
+  }
+
+  async function foreslaDraft() {
+    if (draftArbetar || !draftText.trim()) return;
+    setDraftArbetar(true);
+    setFel("");
+    try {
+      const r = await post<{ forslag: { mallId: string; namn: string } | null }>(
+        "/api/operator/agentdraft",
+        { beskrivning: draftText.trim() },
+      );
+      if (r.forslag) {
+        // Förmarkera rollen; namnet är ett förslag och skriver aldrig
+        // över något operatören redan hunnit skriva i steg 3.
+        setProvMall(r.forslag.mallId);
+        setProvNamn((namn) => namn.trim() ? namn : r.forslag!.namn);
+        const mallNamn =
+          katalog?.mallar.find((m) => m.id === r.forslag!.mallId)?.displayName ??
+          r.forslag.mallId;
+        setDraftSvar(`förslag: ${mallNamn} — ändra fritt nedan`);
+      } else {
+        setDraftSvar("ingen roll matchade beskrivningen — välj själv nedan");
+      }
+    } catch (e) {
+      setFel(e instanceof Error ? e.message : String(e));
+    } finally {
+      setDraftArbetar(false);
     }
   }
 
@@ -862,6 +894,33 @@ export default function OperatorSida() {
               klienten och väljs aldrig här (ADR-0005)
             </span>
           </legend>
+          <div className="draft-rad">
+            <input
+              id="prov-draft"
+              type="text"
+              value={draftText}
+              onChange={(e) => {
+                setDraftText(e.target.value);
+                setDraftSvar("");
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  foreslaDraft();
+                }
+              }}
+              placeholder="beskriv fritt: t.ex. bokföring för min byggfirma"
+              aria-label="Beskriv agentens uppgift fritt för ett rollförslag"
+            />
+            <button onClick={foreslaDraft} disabled={draftArbetar || !draftText.trim()}>
+              {draftArbetar ? "Föreslår …" : "Föreslå roll"}
+            </button>
+            {draftSvar && (
+              <span className="tyst" role="status">
+                {draftSvar}
+              </span>
+            )}
+          </div>
           <div className="mallval" role="radiogroup" aria-label="Funktionsroll">
             {(katalog?.mallar ?? []).map((m) => {
               const aktiva = aktivaPaketFor(m);
