@@ -56,6 +56,7 @@ type FlottRad = {
   template_id: string | null;
   template_version: string;
   mall_aktuell_version: string | null;
+  branschpaket: string[];
   status: "active" | "paused" | "canceled";
   forslag_7d: number;
   auto_7d: number;
@@ -92,7 +93,7 @@ type AgentDetalj = {
 
 /** Katalogmetadata från /api/operator/agentmallar — aldrig registret
  *  självt i klienten: systemPrompt/regler ska inte in i en publik bundle. */
-type AgentmallVal = { id: string; displayName: string; version: string };
+type AgentmallVal = { id: string; displayName: string; version: string; branschpaket: string[] };
 
 const VARNINGSTEXT: Record<FlottVarning, string> = {
   inaktiv_7d: "ingen aktivitet 7 d",
@@ -106,10 +107,14 @@ const pct = (x: number | null) => (x === null ? "—" : `${Math.round(x * 100)} 
 const UTAN_MALL = "__utan_mall__";
 
 /** Mall + version för tabellen: registrets exakta version när pekaren
- *  löser, annars major-pekaren (versionsdriften får sin varningschip). */
+ *  löser, annars major-pekaren (versionsdriften får sin varningschip).
+ *  Aktiva branschpaket (ADR-0005) hängs på som +paket — de är en del av
+ *  agentens verksamma regeluppsättning, härledd ur tenanten. */
 const mallEtikett = (r: FlottRad) =>
   r.template_id
-    ? `${r.template_id} ${r.mall_aktuell_version ?? `v${r.template_version}`}`
+    ? `${r.template_id} ${r.mall_aktuell_version ?? `v${r.template_version}`}${r.branschpaket
+        .map((p) => ` +${p}`)
+        .join("")}`
     : `${r.module} (utan mall)`;
 
 const tid = (iso: string) =>
@@ -685,10 +690,12 @@ export default function OperatorSida() {
             <div className="provisionera-rad">
               <select value={nyMall} onChange={(e) => setNyMall(e.target.value)}>
                 <option value="">utan mall (bokforing, manuell policy)</option>
-                <optgroup label="agentmallar — versionerade hjärnor (ADR-0004)">
+                <optgroup label="agentmallar — funktionsroller (ADR-0005)">
                   {agentmallar.map((m) => (
                     <option key={m.id} value={`agentmall:${m.id}`}>
                       {m.displayName} · {m.version}
+                      {m.branschpaket.length > 0 &&
+                        ` · paket via tenant: ${m.branschpaket.join(", ")}`}
                     </option>
                   ))}
                 </optgroup>

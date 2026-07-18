@@ -6,9 +6,10 @@ import { MALL_IDS, mallRegistret } from "@/mallar/registry";
 export const runtime = "nodejs";
 
 // GET /api/operator/agentmallar — katalogens METADATA för provisionerings-
-// valet. Endast id/namn/version: systemPrompt och regler är mallens hjärna
-// och ska aldrig hamna i en publikt servad klient-bundle (registret
-// importeras därför bara på serversidan).
+// valet. Endast id/namn/version/paket-id:n: systemPrompt och regler är
+// mallens hjärna och ska aldrig hamna i en publikt servad klient-bundle
+// (registret importeras därför bara på serversidan). Branschpaket-id:n är
+// metadata på samma nivå som mall-id:n — reglerna i paketen är det inte.
 export async function GET(req: Request) {
   const db = await getDb();
   const krav = await kravOperator(db, req);
@@ -19,6 +20,7 @@ export async function GET(req: Request) {
       id,
       displayName: mallRegistret[id].displayName,
       version: mallRegistret[id].version,
+      branschpaket: mallRegistret[id].branschpaket ?? [],
     })),
   );
 }

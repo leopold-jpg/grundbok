@@ -18,14 +18,14 @@ const db = await createDb();
 
 // Explicit policy (upsert): kund_a:s seedade bokforing-policy är fullt
 // manuell, och mallförval seedar bara saknade rader — sekvensens auto-
-// godkännande kräver att restaurangnivån sätts uttryckligen.
+// godkännande kräver att rutinnivån sätts uttryckligen.
 const resto = await provisionAgent(
   db,
   {
     tenantId: "kund_a",
-    mall: "bokforing-restaurang",
+    mall: "bokforing",
     displayName: "Flottans restoagent",
-    policy: mallRegistret["bokforing-restaurang"].defaultPolicy,
+    policy: mallRegistret.bokforing.defaultPolicy,
   },
   "test:wp13",
 );
@@ -65,10 +65,13 @@ test("flottöversikten: andelar, mall + version ur registret, byrå och tenant",
   assert.equal(rad.display_name, "Flottans restoagent");
   assert.equal(rad.tenant_namn, "Café Exempel AB");
   assert.equal(rad.byra, "Byrån Exempel AB");
-  assert.equal(rad.template_id, "bokforing-restaurang");
+  assert.equal(rad.template_id, "bokforing");
   assert.equal(rad.template_version, "1");
   // Major-pekaren löser mot registrets exakta version.
   assert.equal(rad.mall_aktuell_version, "1.0.0");
+  // ADR-0005: tenant-kontexten aktiverar — kund_a är café-tenant, så
+  // bokföringsrollen bär restaurangpaketet i flottvyn.
+  assert.deepEqual(rad.branschpaket, ["restaurang"]);
   assert.equal(rad.forslag_7d, 3);
   assert.equal(rad.auto_7d, 1);
   assert.equal(rad.rejected_7d, 1);
@@ -89,7 +92,7 @@ test("varningar: korrigeringsandel över tröskeln tänder, aktivitet släcker i
 test("varningar: aktiv agent utan aktivitet flaggas, pausad är väntat tyst", async () => {
   const bygg = await provisionAgent(
     db,
-    { tenantId: "kund_b", mall: "bokforing-bygg", displayName: "Vilande byggagent" },
+    { tenantId: "kund_b", mall: "bokforing", displayName: "Vilande byggagent" },
     "test:wp13",
   );
   let flotta = await flottoversikt(db);
@@ -98,6 +101,8 @@ test("varningar: aktiv agent utan aktivitet flaggas, pausad är väntat tyst", a
   assert.equal(rad.forslag_7d, 0);
   assert.equal(rad.andel_korrigerade, null);
   assert.ok(rad.varningar.includes("inaktiv_7d"));
+  // Samma roll, annan tenant-kontext: kund_b är byggtenant → byggpaketet.
+  assert.deepEqual(rad.branschpaket, ["bygg"]);
 
   // Pausad agent är väntat inaktiv — varningen gäller bara aktiva.
   await pausaAgent(db, "kund_b", bygg.agent_id);
@@ -109,11 +114,11 @@ test("varningar: aktiv agent utan aktivitet flaggas, pausad är väntat tyst", a
 
 test("varningar: mallpekare utanför katalogen är versionsdrift, aldrig en tyst träff", async () => {
   // kund_b, inte kund_a: policyn är per (tenant, modul) och en mall-
-  // provisionering kopierar sina förval dit — kund_a:s restaurangpolicy
-  // ska stå orörd inför detaljtestet nedan.
+  // provisionering kan seeda förval dit — kund_a:s explicit satta
+  // rutinpolicy ska stå orörd inför detaljtestet nedan.
   const drift = await provisionAgent(
     db,
-    { tenantId: "kund_b", mall: "bokforing-konsult", displayName: "Driftagenten" },
+    { tenantId: "kund_b", mall: "leverantorsreskontra", displayName: "Driftagenten" },
     "test:wp13",
   );
   // Service-vägen: simulera en katalog där agentens major försvunnit.
@@ -123,6 +128,9 @@ test("varningar: mallpekare utanför katalogen är versionsdrift, aldrig en tyst
   assert.ok(rad);
   assert.equal(rad.mall_aktuell_version, null);
   assert.ok(rad.varningar.includes("versionsdrift"));
+  // Utan registerdefinition vet vyn inte vad mallen kan aktivera —
+  // driftade agenter visar inga paket i stället för att gissa.
+  assert.deepEqual(rad.branschpaket, []);
 });
 
 test("agentdetalj: policyn, nyckelscopes och senaste förslagen som driftrader", async () => {

@@ -226,9 +226,13 @@ CREATE TABLE IF NOT EXISTS leads (
 -- varje Proposal (payloadens mall_version, kontrakt v0.3).
 --
 -- template_id läggs till utöver kickoff-skissen: mallens id är INTE ett
--- ModuleId (mallen 'bokforing-bygg' instansierar modulen 'bokforing'),
--- så module-kolumnen ensam kan inte identifiera mallen. NULL = agent
--- provisionerad utan mall (före mallkatalogen, eller rå modul-agent).
+-- ModuleId (mallen 'leverantorsreskontra' instansierar modulen
+-- 'bokforing'; ADR-0005: mallar är funktionsroller), så module-kolumnen
+-- ensam kan inte identifiera mallen. NULL = agent provisionerad utan
+-- mall (före mallkatalogen, eller rå modul-agent). Branschpaket lagras
+-- INTE på agentraden — de härleds ur tenants.mall (tenant-kontexten
+-- aktiverar, ADR-0005), så en branschändring hos tenanten slår igenom
+-- utan agentmigration.
 ALTER TABLE agents ADD COLUMN IF NOT EXISTS template_id text;
 ALTER TABLE agents ADD COLUMN IF NOT EXISTS template_version text NOT NULL DEFAULT '1';
 

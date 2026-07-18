@@ -1,7 +1,7 @@
 import { randomBytes } from "node:crypto";
 import type { PGlite } from "@electric-sql/pglite";
 import { sha256Hex, type ModuleId, type ProposalKind } from "@/contracts";
-import { hamtaMallForMajor } from "@/mallar/registry";
+import { hamtaMallForMajor, aktivaBranschpaket, type BranschPaketId } from "@/mallar/registry";
 import { provisionAgent, type ProvisioneradAgent } from "@/lib/provisioning";
 import { auditera } from "@/lib/ledger";
 import { PgliteKo } from "@/lib/queue";
@@ -277,6 +277,10 @@ export type FlottRad = {
   /** Registrets aktuella exakta version för pekaren — null = mall-lös
    *  agent eller versionsdrift (major saknas i katalogen, ADR-0004). */
   mall_aktuell_version: string | null;
+  /** Aktiva branschpaket (ADR-0005): snittet av vad mallen kan aktivera
+   *  och vad tenantens branschmall pekar ut. Tom för mall-lösa agenter
+   *  och branschneutrala roller. */
+  branschpaket: BranschPaketId[];
   status: string;
   forslag_7d: number;
   auto_7d: number;
@@ -302,6 +306,7 @@ export async function flottoversikt(db: PGlite): Promise<FlottRad[]> {
     module: string;
     template_id: string | null;
     template_version: string;
+    tenant_mall: string;
     status: string;
     proposals_7d: string;
     auto_7d: string;
@@ -310,7 +315,8 @@ export async function flottoversikt(db: PGlite): Promise<FlottRad[]> {
     last_activity: Date | string | null;
   }>(
     `SELECT t.agent_id, b.namn AS byra, t.tenant_id, tn.namn AS tenant_namn,
-            t.display_name, t.module, t.template_id, t.template_version, t.status,
+            t.display_name, t.module, t.template_id, t.template_version,
+            tn.mall AS tenant_mall, t.status,
             t.proposals_7d, t.auto_7d, t.rejected_7d, t.corrected_7d, t.last_activity
      FROM agent_telemetry t
      JOIN tenants tn ON tn.id = t.tenant_id
@@ -354,6 +360,10 @@ export async function flottoversikt(db: PGlite): Promise<FlottRad[]> {
       template_id: rad.template_id,
       template_version: rad.template_version,
       mall_aktuell_version: mall?.version ?? null,
+      // Tenant-kontexten aktiverar (ADR-0005) — härleds här, lagras aldrig
+      // på agentraden. Versionsdriftade agenter visar inga paket: utan
+      // registerdefinition vet vi inte vad mallen kan aktivera.
+      branschpaket: mall ? aktivaBranschpaket(mall, rad.tenant_mall).map((p) => p.id) : [],
       status: rad.status,
       forslag_7d: forslag,
       auto_7d: auto,

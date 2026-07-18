@@ -1,8 +1,15 @@
-// Golden-tester för mallregistret (WP11, ADR-0004). LLM:en "mockas" som i
-// resten av sviten: GRUNDBOK_FORCE_FALLBACK tvingar den deterministiska
-// tolkningen, så pipelinen mall → Proposal → kontraktvalidering är låst
-// mot exakta facit. Fullt promptinnehåll per mall är nästa pass — dessa
-// tester låser strukturen och stämpeln, inte prompttexterna.
+// Golden-tester för mallregistret (WP11, ADR-0004 + ADR-0005). LLM:en
+// "mockas" som i resten av sviten: GRUNDBOK_FORCE_FALLBACK tvingar den
+// deterministiska tolkningen, så pipelinen mall → Proposal →
+// kontraktvalidering är låst mot exakta facit. Fullt promptinnehåll per
+// mall är nästa pass — dessa tester låser strukturen och stämpeln, inte
+// prompttexterna.
+//
+// ADR-0005: mallar är FUNKTIONSROLLER; branschregler bor i BRANSCHPAKET
+// aktiverade via tenant-kontexten. ROT-fallet testar paketet,
+// kvittomatchning testar mallen — och kombinationen testas för de
+// kombinationer som har verkliga tenants (bygg, cafe), inte alla
+// teoretiska.
 process.env.GRUNDBOK_FORCE_FALLBACK = "1";
 
 import { test } from "node:test";
@@ -18,10 +25,15 @@ import {
 } from "../src/contracts";
 import {
   MALL_IDS,
+  BRANSCHPAKET_IDS,
   mallRegistret,
+  branschpaketRegistret,
   hamtaMall,
   mallMajor,
   hamtaMallForMajor,
+  paketForTenantMall,
+  aktivaBranschpaket,
+  effektivaRegler,
   type MallDefinition,
 } from "../src/mallar/registry";
 import { tolka } from "../src/lib/extract";
@@ -31,7 +43,7 @@ import { evaluateAutonomy, type PolicyRad } from "../src/lib/decisions";
 import { kaffefaktura, BYGGFAKTURA } from "../src/lib/exempel";
 import { exempelProposal } from "./helpers";
 
-/** Bokföringsmallarnas pipeline: underlagstext → tolka (fallback) →
+/** Bokföringsrollernas pipeline: underlagstext → tolka (fallback) →
  *  kontera → byggBokforingsProposal med mallstämpel. Ingen DB behövs —
  *  dokumentreferensen är en fri uuid i input_refs. */
 async function byggViaMall(
@@ -73,10 +85,10 @@ function valideraKontrakt(p: Proposal): void {
 
 // ================================================================ registret
 
-test("registret: fyra mallar i release ett, korrekt struktur", () => {
+test("registret: fyra funktionsroller i release ett, korrekt struktur", () => {
   assert.deepEqual(
     [...MALL_IDS].sort(),
-    ["bokforing-bygg", "bokforing-konsult", "bokforing-restaurang", "lon"],
+    ["bokforing", "leverantorsreskontra", "lon", "skatt-compliance"],
   );
   for (const id of MALL_IDS) {
     const mall = mallRegistret[id];
@@ -89,6 +101,10 @@ test("registret: fyra mallar i release ett, korrekt struktur", () => {
     for (const regel of mall.regler) {
       assert.ok(regel.id.length > 0 && regel.beskrivning.length > 0);
     }
+    // Deklarerade paket måste finnas i paketregistret.
+    for (const paket of mall.branschpaket ?? []) {
+      assert.ok((BRANSCHPAKET_IDS as readonly string[]).includes(paket));
+    }
     const p = mall.defaultPolicy;
     assert.ok(Number.isInteger(p.max_belopp_ore) && p.max_belopp_ore >= 0);
     assert.ok(p.min_confidence >= 0 && p.min_confidence <= 1);
@@ -96,74 +112,131 @@ test("registret: fyra mallar i release ett, korrekt struktur", () => {
       assert.ok((PROPOSAL_KINDS as readonly string[]).includes(kind));
     }
   }
+  // Skatterollen är compliance-avgränsad och lönen batchad — ingen av dem
+  // auto-godkänner något i release ett.
+  assert.deepEqual(mallRegistret["skatt-compliance"].defaultPolicy.tillatna_kinds, []);
+  assert.deepEqual(mallRegistret.lon.defaultPolicy.tillatna_kinds, []);
 });
 
 test("registret: uppslagning, major-pekare och versionsdrift", () => {
-  assert.equal(hamtaMall("bokforing-bygg")?.displayName, "Bokföring — bygg");
+  assert.equal(hamtaMall("bokforing")?.displayName, "Bokföring");
+  // Branschmallarna från före ADR-0005 har lämnat katalogen — uppslag på
+  // dem är versionsdrift-vägen, aldrig ett undantag.
+  assert.equal(hamtaMall("bokforing-bygg"), null);
   assert.equal(hamtaMall("finns-inte"), null);
   assert.equal(mallMajor("1.2.3"), "1");
-  // Agentens pekare är major — registrets aktuella 1.x.y matchar "1",
-  // en borttagen major är drift och ska ge null, aldrig en tyst träff.
-  assert.equal(hamtaMallForMajor("bokforing-konsult", "1")?.version, "1.0.0");
-  assert.equal(hamtaMallForMajor("bokforing-konsult", "2"), null);
+  assert.equal(hamtaMallForMajor("leverantorsreskontra", "1")?.version, "1.0.0");
+  assert.equal(hamtaMallForMajor("leverantorsreskontra", "2"), null);
   assert.equal(hamtaMallForMajor("finns-inte", "1"), null);
 });
 
-// ========================================================== bokforing-bygg
+// ========================================================== branschpaket
 
-test("golden bygg: BYGGFAKTURA → omvänd byggmoms-form, stämplad bygg@1.0.0", async () => {
-  const mall = mallRegistret["bokforing-bygg"];
+test("branschpaket: bygg och restaurang, regler med hemvist ENDAST i paketet", () => {
+  assert.deepEqual([...BRANSCHPAKET_IDS].sort(), ["bygg", "restaurang"]);
+  for (const id of BRANSCHPAKET_IDS) {
+    const paket = branschpaketRegistret[id];
+    assert.equal(paket.id, id);
+    assert.match(paket.version, /^\d+\.\d+\.\d+$/);
+    assert.ok(paket.regler.length >= 1);
+  }
+  // Bygg-reglerna flyttade UR bygg-stubben (ADR-0005): omvänd byggmoms +
+  // ROT bor i paketet, med lagrum.
+  const bygg = branschpaketRegistret.bygg.regler;
+  assert.ok(bygg.some((r) => r.id === "omvand-byggmoms"));
+  assert.ok(bygg.some((r) => r.id === "rot-avdrag"));
+  for (const r of bygg) assert.ok(r.lagrum && r.lagrum.length > 0);
+
+  // Regel-hemvist (tumregeln): en paketregel får inte samtidigt ligga i
+  // någon funktionsmall — då hade den gällt fler branscher och hört hemma
+  // i mallen.
+  const paketRegelIds = new Set(
+    Object.values(branschpaketRegistret).flatMap((p) => p.regler.map((r) => r.id)),
+  );
+  for (const mall of Object.values(mallRegistret)) {
+    for (const regel of mall.regler) {
+      assert.ok(!paketRegelIds.has(regel.id), `${regel.id} bor i både mall och paket`);
+    }
+  }
+});
+
+test("branschpaket: tenant-kontexten aktiverar — bygg→bygg, cafe→restaurang, okänd→inga", () => {
+  assert.deepEqual(paketForTenantMall("bygg"), ["bygg"]);
+  assert.deepEqual(paketForTenantMall("cafe"), ["restaurang"]);
+  assert.deepEqual(paketForTenantMall("konsultbyra"), []);
+  assert.deepEqual(paketForTenantMall("helt-okand"), []);
+
+  const bokforing = mallRegistret.bokforing;
+  // Snittet mall × tenant: bokföringsrollen hos byggtenant får bygg-paketet…
+  assert.deepEqual(
+    aktivaBranschpaket(bokforing, "bygg").map((p) => p.id),
+    ["bygg"],
+  );
+  // …och en branschneutral roll (lon) aktiverar inget alls, oavsett tenant.
+  assert.deepEqual(aktivaBranschpaket(mallRegistret.lon, "bygg"), []);
+});
+
+test("branschpaket: effektiva regler = mallens + aktiva paketens, utan id-kollisioner", () => {
+  const bokforing = mallRegistret.bokforing;
+  const hosBygg = effektivaRegler(bokforing, "bygg").map((r) => r.id);
+  // Funktionsreglerna följer med till ALLA branscher…
+  assert.ok(hosBygg.includes("kvittomatchning"));
+  // …och byggpaketets regler läggs till hos byggtenanten…
+  assert.ok(hosBygg.includes("omvand-byggmoms") && hosBygg.includes("rot-avdrag"));
+  // …men aldrig restaurangens.
+  assert.ok(!hosBygg.includes("livsmedelsmoms"));
+
+  const hosKonsult = effektivaRegler(bokforing, "konsultbyra").map((r) => r.id);
+  assert.ok(hosKonsult.includes("kvittomatchning"));
+  assert.ok(!hosKonsult.includes("omvand-byggmoms"));
+
+  // Inga dubbla regel-id:n i någon verklig kombination.
+  for (const tenantMall of ["bygg", "cafe", "konsultbyra"]) {
+    for (const mall of Object.values(mallRegistret)) {
+      const ids = effektivaRegler(mall, tenantMall).map((r) => r.id);
+      assert.equal(new Set(ids).size, ids.length, `${mall.id}×${tenantMall} har regelkollision`);
+    }
+  }
+});
+
+// ============================================ bokforing × branschpaket bygg
+
+test("golden bokforing×bygg: BYGGFAKTURA → omvänd byggmoms-form, stämplad bokforing@1.0.0", async () => {
+  const mall = mallRegistret.bokforing;
   const { proposal } = await byggViaMall(mall, BYGGFAKTURA, "kund_b");
   // Samma facit som kontering.test.ts (ML 16 kap. 13 §): säljaren
-  // fakturerar utan moms, köparen redovisar ut- OCH ingående.
+  // fakturerar utan moms, köparen redovisar ut- OCH ingående. Regeln bor
+  // nu i branschpaketet 'bygg' — aktivt för kund_b (tenants.mall 'bygg').
   assert.deepEqual(tuples(proposal), [
     ["4425", 1_000_000, 0],
     ["2440", 0, 1_000_000],
     ["2614", 0, 250_000],
     ["2647", 250_000, 0],
   ]);
-  assert.equal(proposal.mall_id, "bokforing-bygg");
+  assert.equal(proposal.mall_id, "bokforing");
   assert.equal(proposal.mall_version, "1.0.0");
   assert.equal(proposal.module, "bokforing");
   valideraKontrakt(proposal);
 });
 
-test("golden bygg: mallens policy auto-godkänner aldrig — allt attesteras", async () => {
-  const mall = mallRegistret["bokforing-bygg"];
-  const { proposal } = await byggViaMall(mall, BYGGFAKTURA, "kund_b");
-  // Även perfekt konfidens och känd motpart: tillatna_kinds är tom.
-  const utfall = evaluateAutonomy({ ...proposal, confidence: 1 }, policyRad(mall, "kund_b"), true);
-  assert.equal(utfall.auto, false);
-  assert.ok(utfall.missade.some((v) => v.includes("tillåtna kinds")));
-});
+// ============================================ bokforing × branschpaket resto
 
-test("golden bygg: reglerna omvänd byggmoms + ROT finns med lagrum", () => {
-  const regler = mallRegistret["bokforing-bygg"].regler.map((r) => r.id);
-  assert.ok(regler.includes("omvand-byggmoms"));
-  assert.ok(regler.includes("rot-avdrag"));
-  for (const r of mallRegistret["bokforing-bygg"].regler) {
-    assert.ok(r.lagrum && r.lagrum.length > 0);
-  }
-});
-
-// ==================================================== bokforing-restaurang
-
-test("golden restaurang: kaffefaktura juli (6 %) → 4010/2641/2440, stämplad", async () => {
-  const mall = mallRegistret["bokforing-restaurang"];
+test("golden bokforing×restaurang: kaffefaktura juli (6 %) → 4010/2641/2440, stämplad", async () => {
+  const mall = mallRegistret.bokforing;
   const { proposal, forslag } = await byggViaMall(mall, kaffefaktura("2026-07-08", 6), "kund_a");
   assert.deepEqual(tuples(proposal), [
     ["4010", 100_000, 0],
     ["2641", 6_000, 0],
     ["2440", 0, 106_000],
   ]);
-  assert.equal(proposal.mall_id, "bokforing-restaurang");
+  assert.equal(proposal.mall_id, "bokforing");
   assert.equal(proposal.mall_version, "1.0.0");
   assert.equal(proposal.confidence, bokforingsKonfidens("fallback", forslag));
   valideraKontrakt(proposal);
 });
 
-test("golden restaurang: mars-faktura (12 %) → regelversioneringen följer med genom mallen", async () => {
-  const mall = mallRegistret["bokforing-restaurang"];
+test("golden bokforing×restaurang: mars-faktura (12 %) → regelversioneringen följer med", async () => {
+  const mall = mallRegistret.bokforing;
   const { proposal } = await byggViaMall(mall, kaffefaktura("2026-03-15", 12), "kund_a");
   assert.deepEqual(tuples(proposal), [
     ["4010", 100_000, 0],
@@ -174,8 +247,10 @@ test("golden restaurang: mars-faktura (12 %) → regelversioneringen följer med
   valideraKontrakt(proposal);
 });
 
-test("golden restaurang: fallback-konfidens går till kön, hög konfidens auto-bokförs", async () => {
-  const mall = mallRegistret["bokforing-restaurang"];
+// ==================================================== bokforing: policy
+
+test("golden bokforing: fallback-konfidens går till kön, hög konfidens auto-bokförs", async () => {
+  const mall = mallRegistret.bokforing;
   const { proposal } = await byggViaMall(mall, kaffefaktura("2026-07-08", 6), "kund_a");
   // Fallback-motorns 0.7 når inte policyns 0.85 — förslaget köas.
   const forsiktigt = evaluateAutonomy(proposal, policyRad(mall), true);
@@ -188,23 +263,29 @@ test("golden restaurang: fallback-konfidens går till kön, hög konfidens auto-
   assert.deepEqual(säkert.missade, []);
 });
 
-// ======================================================= bokforing-konsult
+test("golden bokforing: agentens major-pekare löser mot registrets 1.x.y", () => {
+  const mall = mallRegistret.bokforing;
+  assert.equal(mallMajor(mall.version), "1");
+  assert.equal(hamtaMallForMajor(mall.id, mallMajor(mall.version)), mall);
+});
 
-test("golden konsult: kaffefaktura genom konsultmallen, stämplad konsult@1.0.0", async () => {
-  const mall = mallRegistret["bokforing-konsult"];
+// ====================================================== leverantorsreskontra
+
+test("golden reskontra: kaffefaktura genom reskontrarollen, stämplad leverantorsreskontra@1.0.0", async () => {
+  const mall = mallRegistret.leverantorsreskontra;
   const { proposal } = await byggViaMall(mall, kaffefaktura("2026-07-08", 6), "kund_a");
   assert.deepEqual(tuples(proposal), [
     ["4010", 100_000, 0],
     ["2641", 6_000, 0],
     ["2440", 0, 106_000],
   ]);
-  assert.equal(proposal.mall_id, "bokforing-konsult");
+  assert.equal(proposal.mall_id, "leverantorsreskontra");
   assert.equal(proposal.mall_version, "1.0.0");
   valideraKontrakt(proposal);
 });
 
-test("golden konsult: beloppsgränsen 1 000 kr är enda hindret vid hög konfidens", async () => {
-  const mall = mallRegistret["bokforing-konsult"];
+test("golden reskontra: beloppsgränsen 1 000 kr är enda hindret vid hög konfidens", async () => {
+  const mall = mallRegistret.leverantorsreskontra;
   const { proposal } = await byggViaMall(mall, kaffefaktura("2026-07-08", 6), "kund_a");
   // 1 060 kr > 1 000 kr-gränsen — allt annat passerar.
   const utfall = evaluateAutonomy({ ...proposal, confidence: 0.95 }, policyRad(mall), true);
@@ -213,10 +294,32 @@ test("golden konsult: beloppsgränsen 1 000 kr är enda hindret vid hög konfide
   assert.ok(utfall.missade[0].includes("belopp"));
 });
 
-test("golden konsult: agentens major-pekare löser mot registrets 1.x.y", () => {
-  const mall = mallRegistret["bokforing-konsult"];
-  assert.equal(mallMajor(mall.version), "1");
-  assert.equal(hamtaMallForMajor(mall.id, mallMajor(mall.version)), mall);
+test("golden reskontra: mottagarkontroll och dubblettdetektering bor i rollen", () => {
+  const regler = mallRegistret.leverantorsreskontra.regler.map((r) => r.id);
+  assert.ok(regler.includes("mottagarkontroll"));
+  assert.ok(regler.includes("dubblettdetektering"));
+  // Byggpaketet är deklarerat: omvänd byggmoms gäller även reskontran
+  // hos en byggtenant.
+  assert.deepEqual(
+    aktivaBranschpaket(mallRegistret.leverantorsreskontra, "bygg").map((p) => p.id),
+    ["bygg"],
+  );
+});
+
+// ======================================================= skatt-compliance
+
+test("golden skatt-compliance: compliance-avgränsad roll som aldrig auto-godkänner", async () => {
+  const mall = mallRegistret["skatt-compliance"];
+  assert.equal(mall.module, "skatt-juridik");
+  const regler = mall.regler.map((r) => r.id);
+  assert.ok(regler.includes("momsdeklaration-avstamning"));
+  assert.ok(regler.includes("deklarationsfrister"));
+  // Ingen rådgivning i release ett (ADR-0005) — och ingen autonomi:
+  // även perfekt konfidens och känd motpart attesteras.
+  const { proposal } = await byggViaMall(mallRegistret.bokforing, BYGGFAKTURA, "kund_b");
+  const utfall = evaluateAutonomy({ ...proposal, confidence: 1 }, policyRad(mall, "kund_b"), true);
+  assert.equal(utfall.auto, false);
+  assert.ok(utfall.missade.some((v) => v.includes("tillåtna kinds")));
 });
 
 // ===================================================================== lon
@@ -307,11 +410,23 @@ test("v0.3: zod strippar inte stämpeln — omhashad parsed payload är identisk
   // Regressionsvakt för kontraktets farligaste fälla: handleProposal
   // hashar om parsed.data, så ett fält som saknas i zod-schemat strippas
   // tyst och fäller hashverifieringen vid porten.
-  const mall = mallRegistret["bokforing-bygg"];
+  const mall = mallRegistret.bokforing;
   const { proposal } = await byggViaMall(mall, BYGGFAKTURA, "kund_b");
   const parsed = ProposalSchema.parse(proposal);
-  assert.equal(parsed.mall_id, "bokforing-bygg");
+  assert.equal(parsed.mall_id, "bokforing");
   assert.equal(hashProposal(parsed as Proposal), proposal.hash);
+});
+
+test("v0.3: historisk stämpel från en mall som lämnat katalogen validerar", () => {
+  // Kontraktet äger inte katalogen: förslag stämplade med branschmallarna
+  // från före ADR-0005 är giltig historik, aldrig ett valideringsfel.
+  const historisk = exempelProposal({
+    contract_version: "0.3.0",
+    mall_id: "bokforing-restaurang",
+    mall_version: "1.0.0",
+  });
+  assert.ok(ProposalSchema.safeParse(historisk).success);
+  assert.equal(hamtaMall("bokforing-restaurang"), null);
 });
 
 test("v0.3: ensam stämpelhalva avvisas — mall_id och mall_version i par", () => {
@@ -326,7 +441,7 @@ test("v0.3: ensam stämpelhalva avvisas — mall_id och mall_version i par", () 
 test("v0.3: mall_version måste vara exakt semver, inte major-pekaren", () => {
   const trasig = exempelProposal({
     contract_version: "0.3.0",
-    mall_id: "bokforing-bygg",
+    mall_id: "bokforing",
     mall_version: "1",
   });
   assert.equal(ProposalSchema.safeParse(trasig).success, false);

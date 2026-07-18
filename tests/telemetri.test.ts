@@ -47,19 +47,19 @@ async function post(nyckel: string, proposal: Proposal) {
   return proposalsPort(db, `Bearer ${nyckel}`, proposal);
 }
 
-// Restaurangagenten för kund_a — provisioneras EN gång och bär hela
-// telemetrisekvensen nedan (testerna i filen är avsiktligt sekventiella,
-// samma mönster som bokforing-flode.test.ts). Policyn sätts EXPLICIT
-// (upsert-vägen): kund_a har en seedad fullt-manuell bokforing-policy,
-// och mallens förval seedar bara SAKNADE rader — utan explicit policy
-// hade sekvensens auto-godkännande aldrig kunnat inträffa.
+// Bokföringsagenten för kund_a (café-tenant) — provisioneras EN gång och
+// bär hela telemetrisekvensen nedan (testerna i filen är avsiktligt
+// sekventiella, samma mönster som bokforing-flode.test.ts). Policyn sätts
+// EXPLICIT (upsert-vägen): kund_a har en seedad fullt-manuell
+// bokforing-policy, och mallens förval seedar bara SAKNADE rader — utan
+// explicit policy hade sekvensens auto-godkännande aldrig kunnat inträffa.
 const resto = await provisionAgent(
   db,
   {
     tenantId: "kund_a",
-    mall: "bokforing-restaurang",
+    mall: "bokforing",
     displayName: "Restoagenten",
-    policy: mallRegistret["bokforing-restaurang"].defaultPolicy,
+    policy: mallRegistret.bokforing.defaultPolicy,
   },
   "test:wp12",
 );
@@ -71,7 +71,7 @@ test("provisionering ur agentmall: raden pekar på mall + major, explicit policy
     template_version: string;
   }>(`SELECT module, template_id, template_version FROM agents WHERE id = $1`, [resto.agent_id]);
   assert.equal(rad.rows[0].module, "bokforing");
-  assert.equal(rad.rows[0].template_id, "bokforing-restaurang");
+  assert.equal(rad.rows[0].template_id, "bokforing");
   // Major-pekare — aldrig exakt version på agentraden (ADR-0004).
   assert.equal(rad.rows[0].template_version, "1");
 
@@ -85,12 +85,13 @@ test("provisionering ur agentmall: raden pekar på mall + major, explicit policy
 
 test("mallens förval seedar bara SAKNAD policy — en tunad rad skrivs aldrig över", async () => {
   // kund_a:s bokforing-policy är nu 200 000/0.85 (satt explicit ovan).
-  // Byggmallens förval (0/1) får INTE ersätta den vid mall-provisionering
+  // Reskontrarollen delar modul (bokforing) men har försiktigare förval
+  // (100 000/0.9) — det får INTE ersätta raden vid mall-provisionering
   // utan explicit policy — det vore en tyst autonomiändring för tenantens
   // samtliga bokforing-agenter.
   await provisionAgent(
     db,
-    { tenantId: "kund_a", mall: "bokforing-bygg", displayName: "Byggkollegan" },
+    { tenantId: "kund_a", mall: "leverantorsreskontra", displayName: "Reskontrakollegan" },
     "test:wp12",
   );
   const bokforing = await db.query<{ max_belopp_ore: string }>(
@@ -175,7 +176,7 @@ test("workern: mallstämpel i payloaden + agent_id på raden via agentens mallpe
   );
   assert.equal(rad.rows[0].agent_id, resto.agent_id);
   // Agentens major-pekare '1' → registrets exakta 1.0.0 på förslaget.
-  assert.equal(rad.rows[0].payload.mall_id, "bokforing-restaurang");
+  assert.equal(rad.rows[0].payload.mall_id, "bokforing");
   assert.equal(rad.rows[0].payload.mall_version, "1.0.0");
   assert.equal(rad.rows[0].payload.contract_version, "0.3.0");
 });
@@ -258,13 +259,13 @@ test("agent_telemetry: pending/auto/rejected/corrected räknas ur proposals", as
   assert.equal(Number(efter.rejected_7d), 1);
   assert.equal(Number(efter.corrected_7d), 1);
   assert.ok(efter.last_activity !== null);
-  assert.equal(efter.template_id, "bokforing-restaurang");
+  assert.equal(efter.template_id, "bokforing");
 });
 
 test("agent_telemetry: tenant-scopad läsning som agents (RLS via security_invoker)", async () => {
   const bygg = await provisionAgent(
     db,
-    { tenantId: "kund_b", mall: "bokforing-bygg", displayName: "Byggagenten" },
+    { tenantId: "kund_b", mall: "bokforing", displayName: "Byggagenten" },
     "test:wp12",
   );
 
@@ -287,6 +288,6 @@ test("nyckelrotation bevarar mallpekaren (Bugbot-fällan i roteraNyckel)", async
     `SELECT template_id, template_version FROM agents WHERE id = $1`,
     [roterad.agent_id],
   );
-  assert.equal(rad.rows[0].template_id, "bokforing-restaurang");
+  assert.equal(rad.rows[0].template_id, "bokforing");
   assert.equal(rad.rows[0].template_version, "1");
 });
