@@ -16,11 +16,15 @@ kaskadordning:
    `--r-*` (radier), `--tracking-*`, `--dur-*`/`--ease-*`, semantiska
    färgslots. Brand-neutral; ändras inte av identitetsbyten.
 2. **Studio-skinnet** — varm papper/terracotta. GAMMAL identitet; bär
-   fortfarande admin//byra//operator via globals.css tills
-   arbetsyte-passet. Rörs inte förrän D2.
+   numera ENDAST adminkonsolen via globals.css tills dess eget pass.
 3. **Grundbok-skinnet** — vit/blå (riktningsbytet 2026-07-11).
    GÄLLANDE identitet. Ligger på `:root` så varje yta når tokens utan
    lokal deklaration.
+4. **Arbetsyte-mappningen** (D2-passet 2026-07-18) — `main.byra` och
+   `main.operator` mappar grammatik-slotsen (`--bg/--fg/--accent/--ring`
+   …) till grundbok-värden, scopat per yta enligt publik-mönstret.
+   Mappningen bor i tokenfilen (inte i yte-CSS:en) så källan förblir EN;
+   globals.css-klasserna byter därmed skinn utan att adminkonsolen rörs.
 
 Regler:
 
@@ -29,7 +33,8 @@ Regler:
   borttagna och får inte återuppstå.
 - Mono-kedjan (`--font-mono` med IBM Plex Mono först) scopas i
   tokenfilen till ytor som fäster `plexMono.variable` på `<main>`
-  (`main.publik`, `main.login-sida` — via `src/app/_publik/fonter.ts`).
+  (`main.publik`, `main.login-sida`, `main.byra`, `main.operator` — via
+  `src/app/_publik/fonter.ts`).
   Ny yta som ska visa mono-värden: fäst variabeln och lägg till
   selektorn i tokenfilen.
 - `--font-sans`/`--font-serif` sätts i globals.css `:root` med
@@ -55,6 +60,7 @@ Regler:
 | `--bla-djup` | `#1D4ED8` | Accent-hover |
 | `--bla-ljus` | `#60A5FA` | Ljus blå detalj i illustrationer |
 | `--gron` | `#15803D` | ENDAST status |
+| `--varning` | `#B45309` | ENDAST status på arbetsytorna (flaggor, nyckelvarning) |
 | `--marin` | `#0B1B34` | Mörk kontrastyta (sidfoten) |
 | `--marin-fg` / `--marin-mjuk` / `--marin-linje` | `#F8FAFC` / `#94A3B8` / `rgba(148,163,184,0.22)` | Förgrund/sekundär/kant på marin |
 | `--fel` | `#DC2626` | Felmeddelanden |
@@ -70,9 +76,11 @@ Regler:
   `var(--…)` — verifierat: noll hex i `_publik/` + page.tsx (enda `#`
   är hash-textinnehållet `"#9f2c…"`). Illustrationer använder max EN
   blå accentdetalj per motiv; grönt endast som status-bock.
-- Kanonpaletten saknar medvetet varningsfärg (amber). Behövs en på
-  arbetsytorna är det ett öppet designbeslut i D2 — inte ett arv från
-  studio-skinnets `--warning`.
+- **Varningsfärgen är beslutad i D2** (2026-07-18): `--varning #B45309`
+  (amber-700, AA: 5,0:1 på vitt, 4,7:1 på `--yta-is`) finns i kanon för
+  arbetsytornas statusbehov — flaggkanter, avvikelsemarkörer,
+  engångsnyckel-varningen. Som grönt: ENDAST status, aldrig dekor, och
+  den används inte på publika ytan.
 
 ## 3. Typografi
 
@@ -368,93 +376,95 @@ Inget av detta är prejudikat; åtgärdas löpande eller i D2:
 - DESIGN-BRIEF v4 §Struktur p.3 nämner fortfarande "kurva" — v7 tog
   bort kurvan medvetet; briefen bör uppdateras vid nästa revision.
 
-## 9. Audit inför arbetsyte-passet (D2) — ÅTGÄRDAS INTE nu
+## 9. Audit inför arbetsyte-passet (D2) — status
 
-*Ögonblicksbild 2026-07-14 mot kanon ovan. Radhänvisningar avser
-dagens filer.*
+*Ögonblicksbild 2026-07-14 mot kanon ovan; statusuppdaterad 2026-07-18
+i D2-passet (branch design-audit): /byra och /operator är flyttade till
+grundbok-skinnet. Adminkonsolen byggs om i en parallell session och
+står medvetet kvar på studio-skinnet; /login-punkterna är öppna.*
 
 ### Gemensamt (globals.css delas av admin, byra, operator)
 
-- **Hela arbetsytelagret står på studio-skinnet** — bytet är
-  systemiskt, inte radvis. byra.css/operator.css dubbeldefinierar
-  inget (rätt mekanik, fel skin): `--bg/--fg/--accent/--border/--success`
-  resolvar till varm papper `#F7F1E8` / terracotta `#B0532E` /
-  varmgrön `#4E7A4A`. Kärnåtgärd i D2 är på skin-nivå (mappa
-  grammatik-slots → grundbok-värden eller scopa om) — då försvinner
-  majoriteten av färg-/skuggavvikelserna i ett slag. Beslut krävs:
-  flytta globals-basen för alla arbetsytor samtidigt, eller låta varje
-  yta scopa sig själv (publik-mönstret).
-- Det en omskinning INTE löser (kräver CSS-ändringar): serif som
-  bärande rubrikfont (`.steg-titel`/`.steg-nr`/`.wordmark` 34px),
-  mono-chips för löptext (`.chip`), etikettvikter 400/500 (kanon 600),
-  kort utan skugga, reduced-motion-block saknas helt, inputs 13–14px
-  (iOS-zoom), kontrastbrott `--fg-subtle` `#9A8B76` på varm papper
-  ≈ 2,9:1 (under AA) för all sekundärtext, mono-kedjan (IBM Plex Mono)
-  inte scopad till arbetsytorna — siffror/hash renderas i systemmono.
-- Basstorlek: globals body 15px vs publika ytans 16px — ta ställning i
-  D2. Maxbredd: 980px (arv) vs publika 1120px — beslutas mot
-  `docs/design-referens/arbetsyta/`.
+- **LÖST för /byra + /operator (2026-07-18).** Beslutet blev
+  publik-mönstret: varje yta scopar sig själv. `main.byra` och
+  `main.operator` mappar grammatik-slotsen till grundbok-värden i
+  design.tokens.css (§1 lager 4) — globals.css är orörd och
+  adminkonsolen ligger kvar på studio-skinnet tills sitt eget pass.
+  Varm papper/terracotta/varmgrön försvann därmed från båda ytorna i
+  ett slag; flaggor/varningar använder kanonens nya `--varning` (§2).
+  html/body ligger utanför `<main>` och bär studio-bakgrunden för
+  adminens skull — ytorna tar sidbasen med `html:has(main.byra)`/
+  `body:has(main.byra)` (resp. operator) och sätter `color` på main
+  så studio-bläcket inte ärvs in.
+- **LÖST (CSS-ändringarna omskinningen inte nådde):** serif som
+  bärande rubrikfont (`.steg-titel`/`.steg-nr` → Inter 600; ordmärket
+  behåller serifen som varumärkeskrydda enligt §3), mono-chips för
+  löptext (`.chip` → sans; ENDAST verkliga värden bär `.chip.tal` i
+  mono), etikettvikter → 600 / 0.08em, kortskuggor (`--skugga-kort`),
+  reduced-motion-block per yta, inputs ≥16px, kontrastbrottet
+  `--fg-subtle` (→ `--ink-svag`, 4,8:1 på vitt), mono-kedjan scopad
+  till `main.byra`/`main.operator` (`plexMono.variable` på `<main>`).
+- **Beslutade mått (D2):** basstorlek 16px och maxbredd 1120px — samma
+  som publika ytan, scopat per yta. globals 15px/980px gäller
+  fortfarande adminkonsolen tills dess pass.
 
-### /byra (byra.css + byra/page.tsx)
+### /byra (byra.css + byra/page.tsx) — ÅTGÄRDAT 2026-07-18
 
-- Terracotta läcker överallt: attest-knappen `button.godkann`
-  (produktens juridiska poäng!) är `#B0532E`, aktiv fliks underkant,
-  antal-pill, checkboxar, rättelse-tagg, steg-nr, ordmärkets em,
-  fokusringar (`--ring`).
-- `button.primar` (Tolka/Fråga/Spara) är varm brunsvart `#221A12` —
-  kanon: blå CTA.
-- Chattbubblan `.bubbla.konsult` varm beige `#EBE0CF` — kanon: isblått.
-- Flaggor/markörer i amber `#B07A1E` på varm sänka — kanonpalett
-  saknar warning; medvetet beslut krävs i D2.
-- Typografi: `.steg-titel` serif 22px bär alla flikrubriker;
-  `.policy-namn` serif 19px; `.bokford .stor` serif 20px;
-  verifikationsnumret (V1, V2 …) i SERIF 18px — dubbelfel, kanon är
-  mono (jfr publik `.ver-nr` mono 700). `.chip` (mono) bär löptext:
-  modulnamn, klientnamn, "policybeslut", skill@version. Intagets
-  textarea mono 13px = kvitto-manér utanför kedje-scenen. Etiketter
-  400/500 med 0.04em.
-- Kort: `.steg`/`.ko-kort`/`.verifikation` utan skugga på varm yta;
-  `.verifikation`-blocket duplicerat byra.css ↔ globals.css
-  (städtillfälle).
-- Spacing: mikromått utanför skalan (1px 7px, 2px 8px, 3px 10px).
-- A11y: `window.prompt` för avvisningsmotivering (ostylat,
-  skärmläsarfientligt — attestkön har redan tillgängligt inline-mönster
-  för samma sak); inputs 13–14px; kontrastbrotten ovan.
-- Berättar: konfidens i två skalor på samma yta ("92 %" i kön/chatten,
-  "0.92" i förslags-chipen) — välj en; demo-datumknapparna
-  "15 mars/8 juli 2026" är omärkt demo-regi (märk som exempel);
-  engelsk säkerhetsjargong i steg-not ("untrusted input …") annonserar
-  det injektionsflaggan redan visar.
-- **Bevara i ombyggnaden**: mobilhanteringen (skrollbara flikar,
+- **LÖST via skin-mappningen:** terracottan borta — `button.godkann`,
+  aktiv fliks underkant, antal-pill, checkboxar, rättelse-tagg,
+  steg-nr, ordmärkets em och fokusringarna (`--ring`) resolvar till
+  `--bla`; `button.primar` (Tolka/Fråga/Spara) är blå CTA;
+  chattbubblan `.bubbla.konsult` är isblå (`--yta-is`);
+  flaggor/markörer använder `--varning`.
+- **LÖST typografi:** `.steg-titel`/`.steg-nr` Inter 600 18px (som
+  h2), `.policy-namn` Inter 600 16px, verifikationsnumret mono 700
+  tabular-nums (jfr publik `.ver-nr`), `.chip` sans — värde-chips
+  (hash, belopp, saldo, extern ref) bär `.chip.tal` i IBM Plex Mono —
+  intagets textarea sans 16px, etiketter 600 / 0.08em.
+- **LÖST kort/spacing:** `.steg`/`.ko-kort`/`.verifikation`/`.bokford`
+  bär `--skugga-kort`; antal-pillens mikromått ersatta med skalvärden.
+  Kvarstår: `.verifikation`-dubbletten byra.css ↔ globals.css städas
+  när globals blir adminens ensak (adminpasset).
+- **LÖST a11y:** `window.prompt` ersatt med attestkons tillgängliga
+  inline-mönster även i intaget; inputs/textarea/select ≥16px; h1
+  (`.sr-rubrik`) + h2-hierarki; `:focus-visible` med blå ring på
+  knappar och flikar; labelns `all: unset` (som nollställde fokus)
+  borttagen.
+- **LÖST berättar:** konfidens i EN skala (procent) överallt;
+  demo-datumknapparna märkta "exempeldatum:"; engelska
+  säkerhetsjargongen ersatt med "underlaget behandlas som data,
+  aldrig som instruktion".
+- **Bevarat enligt listan:** mobilhanteringen (skrollbara flikar,
   full-bredds attestknapp <600px, overflow-x på verifikationskort),
   aria-labels på sifferinputs, htmlFor-kopplade checkboxar,
   401-hanteringen, attest-språket ("att attestera", aldrig
-  "proposals"). Tre kanonregler hålls redan: ingen glass, inget
-  kvitto-manér (utom textarean), inga påhittade siffror.
+  "proposals"), ingen glass, inget kvitto-manér, inga påhittade
+  siffror.
 
-### /operator (operator.css + operator/page.tsx)
+### /operator (operator.css + operator/page.tsx) — ÅTGÄRDAT 2026-07-18
 
-- Samma systemiska studio-skin (varma ytor, terracotta fokus/checkbox/
-  ordmärkes-em, `button.primar` brunsvart för "Provisionera agent",
-  varm grön/röd/amber).
-- `.bokford` (grön statuskant) återanvänds som container för
-  nyckel-avslöjandet — grönt på något som inte är status: bryter
-  "grönt ENDAST status".
-- Typografi: sektionsrubriker i serif 22px; hälsokortens VÄRDEN (rena
-  siffror + tidsstämpel) i serif 28px — dubbelfel, ska vara mono;
-  scope-chips i mono (löptext); etiketter 400/500.
-- Kort: `.halsa-kort` radie `--r-md` (10px) mot kortnivån `--r-lg`;
-  ingen skugga.
-- A11y (allvarligast på denna yta): bolagsval via `onClick` på `<tr>`
-  utan tabIndex/role/tangentbordshantering — hela agent-sektionen
-  onåbar utan mus; ingen rubrikhierarki alls (h1–h6 saknas, allt är
-  div/span); nyckelvarningen "kopiera nu …" 13px amber ≈ 3,7:1 (under
-  AA); inputs 14px; kontrastbrott på all tertiärtext.
-- Sju inline-styles i JSX inkl. `style={{ all: "unset" }}` på
-  checkbox-labels (nollställer även fokus-stil).
-- Berättar: föredömligt — endast driftaggregat (aldrig belopp/
-  motparter), ärliga tomlägen, ärlig nyckel-copy, inga påhittade
-  siffror. Inga berättar-avvikelser.
+- **LÖST via skin-mappningen:** studio-skinnet borta — fokus/checkbox/
+  ordmärkes-em blå, `button.primar` ("Provisionera agent") blå CTA,
+  status i kanonens `--gron`/`--fel`/`--varning`.
+- **LÖST:** nyckel-avslöjandet flyttat från `.bokford` till egen
+  `.nyckel-avslojande` (blå markeringskant) — grönt är åter ENDAST
+  status.
+- **LÖST typografi:** sektionsrubriker Inter 600 18px (h2);
+  hälsokortens värden mono 26px tabular-nums; scope-chips sans
+  (löptext-beslutet); etiketter 600 / 0.08em.
+- **LÖST kort:** `.halsa-kort` radie `--r-lg` + `--skugga-kort`;
+  `.steg` bär `--skugga-kort`.
+- **LÖST a11y:** bolagsvalet är tangentbordsnåbart — klientbolags-
+  cellen bär en riktig `<button className="valj-bolag">` med
+  `aria-pressed` och blå `:focus-visible`-ring (radens onClick är kvar
+  som större pekyta); rubrikhierarki h1 (`.sr-rubrik`) + h2;
+  nyckelvarningen i `--varning` (5,0:1 på vitt, AA); inputs/select
+  ≥16px; tertiärtexten via `--ink-svag` (4,8:1).
+- **LÖST:** alla sju inline-styles ersatta med klasser
+  (`.nyckel-avslojande`, `.nyckel-kopiera`, `.svep`, `.atgarder`);
+  `all: unset` på checkbox-labels borttagen.
+- **Berättar: föredömligt redan innan** — endast driftaggregat, ärliga
+  tomlägen, ärlig nyckel-copy, inga påhittade siffror. Oförändrat.
 
 ### /login (login.css + login/page.tsx)
 
