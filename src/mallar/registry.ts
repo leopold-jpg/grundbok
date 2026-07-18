@@ -269,6 +269,12 @@ export const mallRegistret: Record<MallId, MallDefinition> = {
     branschpaket: ["bygg"],
     // Försiktigare än bokforing-rollen: reskontran rör betalflöden —
     // auto endast under 1 000 kr och med hög konfidens.
+    //
+    // KÄND BEGRÄNSNING (ADR-0005): policyn är per (tenant, MODUL) och
+    // reskontran delar modulen 'bokforing'. Har tenanten redan en
+    // bokforing-policyrad (seedning skriver aldrig över) nås detta förval
+    // aldrig — rollskild autonomi kräver policy per mall, ett medvetet
+    // uppskjutet schemabeslut. Tills dess: skärp via explicit policy.
     defaultPolicy: {
       max_belopp_ore: 100_000,
       min_confidence: 0.9,

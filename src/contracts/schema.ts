@@ -63,7 +63,14 @@ export const ProposalSchema = z
     // katalogen: kontraktet äger inte src/mallar/, och historiska förslag
     // kan bära mall-id:n som lämnat katalogen.
     mall_id: z.string().min(1).optional(),
-    mall_version: z.string().regex(SEMVER, "mall_version: semver (x.y.z)").optional(),
+    // max(32): regexen ensam tillåter godtyckligt långa sifferföljder —
+    // en illvillig agent ska inte kunna pumpa lagring/operatörsvyn via
+    // stämpeln (granskningsfynd). Verkliga semver ryms med marginal.
+    mall_version: z
+      .string()
+      .max(32)
+      .regex(SEMVER, "mall_version: semver (x.y.z)")
+      .optional(),
     affarshandelsedatum: z.string().regex(ISO_DATUM),
     motpart: z.string().optional(),
     summary: z.string().min(1).max(300),

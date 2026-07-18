@@ -9,8 +9,10 @@ import type { Scope } from "@/lib/decisions";
 
 // Operatörskonsolen (WP14) — grundarens vy. Regeln som allt här lyder
 // under: operatören ser AGGREGAT, aldrig innehåll. Antal förslag är drift;
-// summary, belopp och motpart är byråns värld. Ingen fråga i den här
-// filen läser proposals.payload eller verifikationer.
+// summary, belopp och motpart är byråns värld. Enda payload-läsningen i
+// filen är mall_version i agentDetalj — ett MEDVETET undantag: fältet är
+// driftmetadata, semver-tvingat av kontraktet vid porten (schema.ts) och
+// kan inte bära fritext. Verifikationer läses aldrig.
 
 export type BolagsRad = {
   byra: string;
@@ -382,7 +384,9 @@ export type DetaljProposal = {
   kind: ProposalKind;
   status: string;
   confidence: number;
-  /** Stämpeln ur payloaden — driftmetadata, inte innehåll. */
+  /** Stämpeln ur payloaden — driftmetadata, inte innehåll. OBS: agentens
+   *  EGEN utsaga (semver-tvingad vid porten), till skillnad från flottans
+   *  versionsdrift-varning som räknas ur agentradens DB-sanning. */
   mall_version: string | null;
   skapad: string;
 };

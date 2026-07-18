@@ -433,7 +433,7 @@ export default function OperatorSida() {
       {/* Flottan (WP13, ADR-0004) */}
       <section className="steg">
         <div className="steg-rubrik">
-          <span className="steg-titel">Flottan</span>
+          <h2 className="steg-titel">Flottan</h2>
           <span className="steg-not">
             alla agenter, sorterade på korrigeringsandel — hög andel betyder att mallen
             eller kontexten behöver ses över
@@ -472,7 +472,7 @@ export default function OperatorSida() {
               : "Inga agenter matchar filtret."}
           </p>
         ) : (
-          <div style={{ overflowX: "auto" }}>
+          <div className="svep">
             <table className="rader">
               <thead>
                 <tr>
@@ -563,7 +563,7 @@ export default function OperatorSida() {
             {detalj.senaste.length === 0 ? (
               <p className="tyst">Inga förslag från den här agenten ännu.</p>
             ) : (
-              <div style={{ overflowX: "auto" }}>
+              <div className="svep">
                 <table className="rader">
                   <thead>
                     <tr>

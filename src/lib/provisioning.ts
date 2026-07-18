@@ -1,5 +1,6 @@
 import type { PGlite } from "@electric-sql/pglite";
 import type { ModuleId, ProposalKind } from "@/contracts";
+import { withTenant } from "./db/tenant";
 import { hamtaMall, mallMajor, type MallId } from "@/mallar/registry";
 import { skapaAgentNyckel, sattAgentStatus, listaAgentNycklar, type AgentRad } from "./agent-auth";
 import { sparaPolicy } from "./decisions";
@@ -61,17 +62,26 @@ export async function provisionAgent(
       ...input.policy,
     });
   } else if (mall) {
-    const befintlig = await db.query(
-      `SELECT 1 FROM autonomy_policies WHERE tenant_id = $1 AND module = $2`,
-      [input.tenantId, module],
+    // Atomär seedning (granskningsfynd, ADR-0005-passet): SELECT-före-
+    // insert kunde racea mot en samtidig provisionering (t.ex. framtida
+    // Stripe-webhook) — ON CONFLICT DO NOTHING låter databasen avgöra,
+    // och en befintlig rad rörs aldrig.
+    await withTenant(db, input.tenantId, (tx) =>
+      tx.query(
+        `INSERT INTO autonomy_policies
+           (tenant_id, module, max_belopp_ore, min_confidence, kanda_motparter_endast, tillatna_kinds, updated_at)
+         VALUES ($1, $2, $3, $4, $5, $6, now())
+         ON CONFLICT (tenant_id, module) DO NOTHING`,
+        [
+          input.tenantId,
+          module,
+          mall.defaultPolicy.max_belopp_ore,
+          mall.defaultPolicy.min_confidence,
+          mall.defaultPolicy.kanda_motparter_endast,
+          JSON.stringify(mall.defaultPolicy.tillatna_kinds),
+        ],
+      ),
     );
-    if (!befintlig.rows[0]) {
-      await sparaPolicy(db, {
-        tenant_id: input.tenantId,
-        module,
-        ...mall.defaultPolicy,
-      });
-    }
   }
   // Länka agenten till modulens policyrad (finns via seed eller ovan).
   const p = await db.query<{ id: string }>(

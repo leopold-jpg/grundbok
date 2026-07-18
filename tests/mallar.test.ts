@@ -15,6 +15,8 @@ process.env.GRUNDBOK_FORCE_FALLBACK = "1";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
+import { readdirSync, readFileSync } from "node:fs";
+import { join } from "node:path";
 import {
   ProposalSchema,
   hashProposal,
@@ -160,6 +162,32 @@ test("branschpaket: bygg och restaurang, regler med hemvist ENDAST i paketet", (
   }
 });
 
+test("branschpaket: varje branschmall i kundkatalogen har ett EXPLICIT paketbeslut", () => {
+  // Driftvakt (granskningsfynd): paketForTenantMall faller tyst till []
+  // för okända branschmallar. Det är rätt runtime-beteende, men en NY
+  // branschmall i customers/mallar/ får inte glida förbi utan att någon
+  // tagit ställning till dess paket — en mall 'restaurang' som glöms i
+  // mappningen hade tyst aktiverat ingenting. Ny mall ⇒ uppdatera facit.
+  const katalog = readdirSync(join(process.cwd(), "customers", "mallar"))
+    .filter((f) => f.endsWith(".json"))
+    .map((f) => {
+      const config = JSON.parse(
+        readFileSync(join(process.cwd(), "customers", "mallar", f), "utf8"),
+      ) as { mall_id: string };
+      return config.mall_id;
+    })
+    .sort();
+  const facit: Record<string, string[]> = {
+    bygg: ["bygg"],
+    cafe: ["restaurang"],
+    konsultbyra: [], // medvetet paketlös — konsultregler bor i funktionsmallen
+  };
+  assert.deepEqual(katalog, Object.keys(facit).sort());
+  for (const [tenantMall, paket] of Object.entries(facit)) {
+    assert.deepEqual(paketForTenantMall(tenantMall), paket);
+  }
+});
+
 test("branschpaket: tenant-kontexten aktiverar — bygg→bygg, cafe→restaurang, okänd→inga", () => {
   assert.deepEqual(paketForTenantMall("bygg"), ["bygg"]);
   assert.deepEqual(paketForTenantMall("cafe"), ["restaurang"]);
@@ -205,8 +233,11 @@ test("golden bokforing×bygg: BYGGFAKTURA → omvänd byggmoms-form, stämplad b
   const mall = mallRegistret.bokforing;
   const { proposal } = await byggViaMall(mall, BYGGFAKTURA, "kund_b");
   // Samma facit som kontering.test.ts (ML 16 kap. 13 §): säljaren
-  // fakturerar utan moms, köparen redovisar ut- OCH ingående. Regeln bor
-  // nu i branschpaketet 'bygg' — aktivt för kund_b (tenants.mall 'bygg').
+  // fakturerar utan moms, köparen redovisar ut- OCH ingående. OBS:
+  // runtime-konteringen styrs i release ett av kundconfigens omvand_bygg
+  // (bestamMoms) — branschpaketet 'bygg' bär regelDOKUMENTATIONEN och
+  // vävs in i LLM-vägen först när prompterna fylls (nästa pass). Testet
+  // låser pipelinens facit + stämpeln, inte att paketet driver logiken.
   assert.deepEqual(tuples(proposal), [
     ["4425", 1_000_000, 0],
     ["2440", 0, 1_000_000],
