@@ -8,7 +8,7 @@ import { useState } from "react";
 // all. Nyckeln finns bara i detta svar; endast hashen lagras.
 
 export function Nyckelkort({ rubrik, nyckel }: { rubrik: string; nyckel: string }) {
-  const [kopierad, setKopierad] = useState(false);
+  const [kopierad, setKopierad] = useState<"" | "ja" | "nej">("");
   return (
     <div className="nyckelkort" role="status">
       {rubrik} —{" "}
@@ -19,13 +19,25 @@ export function Nyckelkort({ rubrik, nyckel }: { rubrik: string; nyckel: string 
       <button
         className="nyckel-kopiera"
         onClick={async () => {
-          await navigator.clipboard.writeText(nyckel);
-          setKopierad(true);
+          // Klippbordet kan saknas (http-host) eller nekas — tyst
+          // misslyckande vore farligt just här, nyckeln visas aldrig igen.
+          try {
+            await navigator.clipboard.writeText(nyckel);
+            setKopierad("ja");
+          } catch {
+            setKopierad("nej");
+          }
         }}
       >
         Kopiera nyckeln
       </button>
-      {kopierad && <span className="nyckel-kopierad">kopierad</span>}
+      {kopierad === "ja" && <span className="nyckel-kopierad">kopierad</span>}
+      {kopierad === "nej" && (
+        <span className="nyckel-varning">
+          {" "}
+          kunde inte nå klippbordet — markera texten och kopiera manuellt
+        </span>
+      )}
     </div>
   );
 }

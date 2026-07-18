@@ -14,6 +14,11 @@ import type { Scope } from "@/lib/decisions";
 // driftmetadata, semver-tvingat av kontraktet vid porten (schema.ts) och
 // kan inte bära fritext. Verifikationer läses aldrig.
 
+/** timestamptz kommer som Date eller sträng beroende på driver — EN
+ *  normalisering till ISO-sträng för hela filen. */
+const tillIsoTid = (v: Date | string | null | undefined): string | null =>
+  v == null ? null : (v instanceof Date ? v : new Date(v)).toISOString();
+
 export type BolagsRad = {
   byra: string;
   tenant_id: string;
@@ -293,13 +298,15 @@ export type FlottRad = {
   andel_korrigerade: number | null;
   senaste_aktivitet: string | null;
   varningar: FlottVarning[];
-  /** Antal förslag per dygn, äldst→nyast (7 platser) — sparkline-datat i
-   *  översikten (WP27). Ett ANTAL per dygn, aldrig innehåll. */
+  /** Antal förslag per 24-timmarsintervall bakåt från nu, äldst→nyast
+   *  (7 platser) — sparkline-datat i översikten (WP27). Intervallen
+   *  täcker EXAKT samma rullande 7-dygnsfönster som forslag_7d, så
+   *  summan stämmer alltid med räknaren (granskningsfynd WP29:
+   *  kalenderdygns-bucketing tappade fönstrets äldsta timmar och
+   *  blandade databasens och JS:ets tidszoner). Ett ANTAL per intervall,
+   *  aldrig innehåll. */
   forslag_dagar: number[];
 };
-
-/** UTC-dygnet som nyckel — samma normalisering för DB-rader och JS-datum. */
-const dagNyckel = (d: Date) => d.toISOString().slice(0, 10);
 
 /** Hela flottan ur agent_telemetry (service-vägen — operatören ser alla
  *  tenants). Samma innehållsregel som resten av filen: aggregat och
@@ -332,20 +339,24 @@ export async function flottoversikt(db: PGlite): Promise<FlottRad[]> {
      ORDER BY b.namn NULLS LAST, tn.namn, t.display_name`,
   );
 
-  // Sparkline-datat: antal förslag per agent och UTC-dygn senaste 7
-  // dygnen. Endast count — summary/belopp/motpart läses aldrig.
-  const dagar = await db.query<{ agent_id: string; dag: Date | string; n: string }>(
-    `SELECT agent_id, date_trunc('day', created_at) AS dag, count(*) AS n
+  // Sparkline-datat: antal förslag per agent och 24-timmarsintervall
+  // bakåt från nu (0 = senaste dygnet … 6 = äldsta). Intervallen räknas
+  // helt i SQL mot samma now() som fönstret — EN tidsauktoritet, ingen
+  // tidszonssöm mot JS. Endast count — summary/belopp/motpart läses aldrig.
+  const dagar = await db.query<{ agent_id: string; dygn_sedan: number; n: string }>(
+    `SELECT agent_id,
+            floor(extract(epoch FROM (now() - created_at)) / 86400)::int AS dygn_sedan,
+            count(*) AS n
      FROM proposals
      WHERE agent_id IS NOT NULL AND created_at > now() - interval '7 days'
-     GROUP BY agent_id, date_trunc('day', created_at)`,
+     GROUP BY agent_id, 2`,
   );
-  const perAgentDag = new Map<string, Map<string, number>>();
+  const perAgentDygn = new Map<string, number[]>();
   for (const rad of dagar.rows) {
-    const nyckel = dagNyckel(rad.dag instanceof Date ? rad.dag : new Date(rad.dag));
-    let m = perAgentDag.get(rad.agent_id);
-    if (!m) perAgentDag.set(rad.agent_id, (m = new Map()));
-    m.set(nyckel, Number(rad.n));
+    let hinkar = perAgentDygn.get(rad.agent_id);
+    if (!hinkar) perAgentDygn.set(rad.agent_id, (hinkar = Array(7).fill(0)));
+    const i = Number(rad.dygn_sedan);
+    if (i >= 0 && i < 7) hinkar[i] += Number(rad.n);
   }
 
   const nu = Date.now();
@@ -395,12 +406,12 @@ export async function flottoversikt(db: PGlite): Promise<FlottRad[]> {
       corrected_7d: corrected,
       andel_auto: forslag > 0 ? auto / forslag : null,
       andel_korrigerade: andelKorr,
-      senaste_aktivitet: senaste ? senaste.toISOString() : null,
+      senaste_aktivitet: tillIsoTid(senaste),
       varningar,
-      forslag_dagar: Array.from({ length: 7 }, (_, i) => {
-        const dag = dagNyckel(new Date(nu - (6 - i) * 86_400_000));
-        return perAgentDag.get(rad.agent_id)?.get(dag) ?? 0;
-      }),
+      // Äldst→nyast: plats 0 är 6–7 dygn sedan, plats 6 är senaste dygnet.
+      forslag_dagar: (perAgentDygn.get(rad.agent_id) ?? Array(7).fill(0))
+        .slice()
+        .reverse(),
     };
   });
 }
@@ -482,54 +493,64 @@ export async function agentDetalj(db: PGlite, agentId: string): Promise<AgentDet
       }
     : null;
 
-  const s = await db.query<{
-    id: string;
-    kind: ProposalKind;
-    status: string;
-    confidence: string;
-    mall_version: string | null;
-    created_at: Date | string;
-  }>(
-    `SELECT id, kind, status, confidence,
-            payload->>'mall_version' AS mall_version, created_at
-     FROM proposals WHERE agent_id = $1
-     ORDER BY created_at DESC LIMIT 20`,
-    [agentId],
-  );
+  // Tre oberoende läsningar — parallellt, inte i rad (granskningsfynd
+  // WP29): senaste förslagen, livslinjen och tenantens driftläge.
+  const [s, liv, drift] = await Promise.all([
+    db.query<{
+      id: string;
+      kind: ProposalKind;
+      status: string;
+      confidence: string;
+      mall_version: string | null;
+      created_at: Date | string;
+    }>(
+      `SELECT id, kind, status, confidence,
+              payload->>'mall_version' AS mall_version, created_at
+       FROM proposals WHERE agent_id = $1
+       ORDER BY created_at DESC LIMIT 20`,
+      [agentId],
+    ),
+    // Livslinjen ur audit_log: provisionerad + statusändringar för
+    // agenten. Payload-läsningen är agentId/status — driftfält, aldrig
+    // innehåll. OBS kontraktet: nyckeln 'agentId' skrivs av auditera-
+    // anropen i agent-auth.ts och roteraNyckel ovan — byter de stavning
+    // tystnar livslinjen. id som ordningsutjämnare: händelser i samma
+    // transaktion delar created_at (granskningsfynd WP29).
+    db.query<{ event_type: string; status: string | null; tid: Date | string }>(
+      `SELECT event_type, payload->>'status' AS status, created_at AS tid
+       FROM audit_log
+       WHERE payload->>'agentId' = $1
+         AND event_type IN ('agent_provisionerad', 'agent_statusandrad')
+       ORDER BY created_at, id`,
+      [agentId],
+    ),
+    // Tenantens driftläge: kö-djup nu + senaste worker-körning — jobben
+    // pekar på tenanten via message-kuvertet (payload_ref läses aldrig).
+    // OBS: läser agent_jobs-tabellen direkt (som halsa) — byts kön mot
+    // pgmq i Supabase följer dessa aggregat med i adapterbytet.
+    db.query<{ djup: string; senaste: Date | string | null }>(
+      `SELECT count(*) FILTER (WHERE archived_at IS NULL) AS djup,
+              max(archived_at) AS senaste
+       FROM agent_jobs WHERE message->>'tenant_id' = $1`,
+      [rad.tenant_id],
+    ),
+  ]);
 
-  // Livslinjen ur audit_log: provisionerad + statusändringar för agenten.
-  // Payload-läsningen är agentId/status — driftfält, aldrig innehåll.
-  const liv = await db.query<{ event_type: string; status: string | null; tid: Date | string }>(
-    `SELECT event_type, payload->>'status' AS status, created_at AS tid
-     FROM audit_log
-     WHERE payload->>'agentId' = $1
-       AND event_type IN ('agent_provisionerad', 'agent_statusandrad')
-     ORDER BY created_at`,
-    [agentId],
-  );
-  const livslinje = liv.rows.flatMap((rad) => {
-    const handelse: LivslinjeHandelse | null =
-      rad.event_type === "agent_provisionerad"
-        ? "skapad"
-        : rad.status === "paused"
-          ? "pausad"
-          : rad.status === "active"
-            ? "aterupptagen"
-            : rad.status === "canceled"
-              ? "avslutad"
-              : null;
+  const STATUS_TILL_HANDELSE: Record<string, LivslinjeHandelse> = {
+    paused: "pausad",
+    active: "aterupptagen",
+    canceled: "avslutad",
+  };
+  const livslinje = liv.rows.flatMap((h) => {
+    const handelse =
+      h.event_type === "agent_provisionerad"
+        ? ("skapad" as const)
+        : STATUS_TILL_HANDELSE[h.status ?? ""];
+    // Okänd status (framtida livscykelsteg) hoppar vi över medvetet —
+    // hellre en lucka än en gissad etikett.
     if (!handelse) return [];
-    return [{ tid: (rad.tid instanceof Date ? rad.tid : new Date(rad.tid)).toISOString(), handelse }];
+    return [{ tid: tillIsoTid(h.tid)!, handelse }];
   });
-
-  // Tenantens driftläge: kö-djup nu + senaste worker-körning — jobben
-  // pekar på tenanten via message-kuvertet (payload_ref läses aldrig).
-  const drift = await db.query<{ djup: string; senaste: Date | string | null }>(
-    `SELECT count(*) FILTER (WHERE archived_at IS NULL) AS djup,
-            max(archived_at) AS senaste
-     FROM agent_jobs WHERE message->>'tenant_id' = $1`,
-    [rad.tenant_id],
-  );
 
   return {
     agent: {
@@ -537,10 +558,7 @@ export async function agentDetalj(db: PGlite, agentId: string): Promise<AgentDet
       scopes: agentRad.scopes,
       max_concurrency: Number(agentRad.max_concurrency),
       provisioned_by: agentRad.provisioned_by,
-      skapad: (agentRad.created_at instanceof Date
-        ? agentRad.created_at
-        : new Date(agentRad.created_at)
-      ).toISOString(),
+      skapad: tillIsoTid(agentRad.created_at)!,
     },
     policy,
     senaste: s.rows.map((row) => ({
@@ -549,20 +567,12 @@ export async function agentDetalj(db: PGlite, agentId: string): Promise<AgentDet
       status: row.status,
       confidence: Number(row.confidence),
       mall_version: row.mall_version,
-      skapad: (row.created_at instanceof Date
-        ? row.created_at
-        : new Date(row.created_at)
-      ).toISOString(),
+      skapad: tillIsoTid(row.created_at)!,
     })),
     livslinje,
     tenant_drift: {
       ko_djup: Number(drift.rows[0]?.djup ?? 0),
-      senaste_korning: drift.rows[0]?.senaste
-        ? (drift.rows[0].senaste instanceof Date
-            ? drift.rows[0].senaste
-            : new Date(drift.rows[0].senaste)
-          ).toISOString()
-        : null,
+      senaste_korning: tillIsoTid(drift.rows[0]?.senaste),
     },
   };
 }
@@ -606,13 +616,11 @@ export async function halsa(db: PGlite): Promise<Halsa> {
      GROUP BY message->>'module'
      ORDER BY message->>'module'`,
   );
-  const tillIso = (v: Date | string | null) =>
-    v ? (v instanceof Date ? v : new Date(v)).toISOString() : null;
   return {
     ko_djup: djup,
-    senaste_korning: tillIso(r.rows[0]?.senaste ?? null),
+    senaste_korning: tillIsoTid(r.rows[0]?.senaste),
     omforsok_24h: Number(r.rows[0]?.omforsok ?? 0),
-    aldsta_vantande: tillIso(r.rows[0]?.aldsta ?? null),
+    aldsta_vantande: tillIsoTid(r.rows[0]?.aldsta),
     per_modul: moduler.rows
       .map((m) => ({
         module: m.module ?? "(okänd)",

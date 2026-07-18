@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { plexMono } from "../_publik/fonter";
 import { byggKommandon, type Kommando } from "@/ytor/komponenter/kommandon";
-import { KommandoPalett } from "@/ytor/komponenter/KommandoPalett";
+import { KommandoPalett, useKommandoGenvag } from "@/ytor/komponenter/KommandoPalett";
 import { Chip } from "@/ytor/komponenter/Chip";
 import { StatusPunkt, type AgentStatus } from "@/ytor/komponenter/StatusPunkt";
 import { TomtLage } from "@/ytor/komponenter/TomtLage";
@@ -109,7 +109,15 @@ type AgentDetalj = {
  *  Aktiveringskartan låter steg 2 VISA vilka paket klientens bransch
  *  aktiverar — branschen väljs aldrig manuellt (ADR-0005). */
 type Agentkatalog = {
-  mallar: { id: string; displayName: string; version: string; branschpaket: string[] }[];
+  mallar: {
+    id: string;
+    displayName: string;
+    version: string;
+    branschpaket: string[];
+    /** Serverderiverat av samma aktivaBranschpaket som driften kör —
+     *  klienten visar, den härleder aldrig själv (granskningsfynd WP29). */
+    aktiva_per_tenantmall: Record<string, string[]>;
+  }[];
   paket: Record<string, { displayName: string; version: string }>;
   tenantmall_till_paket: Record<string, string[]>;
 };
@@ -226,6 +234,13 @@ export default function OperatorSida() {
   // Cmd+K.
   const [palettOppen, setPalettOppen] = useState(false);
   const [markeratBolag, setMarkeratBolag] = useState<string | null>(null);
+  // Markeringen är en landningssignal, inte ett urval — släck den själv
+  // så den inte konkurrerar med agentvalet (granskningsfynd WP29).
+  useEffect(() => {
+    if (!markeratBolag) return;
+    const t = setTimeout(() => setMarkeratBolag(null), 6000);
+    return () => clearTimeout(t);
+  }, [markeratBolag]);
 
   // Mall-redigering: formulärstate per mall-id ("" = ny mall).
   const [mallFormer, setMallFormer] = useState<
@@ -310,16 +325,7 @@ export default function OperatorSida() {
 
   // Cmd+K öppnar paletten — kommandokatalogen kommer ur den delade
   // byggaren (operatörsrollen; konsulten ser aldrig dessa, WP29).
-  useEffect(() => {
-    function pa(e: KeyboardEvent) {
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
-        e.preventDefault();
-        setPalettOppen((o) => !o);
-      }
-    }
-    window.addEventListener("keydown", pa);
-    return () => window.removeEventListener("keydown", pa);
-  }, []);
+  useKommandoGenvag(useCallback(() => setPalettOppen((o) => !o), []));
 
   const kommandon = useMemo(
     () =>
@@ -367,7 +373,9 @@ export default function OperatorSida() {
   }
 
   async function provisionera() {
-    if (!provKlient || !provMall || !provNamn.trim()) return;
+    // arbetar-vakten även här: Enter i namnfältet går förbi knappens
+    // disabled och får inte dubbelprovisionera (granskningsfynd WP29).
+    if (arbetar || !provKlient || !provMall || !provNamn.trim()) return;
     setArbetar(true);
     setFel("");
     try {
@@ -479,14 +487,11 @@ export default function OperatorSida() {
     else flottaPerTenant.set(r.tenant_id, [r]);
   }
 
-  // Steg 2:s härledda branschpaket: klientens branschmall → paket-id:n,
-  // snittade mot vad den valda funktionsrollen KAN aktivera.
+  // Steg 2:s härledda branschpaket kommer FÄRDIGA från servern —
+  // samma aktivaBranschpaket som driften, aldrig en klientkopia av regeln.
   const provBolag = bolag.find((b) => b.tenant_id === provKlient) ?? null;
-  const aktivaPaketFor = (mall: { branschpaket: string[] }): string[] => {
-    if (!provBolag || !katalog) return [];
-    const tenantPaket = katalog.tenantmall_till_paket[provBolag.mall] ?? [];
-    return mall.branschpaket.filter((p) => tenantPaket.includes(p));
-  };
+  const aktivaPaketFor = (mall: { aktiva_per_tenantmall: Record<string, string[]> }): string[] =>
+    provBolag ? (mall.aktiva_per_tenantmall[provBolag.mall] ?? []) : [];
 
   // Hälsans larmtoner: statusgrönt/varning enligt systemet — tonen är
   // en punkt + värdesfärg, texten bär alltid betydelsen.
@@ -498,7 +503,13 @@ export default function OperatorSida() {
     ko: halsa && halsa.ko_djup > 0 && aldstaGammal ? "varning" : "ok",
     aldsta: aldstaGammal ? "varning" : "ok",
     omforsok: halsa && halsa.omforsok_24h > 0 ? "varning" : "ok",
-    korning: halsa && halsa.ko_djup > 0 && !halsa.senaste_korning ? "varning" : "ok",
+    // Varning både när workern aldrig kört och när kön väntar för länge
+    // sedan senaste körningen (granskningsfynd WP29: "har kört en gång,
+    // någonsin" är inte hälsa).
+    korning:
+      halsa && halsa.ko_djup > 0 && (!halsa.senaste_korning || aldstaGammal)
+        ? "varning"
+        : "ok",
   } as const;
 
   return (
@@ -595,6 +606,9 @@ export default function OperatorSida() {
                         <span className="tyst">{b.byra}</span> · {b.tenant_namn}{" "}
                         <Chip>{b.mall}</Chip>
                         <span className="tyst bolags-aggregat">
+                          {b.agenter_aktiva} aktiva
+                          {b.agenter_pausade > 0 && ` (+${b.agenter_pausade} pausade)`}
+                          {" · "}
                           {b.forslag_7d} förslag · {b.beslut_7d} beslut senaste 7 d
                         </span>
                       </th>

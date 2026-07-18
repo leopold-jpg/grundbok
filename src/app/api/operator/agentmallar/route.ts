@@ -4,6 +4,7 @@ import { kravOperator } from "@/auth/session";
 import {
   BRANSCHPAKET_IDS,
   MALL_IDS,
+  aktivaBranschpaket,
   branschpaketRegistret,
   mallRegistret,
   tenantmallTillPaket,
@@ -29,6 +30,15 @@ export async function GET(req: Request) {
       displayName: mallRegistret[id].displayName,
       version: mallRegistret[id].version,
       branschpaket: mallRegistret[id].branschpaket ?? [],
+      // Serverderiverat (granskningsfynd WP29): vilka paket som är aktiva
+      // per branschmall räknas av SAMMA aktivaBranschpaket som driften —
+      // klienten visar, den härleder aldrig själv.
+      aktiva_per_tenantmall: Object.fromEntries(
+        Object.keys(tenantmallTillPaket()).map((tm) => [
+          tm,
+          aktivaBranschpaket(mallRegistret[id], tm).map((p) => p.id),
+        ]),
+      ),
     })),
     paket: Object.fromEntries(
       BRANSCHPAKET_IDS.map((id) => [

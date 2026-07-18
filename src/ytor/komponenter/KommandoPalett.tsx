@@ -8,6 +8,21 @@ import { filtreraKommandon, type Kommando } from "./kommandon";
 // paletten är bara sök + val. Tangentbord: skriv för att filtrera,
 // ↑↓ väljer, Enter kör, Escape stänger.
 
+/** Cmd/Ctrl+K — EN delad genväg för båda ytorna (ingen kopierad
+ *  lyssnare per sida). onToggle måste vara stabil (useCallback). */
+export function useKommandoGenvag(onToggle: () => void) {
+  useEffect(() => {
+    function pa(e: KeyboardEvent) {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        onToggle();
+      }
+    }
+    window.addEventListener("keydown", pa);
+    return () => window.removeEventListener("keydown", pa);
+  }, [onToggle]);
+}
+
 const GRUPPNAMN: Record<Kommando["grupp"], string> = {
   navigera: "Navigera",
   klient: "Klienter",
@@ -94,7 +109,7 @@ export function KommandoPalett({
           role="combobox"
           aria-expanded="true"
           aria-controls="kpalett-lista"
-          aria-activedescendant={traffar[vald] ? `kpalett-${traffar[vald].id}` : undefined}
+          aria-activedescendant={traffar[vald] ? `kpalett-val-${vald}` : undefined}
         />
         {traffar.length === 0 ? (
           <p className="tyst kpalett-tom">Inga kommandon matchar.</p>
@@ -103,7 +118,10 @@ export function KommandoPalett({
             {traffar.map((k, i) => (
               <li
                 key={k.id}
-                id={`kpalett-${k.id}`}
+                // Index-id, inte kommando-id: motpartsnamn kan innehålla
+                // blanksteg och blanksteg är ogiltigt i ett DOM-id —
+                // aria-activedescendant måste peka på ett giltigt id.
+                id={`kpalett-val-${i}`}
                 role="option"
                 aria-selected={i === vald}
                 data-vald={i === vald}

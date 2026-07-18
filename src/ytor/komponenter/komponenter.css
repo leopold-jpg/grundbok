@@ -9,13 +9,12 @@
 .kpalett-fond {
   position: fixed;
   inset: 0;
-  /* Kall scrim ur skugg-familjen (rgba på --ink-basen) — aldrig färgad. */
-  background: rgba(15, 23, 42, 0.35);
+  background: var(--scrim);
   z-index: 50;
   display: flex;
   justify-content: center;
   align-items: flex-start;
-  padding: 12vh var(--sp-4) var(--sp-4);
+  padding: var(--sp-16) var(--sp-4) var(--sp-4); /* ur skalan, inte vh (kanon §5) */
 }
 
 .kpalett {

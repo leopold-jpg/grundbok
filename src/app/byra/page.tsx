@@ -12,7 +12,7 @@ import {
   type AttestLage,
 } from "@/ytor/komponenter/attest-tangentbord";
 import { byggKommandon, type Kommando } from "@/ytor/komponenter/kommandon";
-import { KommandoPalett } from "@/ytor/komponenter/KommandoPalett";
+import { KommandoPalett, useKommandoGenvag } from "@/ytor/komponenter/KommandoPalett";
 import { Chip } from "@/ytor/komponenter/Chip";
 import { StatusPunkt, type AgentStatus } from "@/ytor/komponenter/StatusPunkt";
 import { TomtLage } from "@/ytor/komponenter/TomtLage";
@@ -274,11 +274,24 @@ function AttestSektion({
     [skicka],
   );
 
-  // Färsk serverdata in i maskinen (stagad rad filtreras där).
-  const koIds = ko.map((k) => k.id).join(",");
+  // Färsk serverdata in i maskinen (stagad rad filtreras där). Körs på
+  // ARRAY-identiteten, inte ett id-fingeravtryck: efter en misslyckad
+  // POST kan servern svara med exakt samma lista, och då måste den
+  // borttagna raden ändå tillbaka in i maskinen (granskningsfynd WP29).
   useEffect(() => {
-    dispatch({ typ: "rader", rader: koIds ? koIds.split(",") : [] });
-  }, [koIds, dispatch]);
+    dispatch({ typ: "rader", rader: ko.map((k) => k.id) });
+  }, [ko, dispatch]);
+
+  // Radcachen rensas mot färsk kö — utan rensning växer den hela passet
+  // och kan rendera inaktuella rader (granskningsfynd WP29). Den stagade
+  // raden behålls: ångra-bannern behöver den tills beslutet skickats.
+  useEffect(() => {
+    const behall = new Set(ko.map((k) => k.id));
+    const vantande = lageRef.current.vantande?.id;
+    for (const id of cacheRef.current.keys()) {
+      if (!behall.has(id) && id !== vantande) cacheRef.current.delete(id);
+    }
+  }, [ko]);
 
   // Ångra-fönstret: committa när tiden gått.
   const vantandeId = lage.vantande?.id ?? null;
@@ -288,27 +301,37 @@ function AttestSektion({
     return () => clearTimeout(t);
   }, [vantandeId, dispatch]);
 
-  // Lämnas vyn (flikbyte, stängning) skickas ett väntande beslut direkt —
-  // ångra-fönstret är bekvämlighet, aldrig en väg att tappa ett beslut.
-  useEffect(() => {
-    return () => {
-      const v = lageRef.current.vantande;
-      const r = v ? cacheRef.current.get(v.id) : undefined;
-      if (v && r) {
-        void fetch("/api/beslut", {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          keepalive: true,
-          body: JSON.stringify({
-            tenant_id: r.tenant_id,
-            proposal_id: v.id,
-            beslut: v.beslut,
-            reason: v.motivering,
-          }),
-        });
-      }
-    };
+  // Lämnas vyn skickas ett väntande beslut direkt — ångra-fönstret är
+  // bekvämlighet, aldrig en väg att tappa ett beslut. React-cleanupen
+  // täcker flikbyte; pagehide täcker stängning/omladdning/navigering
+  // (granskningsfynd WP29: unmount-effekter körs INTE vid tab-stängning).
+  // keepalive-POST:en är fire-and-forget — går den fel ligger förslaget
+  // kvar som pending hos servern och dyker upp igen vid nästa hämtning.
+  const flushVantande = useCallback(() => {
+    const v = lageRef.current.vantande;
+    const r = v ? cacheRef.current.get(v.id) : undefined;
+    if (!v || !r) return;
+    lageRef.current = { ...lageRef.current, vantande: null };
+    void fetch("/api/beslut", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      keepalive: true,
+      body: JSON.stringify({
+        tenant_id: r.tenant_id,
+        proposal_id: v.id,
+        beslut: v.beslut,
+        reason: v.motivering,
+      }),
+    });
   }, []);
+
+  useEffect(() => {
+    window.addEventListener("pagehide", flushVantande);
+    return () => {
+      window.removeEventListener("pagehide", flushVantande);
+      flushVantande();
+    };
+  }, [flushVantande]);
 
   // Tangentbordet — globalt i attest-fliken; fält och dialoger äger
   // sina egna tangenter (target-vakten släpper igenom dem).
@@ -324,11 +347,17 @@ function AttestSektion({
         e.preventDefault();
         dispatch({ typ: "upp" });
       } else if (e.key === "Enter") {
+        // En fokuserad knapp/länk äger Enter — annars dör aktiveringen
+        // för allt tangentbordsfokus på fliken (granskningsfynd WP29).
+        if (mal?.closest("button, a, summary")) return;
         e.preventDefault();
         detaljRef.current?.focus();
       } else if (e.key === "Escape") {
         dispatch({ typ: "avbryt" });
       } else {
+        // Beslutständer får aldrig autorepetera — ett nedhållet A ska
+        // inte hagla attester genom kön (granskningsfynd WP29).
+        if (e.repeat) return;
         const k = e.key.toLowerCase();
         if (k === "a") {
           e.preventDefault();
@@ -1426,14 +1455,22 @@ export default function ByraSida() {
     });
   }, [router]);
 
+  // Sekvensvakter: snabba attester i rad startar överlappande hämtningar,
+  // och ett ÄLDRE svar som landar sist får inte skriva över ett nyare —
+  // en redan beslutad rad skulle då blinka tillbaka (granskningsfynd WP29).
+  const koSeq = useRef(0);
+  const loggSeq = useRef(0);
+
   const laddaKo = useCallback(async (v: string) => {
+    const seq = ++koSeq.current;
     const rader = await hamta<KoRad[]>(`/api/byra/ko?klient=${v}`);
-    if (rader) setKo(rader);
+    if (rader && seq === koSeq.current) setKo(rader);
   }, []);
 
   const laddaLogg = useCallback(async (v: string) => {
+    const seq = ++loggSeq.current;
     const rader = await hamta<LoggRad[]>(`/api/byra/logg?klient=${v}&limit=50`);
-    if (rader) setLogg(rader);
+    if (rader && seq === loggSeq.current) setLogg(rader);
   }, []);
 
   useEffect(() => {
@@ -1448,16 +1485,7 @@ export default function ByraSida() {
 
   // Cmd+K öppnar paletten (WP26). Kommandokatalogen byggs av den delade
   // byggaren — konsultrollen ger ALDRIG operatörskommandon (WP29-regeln).
-  useEffect(() => {
-    function pa(e: KeyboardEvent) {
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
-        e.preventDefault();
-        setPalettOppen((o) => !o);
-      }
-    }
-    window.addEventListener("keydown", pa);
-    return () => window.removeEventListener("keydown", pa);
-  }, []);
+  useKommandoGenvag(useCallback(() => setPalettOppen((o) => !o), []));
 
   const kommandon = useMemo(
     () =>

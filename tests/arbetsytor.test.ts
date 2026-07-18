@@ -98,6 +98,24 @@ test("avvisning kräver motivering, och serverdata återuppväcker aldrig en sta
   assert.equal(steg.lage.vantande?.id, "p1");
 });
 
+test("försvinner den valda raden i en uppdatering stängs motiveringsfältet", () => {
+  // Granskningsfynd WP29: ett öppet motiveringsfält får aldrig följa med
+  // till en annan rad när markeringen flyttar.
+  const { lage } = kor(nyttLage(["p1", "p2"]), [
+    { typ: "avvisa-oppna" }, // motivering öppen för p1
+    { typ: "rader", rader: ["p2"] }, // p1 beslutades av en kollega
+  ]);
+  assert.equal(lage.avvisar, false);
+  assert.equal(lage.rader[lage.index], "p2");
+
+  // …men en uppdatering som BEHÅLLER raden behåller också fältet.
+  const kvar = kor(nyttLage(["p1", "p2"]), [
+    { typ: "avvisa-oppna" },
+    { typ: "rader", rader: ["p1", "p2"] },
+  ]);
+  assert.equal(kvar.lage.avvisar, true);
+});
+
 // --------------------------------------------------------- Cmd+K + roll
 
 test("Cmd+K respekterar roll: konsulten ser aldrig operatörskommandon", () => {

@@ -160,9 +160,8 @@ body:has(main.operator) {
   font-weight: 600;
 }
 
-/* Tabellsvep och åtgärdscell (ersätter inline-styles). */
+/* Tabellsvep (ersätter inline-styles). */
 .operator .svep { overflow-x: auto; }
-.operator .atgarder { white-space: nowrap; }
 
 .operator select { font-size: 16px; }
 .operator .check-val label { cursor: pointer; }

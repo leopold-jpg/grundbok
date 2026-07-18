@@ -136,6 +136,10 @@ export function attestMaskin(lage: AttestLage, handelse: AttestHandelse): Attest
           ...lage,
           rader,
           index: behallen >= 0 ? behallen : klamp(lage.index, rader.length),
+          // Försvann den valda raden (någon annan beslutade den) flyttar
+          // markeringen — ett öppet motiveringsfält får ALDRIG följa med
+          // till en annan rad (granskningsfynd WP29).
+          avvisar: behallen >= 0 ? lage.avvisar : false,
         },
         effekter: [],
       };
