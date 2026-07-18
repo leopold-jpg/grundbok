@@ -218,6 +218,15 @@ export default function OperatorSida() {
   const [provKlient, setProvKlient] = useState("");
   const [provMall, setProvMall] = useState("");
   const [provNamn, setProvNamn] = useState("");
+  // AgentDraft: fri beskrivning → serverns regelbaserade rollförslag.
+  const [draftText, setDraftText] = useState("");
+  const [draftSvar, setDraftSvar] = useState("");
+  const [draftArbetar, setDraftArbetar] = useState(false);
+  // Generationsvakt (granskningsfynd): ett sent svar för en gammal
+  // beskrivning får aldrig skriva över operatörens val — räknaren bumpas
+  // när texten ändras och när provisioneringen kör, så in-flight-svar
+  // som hunnit bli irrelevanta släpps tyst.
+  const draftGenRef = useRef(0);
   const [provNyckel, setProvNyckel] = useState<{ rubrik: string; nyckel: string } | null>(null);
   const [arbetar, setArbetar] = useState(false);
 
@@ -388,11 +397,47 @@ export default function OperatorSida() {
       // EN gång.
       setProvNyckel({ rubrik: `Nyckel för ${provNamn.trim()}`, nyckel: r.nyckel });
       setProvNamn("");
+      // Ett draft-svar som landar EFTER provisioneringen får inte fylla
+      // formuläret igen och göra Enter-vägen skarp på nytt.
+      draftGenRef.current++;
       await Promise.all([laddaBolag(), laddaFlotta()]);
     } catch (e) {
       setFel(e instanceof Error ? e.message : String(e));
     } finally {
       setArbetar(false);
+    }
+  }
+
+  async function foreslaDraft() {
+    if (draftArbetar || !draftText.trim()) return;
+    const gen = ++draftGenRef.current;
+    setDraftArbetar(true);
+    setFel("");
+    try {
+      const r = await post<{ forslag: { mallId: string; namn: string } | null }>(
+        "/api/operator/agentdraft",
+        { beskrivning: draftText.trim() },
+      );
+      // Stale svar (texten ändrad, ny förfrågan skickad eller en
+      // provisionering emellan) appliceras aldrig.
+      if (gen !== draftGenRef.current) return;
+      // Förmarkera bara en roll som faktiskt renderas som radiokort —
+      // utan laddad katalog vore valet osynligt och ogranskbart.
+      const iKatalogen = katalog?.mallar.find((m) => m.id === r.forslag?.mallId);
+      if (r.forslag && iKatalogen) {
+        setProvMall(r.forslag.mallId);
+        // Namnet är ett förslag och skriver aldrig över något operatören
+        // redan hunnit skriva i steg 3.
+        setProvNamn((namn) => (namn.trim() ? namn : r.forslag!.namn));
+        setDraftSvar(`förslag: ${iKatalogen.displayName} — ändra fritt nedan`);
+      } else {
+        setDraftSvar("ingen roll matchade beskrivningen — välj själv nedan");
+      }
+    } catch (e) {
+      setFel(e instanceof Error ? e.message : String(e));
+    } finally {
+      // Alltid av — stale betyder bara "applicera inte svaret".
+      setDraftArbetar(false);
     }
   }
 
@@ -862,6 +907,35 @@ export default function OperatorSida() {
               klienten och väljs aldrig här (ADR-0005)
             </span>
           </legend>
+          <div className="draft-rad">
+            <input
+              id="prov-draft"
+              type="text"
+              value={draftText}
+              onChange={(e) => {
+                setDraftText(e.target.value);
+                setDraftSvar("");
+                // Ändrad text gör ett in-flight-svar irrelevant.
+                draftGenRef.current++;
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  foreslaDraft();
+                }
+              }}
+              placeholder="beskriv fritt: t.ex. bokföring för min byggfirma"
+              aria-label="Beskriv agentens uppgift fritt för ett rollförslag"
+            />
+            <button onClick={foreslaDraft} disabled={draftArbetar || !draftText.trim()}>
+              {draftArbetar ? "Föreslår …" : "Föreslå roll"}
+            </button>
+            {draftSvar && (
+              <span className="tyst" role="status">
+                {draftSvar}
+              </span>
+            )}
+          </div>
           <div className="mallval" role="radiogroup" aria-label="Funktionsroll">
             {(katalog?.mallar ?? []).map((m) => {
               const aktiva = aktivaPaketFor(m);
@@ -872,7 +946,12 @@ export default function OperatorSida() {
                     name="prov-mall"
                     value={m.id}
                     checked={provMall === m.id}
-                    onChange={() => setProvMall(m.id)}
+                    onChange={() => {
+                      setProvMall(m.id);
+                      // Operatörens eget val vinner alltid över ett
+                      // draft-svar som fortfarande är i luften.
+                      draftGenRef.current++;
+                    }}
                   />
                   <span className="mall-titel">{m.displayName}</span>
                   <span className="mall-meta">

@@ -294,6 +294,16 @@ body:has(main.operator) {
 /* Steg 2: funktionsrollerna som radiokort — fyra roller, granskad-badge
    och de paket klientens bransch aktiverar. */
 .operator .prov-mallar { display: block; }
+/* AgentDraft-raden ovanför rollkorten: fri beskrivning → rollförslag. */
+.operator .draft-rad {
+  display: flex;
+  gap: var(--sp-2) var(--sp-3);
+  align-items: center;
+  flex-wrap: wrap;
+  margin-bottom: var(--sp-3);
+  font-size: 14px;
+}
+.operator .draft-rad input[type="text"] { min-width: 300px; flex: 1; max-width: 460px; }
 .operator .prov-mallar legend {
   display: flex;
   gap: var(--sp-2);
