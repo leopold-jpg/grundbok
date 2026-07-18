@@ -16,11 +16,15 @@ kaskadordning:
    `--r-*` (radier), `--tracking-*`, `--dur-*`/`--ease-*`, semantiska
    färgslots. Brand-neutral; ändras inte av identitetsbyten.
 2. **Studio-skinnet** — varm papper/terracotta. GAMMAL identitet; bär
-   fortfarande admin//byra//operator via globals.css tills
-   arbetsyte-passet. Rörs inte förrän D2.
+   numera ENDAST adminkonsolen via globals.css tills dess eget pass.
 3. **Grundbok-skinnet** — vit/blå (riktningsbytet 2026-07-11).
    GÄLLANDE identitet. Ligger på `:root` så varje yta når tokens utan
    lokal deklaration.
+4. **Arbetsyte-mappningen** (D2-passet 2026-07-18) — `main.byra` och
+   `main.operator` mappar grammatik-slotsen (`--bg/--fg/--accent/--ring`
+   …) till grundbok-värden, scopat per yta enligt publik-mönstret.
+   Mappningen bor i tokenfilen (inte i yte-CSS:en) så källan förblir EN;
+   globals.css-klasserna byter därmed skinn utan att adminkonsolen rörs.
 
 Regler:
 
@@ -29,7 +33,8 @@ Regler:
   borttagna och får inte återuppstå.
 - Mono-kedjan (`--font-mono` med IBM Plex Mono först) scopas i
   tokenfilen till ytor som fäster `plexMono.variable` på `<main>`
-  (`main.publik`, `main.login-sida` — via `src/app/_publik/fonter.ts`).
+  (`main.publik`, `main.login-sida`, `main.byra`, `main.operator` — via
+  `src/app/_publik/fonter.ts`).
   Ny yta som ska visa mono-värden: fäst variabeln och lägg till
   selektorn i tokenfilen.
 - `--font-sans`/`--font-serif` sätts i globals.css `:root` med
@@ -55,6 +60,7 @@ Regler:
 | `--bla-djup` | `#1D4ED8` | Accent-hover |
 | `--bla-ljus` | `#60A5FA` | Ljus blå detalj i illustrationer |
 | `--gron` | `#15803D` | ENDAST status |
+| `--varning` | `#B45309` | ENDAST status på arbetsytorna (flaggor, nyckelvarning) |
 | `--marin` | `#0B1B34` | Mörk kontrastyta (sidfoten) |
 | `--marin-fg` / `--marin-mjuk` / `--marin-linje` | `#F8FAFC` / `#94A3B8` / `rgba(148,163,184,0.22)` | Förgrund/sekundär/kant på marin |
 | `--fel` | `#DC2626` | Felmeddelanden |
@@ -70,9 +76,11 @@ Regler:
   `var(--…)` — verifierat: noll hex i `_publik/` + page.tsx (enda `#`
   är hash-textinnehållet `"#9f2c…"`). Illustrationer använder max EN
   blå accentdetalj per motiv; grönt endast som status-bock.
-- Kanonpaletten saknar medvetet varningsfärg (amber). Behövs en på
-  arbetsytorna är det ett öppet designbeslut i D2 — inte ett arv från
-  studio-skinnets `--warning`.
+- **Varningsfärgen är beslutad i D2** (2026-07-18): `--varning #B45309`
+  (amber-700, AA: 5,0:1 på vitt, 4,7:1 på `--yta-is`) finns i kanon för
+  arbetsytornas statusbehov — flaggkanter, avvikelsemarkörer,
+  engångsnyckel-varningen. Som grönt: ENDAST status, aldrig dekor, och
+  den används inte på publika ytan.
 
 ## 3. Typografi
 

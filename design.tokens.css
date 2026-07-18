@@ -3,8 +3,10 @@
    Tre lager i kaskadordning:
      1. Gesso-grammatiken (neutral strukturbas — spacing, radier, motion)
      2. Studio-skinnet (varmt papper/terracotta — GAMMAL identitet; bär
-        fortfarande admin//byra//operator tills arbetsyte-passet)
+        numera ENDAST adminkonsolen tills dess eget pass)
      3. Grundbok-skinnet (vit/blå — GÄLLANDE identitet, DESIGN-BRIEF v4)
+     4. Arbetsyte-mappningen (main.byra/main.operator: grammatik-slots →
+        grundbok-värden — D2-passet)
    Ursprung: lager 1–2 genererade av gesso; filen underhålls numera för hand. */
 
 /* =========================================================================
@@ -291,6 +293,11 @@
   /* Grönt ENDAST som status: stämplar (Attesterad/Registrerad), LIVE. */
   --gron: #15803D;
 
+  /* Varning ENDAST som status på arbetsytorna (D2-beslutet 2026-07-18:
+     flaggor, avvikelsemarkörer, engångsnyckel-varningen). AA-räknad:
+     5,0:1 på vitt, 4,7:1 på --yta-is. Aldrig dekor, aldrig på publika ytan. */
+  --varning: #B45309;
+
   /* Mörk kontrastyta (sidfoten): djup marin med egna förgrundsnivåer. */
   --marin: #0B1B34;
   --marin-fg: #F8FAFC;
@@ -321,7 +328,68 @@
    scopas kedjan till ytorna som bär fontvariabeln. ENDAST siffror,
    konton, hash och reg-id sätts i mono. */
 main.publik,
-main.login-sida {
+main.login-sida,
+main.byra,
+main.operator {
   --font-mono: var(--font-publik-mono), ui-monospace, "SF Mono", Menlo, monospace;
+}
+
+/* =========================================================================
+   Arbetsytorna på grundbok-skinnet (D2-passet 2026-07-18)
+   /byra och /operator konsumerar globals.css-klasserna, som talar
+   Gesso-grammatikens slots. Här mappas slotsen till grundbok-värden,
+   scopat per yta — beslutet ur design-system.md §9: varje yta scopar
+   sig själv (publik-mönstret), så adminkonsolen kan ligga kvar på
+   studio-skinnet tills dess eget pass. Mappningen bor i DENNA fil så
+   tokenkällan förblir EN; ytorna dubbeldefinierar ingenting lokalt.
+   ========================================================================= */
+main.byra,
+main.operator {
+  /* Ytor */
+  --bg: var(--yta);
+  --bg-elev: var(--kort);
+  --bg-sunken: var(--yta-is);
+  --bg-tint: var(--yta-is);
+
+  /* Bläck. Mappningen av --fg-subtle → --ink-svag (4,8:1 på vitt) löser
+     §9-kontrastbrottet (~2,9:1 på varm papper) för all tertiärtext. */
+  --fg: var(--ink);
+  --fg-muted: var(--ink-mjuk);
+  --fg-subtle: var(--ink-svag);
+  --fg-disabled: #94A3B8; /* slate-400 — enda tillåtna under-AA-nivån (disabled) */
+
+  --border: var(--linje);
+  --border-strong: var(--linje-stark);
+  --divider: var(--linje);
+
+  /* Brand-ink OCH accent-slotten resolvar båda till DEN enda klarblå
+     accenten — primärknappar, attest, fokus, aktiv flik. */
+  --brand: var(--bla);
+  --brand-hover: var(--bla-djup);
+  --brand-fg: #FFFFFF;
+  --accent: var(--bla);
+  --accent-hover: var(--bla-djup);
+  --accent-fg: #FFFFFF;
+  --accent-bg: var(--yta-is);
+  --ring: var(--bla);
+
+  /* Status — grönt ENDAST status, varning ENDAST status, blå info. */
+  --success: var(--gron);
+  --warning: var(--varning);
+  --danger: var(--fel);
+  --info: var(--bla);
+
+  /* Skuggsemantik: kort = vilande, lyft = svävande. Kalla, aldrig färgade. */
+  --shadow-xs: var(--skugga-kort);
+  --shadow-sm: var(--skugga-kort);
+  --shadow-md: var(--skugga-lyft);
+  --shadow-lg: var(--skugga-lyft);
+
+  /* Tabellslots */
+  --table-header-fg: var(--ink-svag);
+  --table-header-bg: var(--yta-is);
+  --table-row-hover: var(--yta-is);
+  --table-stripe: var(--yta-is);
+  --table-border: var(--linje);
 }
 
