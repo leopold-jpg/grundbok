@@ -1,127 +1,101 @@
 # grundbok
 
-**Arkitekturförslag + körbart system** för agentisk AI-bokföring på svenska villkor:
-ett versionshanterat skills-bibliotek i stället för separata expertagenter, ett
-förslagskontrakt som enda skrivväg, tenant-isolering vid kunden (inte agenten),
-deterministisk policy-motor utanför LLM:en, och en append-only verifikationsledger
-enligt bokföringslagen.
+**Agentdriven bokföring för svenska byråer — varje bokföringsbeslut går genom ett granskbart förslagskontrakt.**
 
-## Börja här
+[![ci](https://github.com/leopold-jpg/grundbok/actions/workflows/ci.yml/badge.svg)](https://github.com/leopold-jpg/grundbok/actions/workflows/ci.yml)
+[![licens: MIT](https://img.shields.io/badge/licens-MIT-blue.svg)](./LICENSE)
+[![Next.js 16](https://img.shields.io/badge/Next.js-16-black.svg)](https://nextjs.org)
 
-1. **[docs/GRUNDBOK-MASTERPLAN.md](./docs/GRUNDBOK-MASTERPLAN.md)** — kartan: ytorna, lagren, roadmapen.
-2. **[ULTRAPLAN.md](./ULTRAPLAN.md)** — tesen och grundarkitekturen.
-3. **[docs/adr/](./docs/adr/README.md)** — besluten (förslagskontraktet, serverless-runtimen).
-4. **[ATTRIBUTION.md](./ATTRIBUTION.md)** — vad som lånas varifrån, och vilka svagheter i förlagorna som rättats.
-5. **[DEMO.md](./DEMO.md)** — demokörordningen, steg för steg.
+Specialistagenter tolkar underlag och föreslår konteringar enligt gällande rätt;
+människan attesterar avvikelserna, och andelen avvikelser sjunker över tid via
+policy. Ingen rad når huvudboken utan att en behörig människa attesterat den
+eller att kundens egen autonomipolicy uttryckligen tillåtit det — gaten är
+arkitektur, inte en checkbox. Allt spårbart, hash-bundet och AI Act-redo.
 
-## Fyra personer, fyra ytor
+## Arkitekturen i en bild
 
-| Yta | Vem | Ser ALDRIG |
-|---|---|---|
-| **Publik sajt** (`/`) | Blivande kund | Riktig data |
-| **Byråns arbetsyta** (`/byra`) | Byråns konsulter — attestkö, intag, chatt, logg, klientvy | Andra byråers data |
-| **Operatörskonsolen** (`/operator`) | Grundaren — bolag, agenter, mallar, hälsa (aggregat) | Kvitton, attest, kunddata |
-| **Kundappen** *(kommande, S3)* | Klientbolaget — fota kvitton, status, kundassistent | Konteringar, attestkön |
+```mermaid
+flowchart TD
+    intag["Intag<br/>mejl · foto · UI · API"] --> agent["Agent<br/>funktionsmall + branschpaket<br/>+ tenant-kontext"]
+    agent -- "Proposal (versionerat schema)<br/>Bearer gk_… — scopad nyckel" --> port["Porten — POST /api/proposals<br/>schema → principal → hash →<br/>injection-screening → idempotens"]
+    port --> motor{"Beslutsmotorn<br/>deterministisk<br/>autonomipolicy per tenant + modul"}
+    motor -- "inom policyn" --> auto["Auto-bokföring<br/>loggat policybeslut"]
+    motor -- "utanför policyn" --> ko["Granskningskön<br/>hash-bunden attest hos byrån"]
+    motor -- "correction" --> ko
+    auto --> ledger["Huvudboken<br/>append-only · FORCE RLS<br/>rättelse = ny verifikation"]
+    ko -- "decided_by = verifierat user-id" --> ledger
+```
 
-Regeln som bär allt: **attest bor hos byrån, drift hos operatören.**
-Grundaren godkänner aldrig ett kvitto.
+Enda skrivvägen till huvudboken är förslagskontraktet ([ADR-0002](./docs/adr/0002-forslagskontrakt-och-agentgrans.md)):
+agenter — även externa, OpenClaw-körda — är klienter med scopade nycklar som kan
+föreslå men aldrig bokföra. Varje förslag bär modell, promptversion, konfidens
+och lagrum, så AI Act-dokumentationen genereras som biprodukt.
 
-## Kör systemet
+## Agentfabriken
+
+En agent är inte en maskin utan **en rad i databasen** ([ADR-0003](./docs/adr/0003-serverless-multitenant-runtime.md)):
+provisionering är en insert, pausning en statusändring (porten svarar 403),
+nyckelrotation ett enda flöde. Agentkoden deployas en gång som stateless
+workers och servar alla tenants; jobb flödar genom en kö med pgmq-semantik
+och per-tenant concurrency-tak.
+
+Vad en agent *är* bestäms av mallkatalogen — fast, versionerad kod i repot,
+aldrig fritext per agent ([ADR-0004](./docs/adr/0004-fast-mallkatalog-och-agenttelemetri.md)):
+
+- **Funktionsroller** ([ADR-0005](./docs/adr/0005-funktionsmallar-med-branschpaket.md)):
+  `bokforing`, `lon`, `skatt-compliance`, `leverantorsreskontra`. Kärnkompetensen
+  (mottagarkontroll, förskott, omvänd moms, kvittomatchning, dubblettdetektering)
+  är branschoberoende och skrivs en gång.
+- **Branschpaket**: fristående regelpaket (omvänd byggmoms, ROT, kassarapporter …)
+  som aktiveras via tenant-kontexten. Ny bransch = ett paket, inte fyra nya mallar.
+- **En agent = funktionsmall + tenantens branschpaket + tenantens historik.**
+  Kundunikhet bor i tenant-kontexten och autonomipolicyn, aldrig i mallen.
+- **Telemetri** härleds ur proposals-datat via vy — aldrig räknare på agentraden —
+  så hela flottan kan överblickas i operatörskonsolen.
+
+## Teknikstack
+
+| Lager | Val |
+|---|---|
+| Webb & API | Next.js 16 (App Router) · React 19 · TypeScript |
+| Kontrakt & validering | Zod-schemat `Proposal` + kanonisk SHA-256-hash |
+| Databas | PGlite lokalt, Supabase (Postgres) vid deploy — append-only-triggers, FORCE ROW LEVEL SECURITY |
+| Auth | `AuthAdapter`-interface: lokal PGlite-auth i dev, Supabase Auth i prod som adapterswap |
+| AI | Anthropic API (claude-opus-4-8, structured output) — med deterministisk fallback med exakt samma schema, så hela kedjan kör utan nyckel och nät |
+| Tester | Nodes inbyggda testrunner (183 tester) + `scripts/e2e.py` över HTTP |
+
+## Status per etapp
+
+| Etapp | Status |
+|---|---|
+| Kärnan — kontrakt, beslutsmotor, append-only-ledger, RLS | ✅ klar |
+| Ytor & auth — publik sajt, `/byra`, `/operator`, rollmodell | ✅ klar |
+| Design — designsystem + publika sajtens design-pass | ✅ klar |
+| Mallkatalog & agentfabrik — funktionsroller, branschpaket, provisionering, telemetri | ✅ klar |
+| Innehåll — mallarnas och paketens sakinnehåll | 🔨 pågår |
+| Intag — mejl per byrå, foto/upload, `/api/intake`, kundappen | ⬜ kvar |
+| Deploy — Supabase-moln, Vercel, domän | ⬜ kvar *(provisionerat, kabeldragning återstår)* |
+
+## Kom igång
 
 ```bash
 npm install
-cp .env.example .env.local   # valfritt: klistra in ANTHROPIC_API_KEY för live-AI
+cp .env.example .env.local   # valfritt: ANTHROPIC_API_KEY för live-AI
 npm run dev                  # → http://localhost:3456
+npm test                     # 183 tester: kontrakt, beslutsmotor, RLS, auth, ytor, fabrik
 ```
 
-Dev-inloggningar (lösenord `grundbok-dev`): konsult `konsult.ett@byran-exempel.se`,
-operatör `leopold@otiva.se`. Lokal auth körs i PGlite bakom ett `AuthAdapter`-interface —
-Supabase Auth tar över vid deploy som en adapterswap.
+Utan API-nyckel körs den deterministiska fallbacken — samma schema, samma
+flöde; intaget visar alltid vilken motor som tolkade underlaget.
 
-Med `ANTHROPIC_API_KEY` i `.env.local` tolkar riktig Anthropic (claude-opus-4-8, structured
-output) underlagen. **Utan nyckel körs en deterministisk fallback med exakt samma schema** —
-ett ärligt mock-läge; intaget visar alltid vilken motor som tolkade. Faller API:t mitt i en
-körning går flödet automatiskt vidare i fallback.
+## Läs vidare
 
-```bash
-npm test                # 116 tester: kontrakt, beslutsmotor, RLS/append-only, auth, ytor, gräns-smoke
-npm run test:fallback   # verifierar den deterministiska fallbacken utan nät
-python3 scripts/e2e.py  # 51 kontroller mot körande dev-server (färsk .data) — hela kedjan över HTTP
-```
+- **[docs/GRUNDBOK-MASTERPLAN.md](./docs/GRUNDBOK-MASTERPLAN.md)** — kartan: ytorna, lagren, roadmapen
+- **[docs/ARKITEKTUR.md](./docs/ARKITEKTUR.md)** — teknisk översikt för nya utvecklare
+- **[docs/adr/](./docs/adr/README.md)** — arkitekturbesluten, ett dokument per beslut
+- **[ULTRAPLAN.md](./ULTRAPLAN.md)** — tesen och grundarkitekturen
 
-## Arkitekturen i en bild (text)
+## Licens
 
-```
-underlag in                    agenter (OpenClaw, cron-worker, UI-intag)
-    │                                   │  Bearer gk_… (scopad nyckel)
-    ▼                                   ▼
-┌──────────────────────────────────────────────────────────────┐
-│  PORTEN — POST /api/proposals (förslagskontraktet, ADR-0002) │
-│  schema → principal → hash → injection-screening → idempotens│
-└──────────────────────────┬───────────────────────────────────┘
-                           ▼
-        ┌──────────────────────────────────────┐
-        │  BESLUTSMOTORN (kärnan, deterministisk)│
-        │  autonomipolicy per tenant+modul       │
-        │  inom policyn → auto (policybeslut)    │
-        │  utanför → attestkön hos byrån         │
-        │  correction → ALLTID människa          │
-        └──────────────┬───────────────────────┘
-                       ▼ decided_by = verifierat user-id
-        ┌──────────────────────────────────────┐
-        │  HUVUDBOKEN — append-only, FORCE RLS  │
-        │  rättelse = ny verifikation m. referens│
-        └──────────────────────────────────────┘
-
-ytor:  /       publik — ingen riktig data
-       /byra   byrån  — attest, intag, chatt, logg (kravKonsult + byrå-vakt)
-       /operator operatören — aggregat, mallar, provisionering (kravOperator)
-```
-
-En byrå förvaltar flera klientbolag (`byraer` → `tenants`); konsultens session
-scopar allt i `/byra`, och operatören ser antal — aldrig innehåll. Varje förslag
-bär modell, promptversion, konfidens och lagrum (AI Act-spårbarhet).
-
-## Vad systemet visar
-
-- **Momssats som data, inte prompttext.** Versionerad, datumavgränsad data i
-  `skills/se/moms/rules.json`. Byt affärshändelsedatum och förslaget räknas om live
-  (6 % ↔ 12 % för kaffeexemplet); avvikelser mot underlaget flaggas — ersätts aldrig tyst.
-- **Attest med hash-bunden, verifierad identitet.** Attesten binds till en SHA-256-hash
-  av exakt det förslag som visades plus den inloggade konsultens user-id.
-- **Policy som ratt.** "Bokför själv upp till X kr för kända motparter" — rutinhändelser
-  auto-bokförs som loggade policybeslut, attesthögen krymper, correction kräver alltid människa.
-- **RLS-isolering per kund + byrå-gräns i ytan.** FORCE ROW LEVEL SECURITY i databasen,
-  byrå-vakt i API:t — URL-manipulation ger 403, smoke-testat.
-- **En agent är en rad** (ADR-0003). Provisionering är en insert, pausning en statusändring
-  (porten svarar 403), nyckelrotation ett enda flöde. Nyckeln kan föreslå, aldrig bokföra.
-- **Automatisk deterministisk fallback.** Samma schema, samma flöde, med eller utan LLM.
-
-## Struktur
-
-```
-docs/GRUNDBOK-MASTERPLAN.md  kartan — ytor, lager, roadmap
-docs/adr/               arkitekturbesluten (0002 förslagskontraktet, 0003 runtimen)
-ULTRAPLAN.md            tesen och grundarkitekturen
-ATTRIBUTION.md          lånen + de rättade svagheterna
-DEMO.md                 demokörordning (Mats-demon)
-skills/se/              en skill = SKILL.md (läsbar) + rules.json (exekverbar) + config.schema.json
-agents/                 en expert = en manifest-fil, inte en kodbas
-customers/              en kundinstans = config (mallar/ = branschmallar)
-src/contracts/          förslagskontraktet: typer, zod, kanonisk hash
-src/lib/                kärnan: beslutsmotor, ledger, policy, kontering, moms, db (RLS + triggers)
-src/modules/            moduler bakom porten (radgivning m. RAG)
-src/workers/            generisk agent-worker + cron (ADR-0003)
-src/auth/               AuthAdapter + session-krav (kravKonsult/kravOperator/byrå-vakt)
-src/ytor/               ytlogik: leads, byra, operator
-src/app/                Next.js — publik sajt, /byra, /operator, /login + API-rutter
-tests/                  116 tester; scripts/e2e.py kör 51 kontroller över HTTP
-```
-
-## Design och ansvar
-
-UI:t följer [Gesso](https://github.com/leopold-jpg/gesso)-designgrunden (`DESIGN.md` +
-`design.tokens.css` i repot, self-hostade fonter), scopad CSS per yta. Och en princip
-bär hela systemet: **allt det producerar är förslag.** Ingen rad bokförs utan att en
-behörig människa attesterat den eller att kundens egen policy uttryckligen tillåtit
-det — gaten är arkitektur, inte en checkbox.
+MIT idag — se [LICENSE](./LICENSE). Licensfrågan är under övervägande och kan
+komma att ändras inför kommersialisering.
