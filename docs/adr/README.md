@@ -10,6 +10,7 @@ kod, därefter `accepted`; ersätts ett beslut markeras det `superseded by ADR-N
 | 0001 | *(reserverad — v1-arkitekturens grundbeslut är dokumenterade i [ULTRAPLAN.md](../../ULTRAPLAN.md); de bryts ut hit om de behöver revideras)* | accepted |
 | [0002](./0002-forslagskontrakt-och-agentgrans.md) | Förslagskontrakt som enda skrivväg — agenter är klienter | accepted |
 | [0003](./0003-serverless-multitenant-runtime.md) | Serverless multi-tenant runtime — en agent är en rad, inte en maskin | accepted *(WP8–WP10, PR #1)* |
+| [0004](./0004-fast-mallkatalog-och-agenttelemetri.md) | Fast mallkatalog och agenttelemetri — mallar är versionerad kod, telemetri härleds ur proposals | accepted *(WP11–WP13)* |
 
 Beslut som än så länge bara är dokumenterade i prosa: byrå-nivån över tenants
 och AuthAdapter-mönstret (WP11, [KICKOFF-YTOR.md](../../KICKOFF-YTOR.md)) samt
