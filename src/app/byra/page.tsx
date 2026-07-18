@@ -135,6 +135,29 @@ type Policy = {
   tillatna_kinds: string[];
 };
 
+type Komplettering = {
+  id: string;
+  tenant_id: string;
+  tenant_namn: string;
+  proposal_id: string;
+  typ: "missing_receipt" | "fraga";
+  belopp_ore: number | null;
+  beskrivning: string;
+  status: "open" | "paminnd" | "klar";
+  svar: string | null;
+  skapad: string;
+  senast_paminnd: string | null;
+  proposal_summary: string;
+};
+
+type KlientKompletteringar = {
+  tenant_id: string;
+  tenant_namn: string;
+  manad: { attest_vantar: number; kompletteringar_oppna: number; gron: boolean };
+  rader: Komplettering[];
+  utkast: { subject: string; body: string } | null;
+};
+
 type ChattInlagg = {
   roll: "konsult" | "agent";
   text: string;
@@ -186,6 +209,7 @@ async function post<T>(url: string, body: unknown): Promise<T> {
 
 const FLIKAR = [
   { id: "attest", namn: "Att attestera" },
+  { id: "vanta", namn: "Väntar på kunden" },
   { id: "intag", namn: "Underlag in" },
   { id: "chatt", namn: "Chatt" },
   { id: "logg", namn: "Beslutslogg" },
@@ -221,6 +245,11 @@ function AttestSektion({
   const [fel, setFel] = useState("");
   const [bekraftelse, setBekraftelse] = useState("");
   const [motivering, setMotivering] = useState("");
+  // "Fråga kunden" (WP33): konsultens fråga på det valda förslaget blir
+  // en kompletteringsrad — svaret fästs vid förslaget i beslutsloggen.
+  const [fragar, setFragar] = useState(false);
+  const [fragaText, setFragaText] = useState("");
+  const [fragaBekraftelse, setFragaBekraftelse] = useState("");
   const detaljRef = useRef<HTMLDivElement>(null);
   const motiveringRef = useRef<HTMLInputElement>(null);
 
@@ -395,6 +424,34 @@ function AttestSektion({
   const vald = valdId ? rad(valdId) : null;
   const vantandeRad = lage.vantande ? rad(lage.vantande.id) : null;
 
+  // Radbyte nollställer frågeflödet — frågan hör till ett förslag.
+  useEffect(() => {
+    setFragar(false);
+    setFragaText("");
+    setFragaBekraftelse("");
+  }, [valdId]);
+
+  async function skickaFraga() {
+    if (!vald || !fragaText.trim()) return;
+    setFel("");
+    try {
+      await post("/api/byra/kompletteringar", {
+        handling: "fraga",
+        tenant_id: vald.tenant_id,
+        proposal_id: vald.id,
+        fraga: fragaText,
+      });
+      setFragar(false);
+      setFragaText("");
+      setFragaBekraftelse(
+        "Frågan ligger i kompletteringskön — svaret fästs vid förslaget när det registreras.",
+      );
+      await onBeslutad();
+    } catch (e) {
+      setFel(e instanceof Error ? e.message : String(e));
+    }
+  }
+
   return (
     <section className="steg">
       <div className="steg-rubrik">
@@ -519,6 +576,41 @@ function AttestSektion({
                   </div>
                 )}
 
+                <div style={{ marginTop: "var(--sp-3)" }}>
+                  {fragar ? (
+                    <div className="avvisa-rad">
+                      <input
+                        type="text"
+                        value={fragaText}
+                        onChange={(e) => setFragaText(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" && fragaText.trim()) {
+                            e.preventDefault();
+                            void skickaFraga();
+                          } else if (e.key === "Escape") {
+                            e.preventDefault();
+                            setFragar(false);
+                          }
+                        }}
+                        placeholder="Fråga till kunden om detta underlag …"
+                        aria-label="Fråga till kunden"
+                        autoFocus
+                      />
+                      <button onClick={() => void skickaFraga()} disabled={!fragaText.trim()}>
+                        Lägg i kompletteringskön
+                      </button>
+                      <button onClick={() => setFragar(false)}>Avbryt</button>
+                    </div>
+                  ) : (
+                    <button onClick={() => setFragar(true)}>Fråga kunden</button>
+                  )}
+                  {fragaBekraftelse && !fragar && (
+                    <span className="sparat" style={{ marginLeft: "var(--sp-2)" }}>
+                      {fragaBekraftelse}
+                    </span>
+                  )}
+                </div>
+
                 {lage.avvisar ? (
                   <div className="avvisa-rad">
                     <input
@@ -567,6 +659,214 @@ function AttestSektion({
       <p className="kortkommandon tyst" aria-hidden="true">
         ↑↓ välj · Enter detalj · A attestera · X avvisa · U ångra · ⌘K kommandon
       </p>
+
+      {fel && <p className="fel">{fel}</p>}
+    </section>
+  );
+}
+
+// --------------------------------------------------- väntar på kunden
+
+/** Underlagsjakten (WP33): kompletteringskön per klient — saknade kvitton
+ *  och frågor till kunden, med ålder, belopp, påminnelse (färdigt
+ *  mejlutkast via mailto — mejladaptern kommer i intag-passet) och
+ *  svarsregistrering. Månadsgrönt v0: grön chip när både attestkön och
+ *  kompletteringskön är tomma. */
+function VantaSektion({
+  data,
+  onForandring,
+}: {
+  data: KlientKompletteringar[];
+  onForandring: () => Promise<void>;
+}) {
+  const [fel, setFel] = useState("");
+  const [svarFor, setSvarFor] = useState<string | null>(null);
+  const [svarText, setSvarText] = useState("");
+  const [paminner, setPaminner] = useState<string | null>(null);
+
+  const manad = new Date().toLocaleString("sv-SE", { month: "long" });
+
+  const alderDagar = (iso: string) =>
+    Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 86_400_000));
+
+  /** Påminn per klient: alla öppna rader markeras påminda och det
+   *  färdiga utkastet öppnas i konsultens mejlklient (mailto:). */
+  async function paminn(klient: KlientKompletteringar) {
+    if (!klient.utkast) return;
+    setFel("");
+    setPaminner(klient.tenant_id);
+    try {
+      const oppna = klient.rader.filter((r) => r.status !== "klar");
+      for (const rad of oppna) {
+        await post("/api/byra/kompletteringar", {
+          handling: "paminn",
+          tenant_id: klient.tenant_id,
+          komplettering_id: rad.id,
+        });
+      }
+      window.location.href =
+        `mailto:?subject=${encodeURIComponent(klient.utkast.subject)}` +
+        `&body=${encodeURIComponent(klient.utkast.body)}`;
+      await onForandring();
+    } catch (e) {
+      setFel(e instanceof Error ? e.message : String(e));
+    } finally {
+      setPaminner(null);
+    }
+  }
+
+  async function skickaSvar(rad: Komplettering) {
+    if (!svarText.trim()) return;
+    setFel("");
+    try {
+      await post("/api/byra/kompletteringar", {
+        handling: "svar",
+        tenant_id: rad.tenant_id,
+        komplettering_id: rad.id,
+        svar: svarText,
+      });
+      setSvarFor(null);
+      setSvarText("");
+      await onForandring();
+    } catch (e) {
+      setFel(e instanceof Error ? e.message : String(e));
+    }
+  }
+
+  const tomt = data.every((k) => k.rader.length === 0);
+
+  return (
+    <section className="steg">
+      <div className="steg-rubrik">
+        <h2 className="steg-titel">Väntar på kunden</h2>
+        <span className="steg-not">
+          saknade kvitton och frågor — påminnelsen är ett färdigt mejlutkast, svaret
+          fästs vid förslaget i beslutsunderlaget
+        </span>
+      </div>
+
+      {tomt ? (
+        <TomtLage>
+          Inget väntar på någon kund — flaggade underlag och frågor lägger sig här av
+          sig själva.
+        </TomtLage>
+      ) : (
+        data.map((klient) => (
+          <div key={klient.tenant_id} className="verifikation">
+            <div className="huvud">
+              <span className="beskr">{klient.tenant_namn}</span>
+              {klient.manad.gron ? (
+                <Chip>{manad}: grön</Chip>
+              ) : (
+                <Chip varning>
+                  {manad}: {klient.manad.attest_vantar} att attestera ·{" "}
+                  {klient.manad.kompletteringar_oppna} hos kunden
+                </Chip>
+              )}
+              <span className="hoger">
+                {klient.utkast && (
+                  <button
+                    onClick={() => void paminn(klient)}
+                    disabled={paminner === klient.tenant_id}
+                  >
+                    {paminner === klient.tenant_id ? "Påminner …" : "Påminn (mejlutkast)"}
+                  </button>
+                )}
+              </span>
+            </div>
+
+            {klient.rader.length === 0 ? (
+              <p className="tyst" style={{ margin: "var(--sp-2) 0" }}>
+                Inget väntar hos {klient.tenant_namn}.
+              </p>
+            ) : (
+              <table className="rader">
+                <thead>
+                  <tr>
+                    <th>Typ</th>
+                    <th>Gäller</th>
+                    <th className="tal">Belopp</th>
+                    <th className="tal">Ålder</th>
+                    <th>Status</th>
+                    <th>Svar</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {klient.rader.map((rad) => (
+                    <tr key={rad.id}>
+                      <td>
+                        {rad.typ === "missing_receipt" ? (
+                          <Chip varning>kvitto saknas</Chip>
+                        ) : (
+                          <Chip>fråga</Chip>
+                        )}
+                      </td>
+                      <td>
+                        {rad.proposal_summary}
+                        {rad.typ === "fraga" && (
+                          <div className="tyst">”{rad.beskrivning}”</div>
+                        )}
+                      </td>
+                      <td className="tal">
+                        {rad.belopp_ore !== null ? `${kr(rad.belopp_ore)} kr` : "—"}
+                      </td>
+                      <td className="tal">{alderDagar(rad.skapad)} d</td>
+                      <td>
+                        {rad.status === "klar" ? (
+                          "klar"
+                        ) : rad.status === "paminnd" ? (
+                          <>påmind {rad.senast_paminnd ? tid(rad.senast_paminnd) : ""}</>
+                        ) : (
+                          "öppen"
+                        )}
+                      </td>
+                      <td>
+                        {rad.status === "klar" ? (
+                          <span>{rad.svar}</span>
+                        ) : svarFor === rad.id ? (
+                          <span className="avvisa-rad" style={{ margin: 0 }}>
+                            <input
+                              type="text"
+                              value={svarText}
+                              onChange={(e) => setSvarText(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter" && svarText.trim()) {
+                                  e.preventDefault();
+                                  void skickaSvar(rad);
+                                } else if (e.key === "Escape") {
+                                  setSvarFor(null);
+                                }
+                              }}
+                              placeholder="Kundens svar / underlag inkommet …"
+                              aria-label="Registrera svar"
+                              autoFocus
+                            />
+                            <button
+                              onClick={() => void skickaSvar(rad)}
+                              disabled={!svarText.trim()}
+                            >
+                              Registrera
+                            </button>
+                          </span>
+                        ) : (
+                          <button
+                            onClick={() => {
+                              setSvarFor(rad.id);
+                              setSvarText("");
+                            }}
+                          >
+                            Registrera svar
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        ))
+      )}
 
       {fel && <p className="fel">{fel}</p>}
     </section>
@@ -1442,6 +1742,7 @@ export default function ByraSida() {
   const [flik, setFlik] = useState<FlikId>("attest");
   const [ko, setKo] = useState<KoRad[]>([]);
   const [logg, setLogg] = useState<LoggRad[]>([]);
+  const [komp, setKomp] = useState<KlientKompletteringar[]>([]);
   const [palettOppen, setPalettOppen] = useState(false);
   const [fokusRad, setFokusRad] = useState<string | null>(null);
 
@@ -1460,6 +1761,7 @@ export default function ByraSida() {
   // en redan beslutad rad skulle då blinka tillbaka (granskningsfynd WP29).
   const koSeq = useRef(0);
   const loggSeq = useRef(0);
+  const kompSeq = useRef(0);
 
   const laddaKo = useCallback(async (v: string) => {
     const seq = ++koSeq.current;
@@ -1473,15 +1775,22 @@ export default function ByraSida() {
     if (rader && seq === loggSeq.current) setLogg(rader);
   }, []);
 
+  const laddaKomp = useCallback(async (v: string) => {
+    const seq = ++kompSeq.current;
+    const rader = await hamta<KlientKompletteringar[]>(`/api/byra/kompletteringar?klient=${v}`);
+    if (rader && seq === kompSeq.current) setKomp(rader);
+  }, []);
+
   useEffect(() => {
     if (!session) return;
     laddaKo(val);
     laddaLogg(val);
-  }, [session, val, laddaKo, laddaLogg]);
+    laddaKomp(val);
+  }, [session, val, laddaKo, laddaLogg, laddaKomp]);
 
   const uppdatera = useCallback(async () => {
-    await Promise.all([laddaKo(val), laddaLogg(val)]);
-  }, [val, laddaKo, laddaLogg]);
+    await Promise.all([laddaKo(val), laddaLogg(val), laddaKomp(val)]);
+  }, [val, laddaKo, laddaLogg, laddaKomp]);
 
   // Cmd+K öppnar paletten (WP26). Kommandokatalogen byggs av den delade
   // byggaren — konsultrollen ger ALDRIG operatörskommandon (WP29-regeln).
@@ -1588,6 +1897,14 @@ export default function ByraSida() {
           >
             {f.namn}
             {f.id === "attest" && ko.length > 0 && <span className="antal">{ko.length}</span>}
+            {f.id === "vanta" &&
+              (() => {
+                const oppna = komp.reduce(
+                  (s, k) => s + k.rader.filter((r) => r.status !== "klar").length,
+                  0,
+                );
+                return oppna > 0 ? <span className="antal">{oppna}</span> : null;
+              })()}
           </button>
         ))}
       </nav>
@@ -1601,6 +1918,7 @@ export default function ByraSida() {
           onFokusKlar={fokusKlar}
         />
       )}
+      {flik === "vanta" && <VantaSektion data={komp} onForandring={uppdatera} />}
       {flik === "intag" && <IntagSektion klient={valdKlient} onNyttForslag={uppdatera} />}
       {flik === "chatt" && <ChattSektion klient={valdKlient} userId={session.konsult.id} />}
       {flik === "logg" && <LoggSektion logg={logg} visaKlient={val === "alla"} />}

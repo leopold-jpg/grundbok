@@ -240,6 +240,25 @@ export async function handleProposal(
       ],
     );
 
+    // Underlagsjakten (WP33): ett missing_receipt-flaggat förslag skapar
+    // automatiskt en kompletteringsrad — restbeloppet jagas hos kunden i
+    // byråvyns "Väntar på kunden", aldrig i konsultens huvud.
+    const saknat = flaggor.find((f) => f.id === "missing_receipt");
+    if (saknat) {
+      await tx.query(
+        `INSERT INTO kompletteringar
+           (tenant_id, agent_id, proposal_id, typ, belopp_ore, beskrivning)
+         VALUES ($1, $2, $3, 'missing_receipt', $4, $5)`,
+        [
+          p.tenant_id,
+          principal.agent_id ?? null,
+          p.id,
+          typeof saknat.data?.restbelopp_ore === "number" ? saknat.data.restbelopp_ore : null,
+          saknat.text,
+        ],
+      );
+    }
+
     if (!utfall.auto) {
       await auditera(tx, p.tenant_id, "forslag_i_ko", {
         proposalId: p.id,
