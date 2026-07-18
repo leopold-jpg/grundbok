@@ -284,6 +284,28 @@ FROM agents a
 LEFT JOIN proposals p ON p.agent_id = a.id
 GROUP BY a.id;
 
+-- ======================================== underlagsjakten (WP33) ====
+-- Kompletteringskön: det klienten är skyldig byrån — saknade kvitton
+-- (skapas automatiskt ur missing_receipt-flaggade förslag) och
+-- konsultens frågor till kunden. Kunddatabärande: tenant_id + RLS som
+-- övriga. Status är arbetsflöde (open → paminnd → klar) — raden är
+-- arbetsdata, inte räkenskapsinformation, och får uppdateras.
+CREATE TABLE IF NOT EXISTS kompletteringar (
+  id             uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id      text NOT NULL REFERENCES tenants(id),
+  agent_id       uuid REFERENCES agents(id),
+  proposal_id    uuid NOT NULL REFERENCES proposals(id),
+  typ            text NOT NULL CHECK (typ IN ('missing_receipt', 'fraga')),
+  belopp_ore     bigint,
+  beskrivning    text NOT NULL,
+  status         text NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'paminnd', 'klar')),
+  -- Kundens/konsultens registrerade svar — när det sätts blir raden klar
+  -- och svaret fästs vid förslaget i audit-loggen (Rex-dokumentation).
+  svar           text,
+  skapad         timestamptz NOT NULL DEFAULT now(),
+  senast_paminnd timestamptz
+);
+
 -- Operatörskonsolen (WP14): namngivna policymallar som väljs vid
 -- provisionering och KOPIERAS till tenantens autonomy_policies — mallen
 -- är operatörens data (service-vägens plan, inga app-grants), tenantens

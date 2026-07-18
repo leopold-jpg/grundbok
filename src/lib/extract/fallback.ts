@@ -86,6 +86,29 @@ export function tolkaMedFallback(text: string): Extraktion {
     .map((l) => l.trim())
     .find((l) => /avser|gäller|beskrivning/i.test(l));
 
+  // Observationsfälten (WP32): deterministiska motsvarigheter till det
+  // riktiga LLM:et rapporterar — märkta rader i textrepresentationen.
+  // Radankrat (granskningsfynd WP34): "Betalningsmottagare: <leverantör>"
+  // i betalfoten får ALDRIG fångas som fakturamottagare — då hade
+  // leverantörens namn jämförts mot tenanten och falsklarmat wrong_tenant.
+  const mottagare =
+    text.match(/(?:^|\n)\s*(?:mottagare|fakturamottagare|faktura\s+till|köpare|ställd\s+till)\s*[:.]\s*(.+)/i)?.[1]?.trim() ??
+    null;
+  // Slut-/kreditfaktura som bara AVRÄKNAR ett tidigare a conto är inte
+  // ett förskott (granskningsfynd WP34) — kostnaden har levererats.
+  const forskott =
+    /förskott|a\s?conto|à\s?conto|deposition/i.test(text) &&
+    !/slutfaktura|kreditfaktura|avgår/i.test(text);
+  const privatRad = text
+    .split("\n")
+    .map((l) => l.trim())
+    .find((l) => /privat|verksamhetsfrämmande/i.test(l));
+  const orderRef = text.match(/order(?:nr|nummer|ref(?:erens)?)?\s*[:.]\s*([A-ZÅÄÖa-zåäö0-9-]+)/i)?.[1] ?? null;
+  const restUtanUnderlag = hittaBelopp(text, [
+    /varav\s+utan\s+(?:kvitto|underlag)/,
+    /(?:kvitto|underlag)\s+saknas\s+för/,
+  ]);
+
   return {
     motpart: motpart.slice(0, 120),
     beskrivning:
@@ -98,5 +121,10 @@ export function tolkaMedFallback(text: string): Extraktion {
     momssats_angiven: momssats ? Number(momssats) : null,
     kategori,
     betalsatt: /faktura|förfallodag|bankgiro|att\s+betala/i.test(text) ? "faktura" : "direkt",
+    mottagare: mottagare ? mottagare.slice(0, 120) : null,
+    forskott,
+    privat_indikation: privatRad ? privatRad.slice(0, 200) : null,
+    order_ref: orderRef,
+    rest_utan_underlag_ore: restUtanUnderlag,
   };
 }

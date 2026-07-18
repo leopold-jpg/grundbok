@@ -103,6 +103,11 @@ export async function handleProposal(
   db: PGlite,
   principal: Principal,
   raw: unknown,
+  /** Granskningsflaggor från BETRODDA runtime-lager (workern, interna
+   *  routes) — WP32. Aldrig från payloaden: en extern agents egen utsaga
+   *  om sina flaggor är värdelös som kontroll. Persisteras i
+   *  proposals.flaggor tillsammans med portens egna. */
+  runtimeFlaggor: Flagga[] = [],
 ): Promise<ProposalResultat> {
   const parsed = ProposalSchema.safeParse(raw);
   if (!parsed.success) {
@@ -147,11 +152,16 @@ export async function handleProposal(
     ...p.lines.map((l) => l.benamning),
     ...p.legal.map((l) => l.note ?? ""),
   ].join("\n");
-  const flaggor: Flagga[] = kontrolleraInjection(fritext).map((f) => ({
-    id: `injection_${f.monster}`,
-    niva: "varning" as const,
-    text: `Förslaget innehåller text som liknar en instruktion till systemet ("${f.utdrag}"). Behandlad som data — granska.`,
-  }));
+  const flaggor: Flagga[] = [
+    // Runtime-lagrets granskningsflaggor först (dedupliceras på id) …
+    ...new Map(runtimeFlaggor.map((f) => [f.id, f])).values(),
+    // … sedan portens egen injection-screening.
+    ...kontrolleraInjection(fritext).map((f) => ({
+      id: `injection_${f.monster}`,
+      niva: "varning" as const,
+      text: `Förslaget innehåller text som liknar en instruktion till systemet ("${f.utdrag}"). Behandlad som data — granska.`,
+    })),
+  ];
   if (!p.provenance.injection_screened) {
     flaggor.push({
       id: "agent_utan_screening",
@@ -227,6 +237,37 @@ export async function handleProposal(
         principal.agent_id ?? null,
       ],
     );
+
+    // Telemetrisignalen för beloppsanomali (fall 7) skrivs HÄR — efter
+    // idempotenskontrollen och i samma transaktion som förslaget: en
+    // kö-omkörning av samma jobb blir 'duplicate' ovan och kan aldrig
+    // lämna dubbla anomalihändelser i den append-only-loggen.
+    const anomali = flaggor.find((f) => f.id === "anomaly_amount");
+    if (anomali) {
+      await auditera(tx, p.tenant_id, "telemetri_anomaly_amount", {
+        proposalId: p.id,
+        ...(anomali.data ?? {}),
+      });
+    }
+
+    // Underlagsjakten (WP33): ett missing_receipt-flaggat förslag skapar
+    // automatiskt en kompletteringsrad — restbeloppet jagas hos kunden i
+    // byråvyns "Väntar på kunden", aldrig i konsultens huvud.
+    const saknat = flaggor.find((f) => f.id === "missing_receipt");
+    if (saknat) {
+      await tx.query(
+        `INSERT INTO kompletteringar
+           (tenant_id, agent_id, proposal_id, typ, belopp_ore, beskrivning)
+         VALUES ($1, $2, $3, 'missing_receipt', $4, $5)`,
+        [
+          p.tenant_id,
+          principal.agent_id ?? null,
+          p.id,
+          typeof saknat.data?.restbelopp_ore === "number" ? saknat.data.restbelopp_ore : null,
+          saknat.text,
+        ],
+      );
+    }
 
     if (!utfall.auto) {
       await auditera(tx, p.tenant_id, "forslag_i_ko", {

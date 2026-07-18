@@ -56,6 +56,11 @@
         "beloppsgrans_flagga_sek": { "type": "number", "minimum": 0 }
       }
     },
+    "ordrar": {
+      "description": "Kända ordervärden för ÄTA-vaksamheten (WP32, branschpaket bygg): orderreferens → värde i ören. Granskningsmotorn flaggar fakturor som åberopar en känd order men överstiger värdet (needs_review).",
+      "type": "object",
+      "additionalProperties": { "type": "integer", "minimum": 0 }
+    },
     "integrationer": {
       "type": "object",
       "additionalProperties": false,

@@ -1,9 +1,24 @@
+// Tolkningen tvingas till den deterministiska fallbacken (WP34-kedjan
+// kör hela workervägen) — inga nätanrop i testsviten.
+process.env.GRUNDBOK_FORCE_FALLBACK = "1";
+
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { createDb } from "../src/lib/db/client";
+import { withTenant } from "../src/lib/db/tenant";
 import { provisionAgent, pausaAgent } from "../src/lib/provisioning";
 import { proposalsPort } from "../src/lib/proposals-port";
 import { mallRegistret } from "../src/mallar/registry";
+import { skapaAgentNyckel } from "../src/lib/agent-auth";
+import { körJobb } from "../src/workers/run-agent";
+import { decideProposal } from "../src/lib/decisions";
+import {
+  hamtaKompletteringar,
+  skapaFraga,
+  registreraSvar,
+  manadsStatus,
+} from "../src/lib/kompletteringar";
+import { FALL_5_DELMATCHNING } from "./golden-underlag";
 import { exempelProposal } from "./helpers";
 
 // Kompletteringspass (punkt 3): hela kedjan som EN smoke — provisionera
@@ -84,4 +99,107 @@ test("e2e: provisionering → jobb → mallstämplad proposal → telemetri → 
   );
   assert.equal(teleEfter.rows[0]?.status, "paused");
   assert.equal(Number(teleEfter.rows[0]?.proposals_7d), 1);
+});
+
+// ================================================== underlagsjakten (WP34)
+
+test("e2e: saknat kvitto → delmatchad proposal → komplettering → fråga → svar → månadschip gul→grön", async () => {
+  // Egen databas: månadsgrönt beräknas ur nuläget och ska inte störas
+  // av smoken ovan.
+  const db2 = await createDb();
+  const tenant = "kund_a";
+
+  // 0. Utgångsläget är grönt — inget väntar någonstans.
+  assert.equal((await manadsStatus(db2, tenant)).gron, true);
+
+  // 1. Underlag med saknat kvitto in via workervägen (mallstämplad agent).
+  const { id: agentId } = await skapaAgentNyckel(db2, {
+    tenantId: tenant,
+    module: "bokforing",
+    scopes: ["proposals:write"],
+    namn: "e2e-underlagsjakt-agent",
+    template: { id: "bokforing", major: "1" },
+  });
+  const doc = await withTenant(db2, tenant, async (tx) => {
+    const r = await tx.query<{ id: string }>(
+      `INSERT INTO documents (tenant_id, raw) VALUES ($1, $2) RETURNING id`,
+      [tenant, FALL_5_DELMATCHNING],
+    );
+    return r.rows[0].id;
+  });
+  const utfall = await körJobb(db2, {
+    job_id: "e2e-underlagsjakt-1",
+    tenant_id: tenant,
+    module: "bokforing",
+    trigger: "e2e",
+    agent_id: agentId,
+    payload_ref: `document:${doc}`,
+  });
+  assert.equal(utfall.utfall, "klar");
+  const proposalId = (utfall as { proposal_id: string }).proposal_id;
+
+  // 2. Förslaget är delmatchat (missing_receipt persisterad) och pending.
+  const prad = await withTenant(db2, tenant, (tx) =>
+    tx.query<{ status: string; flaggor: { id: string }[] }>(
+      `SELECT status, flaggor FROM proposals WHERE id = $1`,
+      [proposalId],
+    ),
+  );
+  assert.equal(prad.rows[0].status, "pending");
+  assert.ok(prad.rows[0].flaggor.some((f) => f.id === "missing_receipt"));
+
+  // 3. Kompletteringsraden skapades automatiskt med restbeloppet.
+  const komplettering = (await hamtaKompletteringar(db2, tenant)).find(
+    (k) => k.proposal_id === proposalId,
+  );
+  assert.ok(komplettering, "kompletteringsraden saknas");
+  assert.equal(komplettering.belopp_ore, 40_000);
+
+  // 4. Konsulten ställer en fråga på samma förslag.
+  const fraga = await skapaFraga(db2, {
+    tenantId: tenant,
+    proposalId,
+    fraga: "Vilka tre transaktioner ingick i kortavräkningen?",
+    stalldAv: "konsult-e2e",
+  });
+
+  // Gult läge: 1 att attestera, 2 hos kunden.
+  const gult = await manadsStatus(db2, tenant);
+  assert.deepEqual(
+    { gron: gult.gron, attest: gult.attest_vantar, komp: gult.kompletteringar_oppna },
+    { gron: false, attest: 1, komp: 2 },
+  );
+
+  // 5. Svaren registreras — båda loggas som Rex-dokumentation vid förslaget.
+  await registreraSvar(db2, {
+    tenantId: tenant,
+    kompletteringId: komplettering.id,
+    svar: "Kvittot för 400 kr inkom via mejl.",
+    registreratAv: "konsult-e2e",
+  });
+  await registreraSvar(db2, {
+    tenantId: tenant,
+    kompletteringId: fraga.id,
+    svar: "Lunch, taxi och kontorsmaterial enligt specifikation.",
+    registreratAv: "konsult-e2e",
+  });
+  const svar = await withTenant(db2, tenant, (tx) =>
+    tx.query<{ payload: { proposalId: string } }>(
+      `SELECT payload FROM audit_log WHERE event_type = 'kompletteringssvar'`,
+    ),
+  );
+  assert.equal(svar.rows.filter((r) => r.payload.proposalId === proposalId).length, 2);
+
+  // 6. Attest av förslaget → kön töms → månadschippet går till grönt.
+  await decideProposal(db2, {
+    tenantId: tenant,
+    proposalId,
+    outcome: "approved",
+    decidedBy: "konsult-e2e",
+  });
+  const slut = await manadsStatus(db2, tenant);
+  assert.deepEqual(
+    { gron: slut.gron, attest: slut.attest_vantar, komp: slut.kompletteringar_oppna },
+    { gron: true, attest: 0, komp: 0 },
+  );
 });

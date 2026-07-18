@@ -1,0 +1,13 @@
+{
+  "fall": 1,
+  "titel": "Faktura ställd till annat bolag — flag_wrong_tenant, ingen kontering",
+  "tenant": "kund_a",
+  "forvantat": {
+    "kind": "advisory_answer",
+    "eskalerad": true,
+    "lines": [],
+    "flaggor_kravs": ["flag_wrong_tenant"],
+    "flaggor_forbjudna": [],
+    "status": "pending"
+  }
+}

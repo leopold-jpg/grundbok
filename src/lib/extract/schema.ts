@@ -51,6 +51,57 @@ export const ExtraktionSchema = z.object({
   betalsatt: z
     .enum(["faktura", "direkt"])
     .describe("faktura = leverantörsfaktura att betala senare; direkt = betalt på plats (kort/swish)"),
+
+  // ---- Observationsfält (WP32): LLM:en/fallbacken RAPPORTERAR vad
+  // dokumentet säger — den deterministiska granskningen (granskning.ts)
+  // fattar besluten (flaggor, eskalering, kontoval). Alla fält har
+  // default så att äldre payloads och testliteraler validerar oförändrat.
+  mottagare: z
+    .string()
+    .nullable()
+    .default(null)
+    .describe(
+      "Vem dokumentet är STÄLLT TILL (fakturamottagare/köpare) om det framgår — inte leverantören. Annars null",
+    ),
+  forskott: z
+    .boolean()
+    .default(false)
+    .describe(
+      "true om dokumentet är en förskottsfaktura/a conto/deposition — betalning FÖRE leverans, inte en kostnad ännu",
+    ),
+  privat_indikation: z
+    .string()
+    .nullable()
+    .default(null)
+    .describe(
+      "Om innehållet framstår som privat/verksamhetsfrämmande: kort motivering (t.ex. 'privat middag'). Annars null",
+    ),
+  order_ref: z
+    .string()
+    .nullable()
+    .default(null)
+    .describe("Order-/beställningsreferens som dokumentet åberopar (t.ex. 'ORD-2026-77'), annars null"),
+  rest_utan_underlag_ore: z
+    .number()
+    .int()
+    .nullable()
+    .default(null)
+    .describe(
+      "Belopp i ören som enligt dokumentet SAKNAR kvitto/underlag (t.ex. 'varav utan kvitto: 400,00 kr'), annars null",
+    ),
 });
 
 export type Extraktion = z.infer<typeof ExtraktionSchema>;
+
+/** Neutralvärden för observationsfälten (WP32) — för testliteraler och
+ *  äldre anropare som bygger Extraktion för hand. */
+export const OBSERVATIONS_DEFAULTS: Pick<
+  Extraktion,
+  "mottagare" | "forskott" | "privat_indikation" | "order_ref" | "rest_utan_underlag_ore"
+> = {
+  mottagare: null,
+  forskott: false,
+  privat_indikation: null,
+  order_ref: null,
+  rest_utan_underlag_ore: null,
+};

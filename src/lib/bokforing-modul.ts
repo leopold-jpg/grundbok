@@ -6,7 +6,7 @@ import {
   type Proposal,
   type LegalReference,
 } from "@/contracts";
-import type { Forslag } from "./kontering";
+import type { Flagga, Forslag } from "./kontering";
 import type { Extraktion } from "./extract/schema";
 
 // Modul #1: bokforing — v1:s kvitto/faktura-tolkning bakom förslags-
@@ -45,6 +45,9 @@ export function byggBokforingsProposal(input: {
   /** Mallstämpeln (v0.3, ADR-0004): agentens mall + registrets exakta
    *  version. Utelämnad för mall-lösa körningar (intag-UI, äldre agenter). */
   mall?: { id: string; version: string };
+  /** Den kompletta systemprompt körningen använde (WP31) — ingår i
+   *  prompt_hash så att branschpaketändringar syns i provenansen. */
+  systemPrompt?: string;
 }): Proposal {
   const { forslag } = input;
 
@@ -83,9 +86,13 @@ export function byggBokforingsProposal(input: {
     provenance: {
       ...(input.agentRuntime ? { agent_runtime: input.agentRuntime } : {}),
       model: input.motor === "anthropic" ? input.motorDetalj : "fallback:deterministisk",
+      // prompt_hash täcker modulversion + skillversioner + (när mallen
+      // körs, WP31) hela den sammanvävda systemprompten — ett bumpat
+      // branschpaket ger nytt hash och syns i revisionsspåret.
       prompt_hash: sha256Hex(
         `grundbok-bokforing@${BOKFORING_MODULE_VERSION}|` +
-          JSON.stringify(forslag.skill_versions),
+          JSON.stringify(forslag.skill_versions) +
+          (input.systemPrompt ? `|prompt:${sha256Hex(input.systemPrompt)}` : ""),
       ),
       module_version: BOKFORING_MODULE_VERSION,
       input_refs: [`document:${input.documentId}`],
@@ -93,5 +100,53 @@ export function byggBokforingsProposal(input: {
     },
   };
 
+  return { ...utanHash, hash: hashProposal(utanHash) };
+}
+
+/** Eskalering utan kontering (WP32): mottagarkontrollen eller privat-
+ *  vakten föll — förslaget byggs som advisory_answer (inga rader, ingen
+ *  ledger-effekt, kontrakt v0.3) och går till granskningskön. Kontraktet
+ *  kräver rader för journal_entry, så "ingen kontering" ÄR advisory-
+ *  formen — aldrig ett halvtomt journal_entry. */
+export function byggEskaleringsProposal(input: {
+  tenantId: string;
+  documentId: string;
+  extraktion: Extraktion;
+  skal: string;
+  flaggor: Flagga[];
+  motor: "anthropic" | "fallback";
+  motorDetalj: string;
+  id?: string;
+  agentRuntime?: string;
+  mall?: { id: string; version: string };
+  systemPrompt?: string;
+}): Proposal {
+  const utanHash: Omit<Proposal, "hash"> = {
+    contract_version: CONTRACT_VERSION,
+    id: input.id ?? randomUUID(),
+    tenant_id: input.tenantId,
+    module: "bokforing",
+    kind: "advisory_answer",
+    ...(input.mall ? { mall_id: input.mall.id, mall_version: input.mall.version } : {}),
+    affarshandelsedatum: input.extraktion.datum,
+    motpart: input.extraktion.motpart,
+    summary: `ESKALERING (ingen kontering): ${input.skal}`.slice(0, 300),
+    lines: [],
+    legal: [],
+    // Eskaleringar är per definition lågkonfidenta beslut ÅT konsulten —
+    // aldrig i närheten av någon auto-tröskel.
+    confidence: 0.2,
+    provenance: {
+      ...(input.agentRuntime ? { agent_runtime: input.agentRuntime } : {}),
+      model: input.motor === "anthropic" ? input.motorDetalj : "fallback:deterministisk",
+      prompt_hash: sha256Hex(
+        `grundbok-bokforing@${BOKFORING_MODULE_VERSION}|eskalering` +
+          (input.systemPrompt ? `|prompt:${sha256Hex(input.systemPrompt)}` : ""),
+      ),
+      module_version: BOKFORING_MODULE_VERSION,
+      input_refs: [`document:${input.documentId}`],
+      injection_screened: true,
+    },
+  };
   return { ...utanHash, hash: hashProposal(utanHash) };
 }

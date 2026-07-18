@@ -64,6 +64,9 @@ export type KundConfig = {
   mall: { id: string; version: string };
   skills: Record<string, { version: string; config: Record<string, unknown> }>;
   approval: { auto_godkann: false; beloppsgrans_flagga_sek?: number };
+  /** Kända ordervärden (WP32, ÄTA-vaksamhet): orderreferens → värde i
+   *  ören. Läses av granskningsmotorn när bygg-paketet är aktivt. */
+  ordrar?: Record<string, number>;
 };
 
 const kundConfigCache = new Map<string, KundConfig>();

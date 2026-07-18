@@ -40,6 +40,10 @@ GRANT SELECT ON agents TO grundbok_app;
 -- appen samma tenant-scopade läsning som agents. Vyn DROP+CREATE:as i
 -- schema.sql vid varje uppstart; grant:en här återställs direkt efter.
 GRANT SELECT ON agent_telemetry TO grundbok_app;
+-- kompletteringar (WP33): arbetsdata — status/svar/påminnelse får
+-- uppdateras, raderas aldrig (spårbarheten mot förslaget ska bestå).
+GRANT SELECT, INSERT ON kompletteringar TO grundbok_app;
+GRANT UPDATE (status, svar, senast_paminnd) ON kompletteringar TO grundbok_app;
 
 -- RLS på varje kunddatabärande tabell: rad synlig/skrivbar ⇔ rätt tenant_id.
 -- current_setting(..., true) returnerar NULL om osatt → policyn nekar allt.
@@ -48,7 +52,8 @@ DECLARE t text;
 BEGIN
   FOREACH t IN ARRAY ARRAY[
     'documents', 'verifications', 'verification_rows', 'audit_log',
-    'proposals', 'decisions', 'autonomy_policies', 'agents'
+    'proposals', 'decisions', 'autonomy_policies', 'agents',
+    'kompletteringar'
   ] LOOP
     EXECUTE format('ALTER TABLE %I ENABLE ROW LEVEL SECURITY', t);
     EXECUTE format('ALTER TABLE %I FORCE ROW LEVEL SECURITY', t);

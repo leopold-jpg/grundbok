@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getDb } from "@/lib/db/client";
 import { kontera } from "@/lib/kontering";
+import { granskaUnderlag } from "@/lib/granskning";
 import { ExtraktionSchema } from "@/lib/extract/schema";
 import { byggBokforingsProposal } from "@/lib/bokforing-modul";
 import { handleProposal, type Principal } from "@/lib/decisions";
@@ -45,15 +46,41 @@ export async function POST(req: Request) {
     );
   }
 
+  // Samma granskningsordning som workervägen (WP34-granskningsfynd: två
+  // ingångar får aldrig tillämpa olika bokföringsregler på samma
+  // underlag). Eskaleringsfallen (fel mottagare, privat) stoppas här med
+  // tydligt fel — intags-UI:t saknar eskaleringsrendering i natt, och
+  // ingenting får konteras vidare förbi vakterna. Aktiva paket härleds
+  // ur tenantens bransch: intaget är mall-löst (ingen agentrad).
+  const granskning = await granskaUnderlag(db, body.tenant_id, parsed.data);
+  if (granskning.eskalera) {
+    return NextResponse.json(
+      {
+        fel:
+          `Underlaget eskaleras och konteras inte: ${granskning.eskaleringsSkal}. ` +
+          granskning.flaggor.map((f) => f.text).join(" "),
+      },
+      { status: 422 },
+    );
+  }
+
   let forslag;
   try {
-    forslag = kontera(parsed.data, body.tenant_id, body.affarshandelsedatum);
+    forslag = kontera(
+      parsed.data,
+      body.tenant_id,
+      body.affarshandelsedatum,
+      granskning.kostnadskontoOverride,
+    );
   } catch (err) {
     return NextResponse.json(
       { fel: err instanceof Error ? err.message : String(err) },
       { status: 422 },
     );
   }
+  // Granskningens flaggor in FÖRE konfidensberäkningen — varningar
+  // (dubblett, delmatchning, ÄTA) trycker förslaget till attestkön.
+  forslag.flaggor.push(...granskning.flaggor);
 
   const proposal = byggBokforingsProposal({
     tenantId: body.tenant_id,
@@ -73,7 +100,9 @@ export async function POST(req: Request) {
     namn: `konsult:${krav.session.user.id}`,
   };
 
-  const resultat = await handleProposal(db, principal, proposal);
+  // Flaggorna följer med som betrodd runtime-metadata — persisteras i
+  // proposals.flaggor och driver missing_receipt→komplettering (WP33).
+  const resultat = await handleProposal(db, principal, proposal, forslag.flaggor);
 
   if (resultat.status === "avvisad_vid_porten") {
     return NextResponse.json({ fel: resultat.fel.join("; ") }, { status: resultat.http });

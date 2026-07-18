@@ -3,6 +3,12 @@ import type { Sessionsinfo } from "@/auth/adapter";
 import { tenantsForSession } from "@/auth/session";
 import { withTenant } from "@/lib/db/tenant";
 import { hamtaKo, hamtaBeslutslogg, type KoRad, type LoggRad } from "@/lib/admin";
+import {
+  kompletteringsOversikt,
+  byggPaminnelseUtkast,
+  type Komplettering,
+  type ManadsStatus,
+} from "@/lib/kompletteringar";
 
 // Byråns arbetsyta (WP13) — ytlogik ovanpå kärnans läshjälpare. Allt är
 // scopat genom sessionens byrå: klientlistan kommer ALLTID ur
@@ -87,6 +93,48 @@ export async function beslutsLogg(
         : (namn.get(r.decided_by) ?? r.decided_by),
     };
   });
+}
+
+// ------------------------------------------------ underlagsjakten (WP33)
+
+export type ByraKomplettering = Komplettering & {
+  tenant_id: string;
+  tenant_namn: string;
+};
+
+export type KlientKompletteringar = {
+  tenant_id: string;
+  tenant_namn: string;
+  manad: ManadsStatus;
+  rader: ByraKomplettering[];
+  /** Färdigt mejlutkast för de öppna raderna — mailto: i natt. */
+  utkast: { subject: string; body: string } | null;
+};
+
+/** "Väntar på kunden" — kompletteringskön per klient, med månadsgrönt v0
+ *  och färdigt påminnelseutkast. Samma scopning som kö/logg: klienterna
+ *  kommer ALLTID ur sessionen. */
+export async function kompletteringarForByra(
+  db: PGlite,
+  session: Sessionsinfo,
+  val: string,
+): Promise<KlientKompletteringar[]> {
+  const klienter = await valdaKlienter(db, session, val);
+  const resultat: KlientKompletteringar[] = [];
+  for (const k of klienter) {
+    // En tenant-transaktion per klient: rader + månadsstatus i samma
+    // withTenant (WP34-granskningsfynd — halverar transaktionerna).
+    const { rader, manad } = await kompletteringsOversikt(db, k.id);
+    const oppna = rader.filter((r) => r.status !== "klar");
+    resultat.push({
+      tenant_id: k.id,
+      tenant_namn: k.namn,
+      manad,
+      rader: rader.map((r) => ({ ...r, tenant_id: k.id, tenant_namn: k.namn })),
+      utkast: oppna.length > 0 ? byggPaminnelseUtkast(k.namn, oppna) : null,
+    });
+  }
+  return resultat;
 }
 
 // Attest-inputen valideras FÖRE decideProposal (Bugbot PR #2): ett

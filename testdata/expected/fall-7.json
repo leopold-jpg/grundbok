@@ -1,0 +1,19 @@
+{
+  "fall": 7,
+  "titel": "Elkostnad-anomali — anomaly_amount (>2× median), bokför men notifiera",
+  "tenant": "kund_a",
+  "forvantat": {
+    "kind": "journal_entry",
+    "eskalerad": false,
+    "lines": [
+      ["6991", 304000, 0],
+      ["2641", 76000, 0],
+      ["2440", 0, 380000]
+    ],
+    "flaggor_kravs": ["anomaly_amount"],
+    "flaggor_forbjudna": ["dubblett_misstankt"],
+    "anomaly_niva": "info",
+    "audit_event": "telemetri_anomaly_amount",
+    "status": "pending"
+  }
+}

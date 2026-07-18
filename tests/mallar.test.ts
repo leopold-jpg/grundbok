@@ -36,6 +36,7 @@ import {
   paketForTenantMall,
   aktivaBranschpaket,
   effektivaRegler,
+  byggSystemPrompt,
   type MallDefinition,
 } from "../src/mallar/registry";
 import { tolka } from "../src/lib/extract";
@@ -120,6 +121,61 @@ test("registret: fyra funktionsroller i release ett, korrekt struktur", () => {
   assert.deepEqual(mallRegistret.lon.defaultPolicy.tillatna_kinds, []);
 });
 
+// ===================================================== systempromptar (WP30)
+
+test("WP30: stubbarna är ersatta — fullständiga promptar, minor-bumpade till 1.1", () => {
+  for (const id of MALL_IDS) {
+    const mall = mallRegistret[id];
+    assert.ok(!mall.systemPrompt.includes("STUB"), `${id} bär kvar stub-prompten`);
+    assert.ok(mall.systemPrompt.length > 1000, `${id}: prompten är för tunn för att vara fullständig`);
+    assert.equal(mallMajor(mall.version), "1", `${id}: minor-bump får inte byta major`);
+    assert.ok(
+      mall.version.startsWith("1.1."),
+      `${id}: promptversionering kräver minor-bump (är ${mall.version})`,
+    );
+  }
+});
+
+test("WP30: varje prompt bär den obligatoriska granskningsordningen", () => {
+  for (const id of MALL_IDS) {
+    const prompt = mallRegistret[id].systemPrompt;
+    // Mottagarkontrollen FÖRST — fel mottagare ger flagga och ingen kontering.
+    assert.ok(prompt.includes("MOTTAGARKONTROLL FÖRST"), `${id}: mottagarkontroll saknas`);
+    assert.ok(prompt.includes("flag_wrong_tenant"), `${id}: flag_wrong_tenant saknas`);
+    assert.ok(prompt.includes("INGEN kontering"), `${id}: 'ingen kontering' saknas`);
+    // Privat/verksamhetsfrämmande.
+    assert.ok(prompt.includes("flag_private_expense"), `${id}: flag_private_expense saknas`);
+    // Delmatchning med restbelopp.
+    assert.ok(prompt.includes("missing_receipt"), `${id}: missing_receipt saknas`);
+    assert.ok(prompt.includes("restbelopp"), `${id}: restbelopp saknas`);
+    // Dubblettdetektering leverantör+belopp+period.
+    assert.ok(prompt.includes("dubblett_misstankt"), `${id}: dubblettdetektering saknas`);
+    // Förskott ≠ kostnad → 1480.
+    assert.ok(prompt.includes("1480"), `${id}: förskottskontot 1480 saknas`);
+    // Beloppsanomali — telemetrisignal.
+    assert.ok(prompt.includes("anomaly_amount"), `${id}: anomaly_amount saknas`);
+    // Output alltid kontraktet v0.3, med eskaleringsregler.
+    assert.ok(prompt.includes("Proposal enligt kontraktet v0.3"), `${id}: kontraktskravet saknas`);
+    assert.ok(prompt.includes("ESKALERINGSREGLER"), `${id}: eskaleringsregler saknas`);
+  }
+});
+
+test("WP30: rollspecifika gränser bor i respektive prompt", () => {
+  const p = mallRegistret;
+  // Bokföring: kvittomatchning/periodisering + aldrig rådgivning.
+  assert.ok(p.bokforing.systemPrompt.includes("kvittomatchning"));
+  // Lön: batch, aldrig auto, personuppgiftsdisciplin.
+  assert.ok(p.lon.systemPrompt.includes("payroll_run"));
+  assert.ok(p.lon.systemPrompt.includes("auto-godkänns ALDRIG"));
+  assert.ok(p.lon.systemPrompt.includes("aldrig namn eller personnummer"));
+  // Skatt: compliance-avgränsning (ADR-0005), ingen rådgivning.
+  assert.ok(p["skatt-compliance"].systemPrompt.includes("COMPLIANCE"));
+  assert.ok(p["skatt-compliance"].systemPrompt.includes("aldrig rådgivning"));
+  // Reskontra: betalningar verkställs aldrig, fakturakapningsvakt.
+  assert.ok(p.leverantorsreskontra.systemPrompt.includes("verkställs ALDRIG"));
+  assert.ok(p.leverantorsreskontra.systemPrompt.includes("fakturakapning"));
+});
+
 test("registret: uppslagning, major-pekare och versionsdrift", () => {
   assert.equal(hamtaMall("bokforing")?.displayName, "Bokföring");
   // Branschmallarna från före ADR-0005 har lämnat katalogen — uppslag på
@@ -127,7 +183,7 @@ test("registret: uppslagning, major-pekare och versionsdrift", () => {
   assert.equal(hamtaMall("bokforing-bygg"), null);
   assert.equal(hamtaMall("finns-inte"), null);
   assert.equal(mallMajor("1.2.3"), "1");
-  assert.equal(hamtaMallForMajor("leverantorsreskontra", "1")?.version, "1.0.0");
+  assert.equal(hamtaMallForMajor("leverantorsreskontra", "1")?.version, "1.1.0");
   assert.equal(hamtaMallForMajor("leverantorsreskontra", "2"), null);
   assert.equal(hamtaMallForMajor("finns-inte", "1"), null);
 });
@@ -227,9 +283,72 @@ test("branschpaket: effektiva regler = mallens + aktiva paketens, utan id-kollis
   }
 });
 
+// ================================================ LLM-vägen (WP31)
+
+test("WP31: samma roll hos tenant med/utan paket → olika promptinnehåll", () => {
+  const bokforing = mallRegistret.bokforing;
+  const hosBygg = byggSystemPrompt(bokforing, "bygg");
+  const hosKonsult = byggSystemPrompt(bokforing, "konsultbyra");
+  assert.notEqual(hosBygg, hosKonsult);
+
+  // Byggtenanten får paketreglerna invävda — inkl. nya ÄTA-vaksamheten…
+  assert.ok(hosBygg.includes("omvand-byggmoms"));
+  assert.ok(hosBygg.includes("ata-vaksamhet") && hosBygg.includes("needs_review"));
+  assert.ok(hosBygg.includes("bygg@1.1.0"));
+  // …paketlös tenant får dem inte, men mallens funktionsregler följer alltid.
+  assert.ok(!hosKonsult.includes("omvand-byggmoms"));
+  assert.ok(hosKonsult.includes("kvittomatchning"));
+  assert.ok(hosKonsult.includes("AKTIVA BRANSCHPAKET: inga"));
+  // Rollprompten (WP30) ligger alltid först i den sammanvävda prompten.
+  assert.ok(hosBygg.startsWith(bokforing.systemPrompt.trim()));
+});
+
+test("WP31: restaurangpaketet är datumstyrt i prompt och regelverk — aldrig hårdkodad sats", () => {
+  const hosCafe = byggSystemPrompt(mallRegistret.bokforing, "cafe");
+  assert.ok(hosCafe.includes("livsmedelsmoms") && hosCafe.includes("DATUMSTYRD"));
+  assert.ok(hosCafe.includes("restaurang@1.1.0"));
+  assert.ok(!hosCafe.includes("ata-vaksamhet"));
+  // Kassarapportlogiken är en uttalad stub i detta pass.
+  assert.ok(hosCafe.includes("kassarapport"));
+  // Satsen styrs av rules.json-perioderna (12→6→12), inte av prompttexten:
+  // regeln nämner fönstret som dokumentation men regelmotorn äger beslutet
+  // — verifierat i moms.test.ts (bestamMoms per datum).
+});
+
+test("WP31: branschneutral roll aktiverar inga paket oavsett tenant", () => {
+  const lonHosBygg = byggSystemPrompt(mallRegistret.lon, "bygg");
+  assert.ok(lonHosBygg.includes("AKTIVA BRANSCHPAKET: inga"));
+  assert.ok(!lonHosBygg.includes("omvand-byggmoms"));
+});
+
+test("WP31: prompt_hash bär den sammanvävda systemprompten — paketbyte syns i provenansen", async () => {
+  const mall = mallRegistret.bokforing;
+  const tolkning = await tolka(kaffefaktura("2026-07-08", 6));
+  const forslag = kontera(tolkning.extraktion, "kund_a");
+  const bygg = (systemPrompt?: string) =>
+    byggBokforingsProposal({
+      tenantId: "kund_a",
+      documentId: "00000000-0000-4000-8000-000000000001",
+      extraktion: tolkning.extraktion,
+      forslag,
+      motor: tolkning.motor,
+      motorDetalj: tolkning.motor_detalj,
+      id: "00000000-0000-4000-8000-000000000002",
+      mall: { id: mall.id, version: mall.version },
+      systemPrompt,
+    });
+  const utanPaket = bygg(byggSystemPrompt(mall, "konsultbyra"));
+  const medPaket = bygg(byggSystemPrompt(mall, "cafe"));
+  const utanMall = bygg(undefined);
+  assert.notEqual(utanPaket.provenance.prompt_hash, medPaket.provenance.prompt_hash);
+  assert.notEqual(utanMall.provenance.prompt_hash, medPaket.provenance.prompt_hash);
+  // Samma tenantMall → deterministiskt samma hash.
+  assert.equal(bygg(byggSystemPrompt(mall, "cafe")).provenance.prompt_hash, medPaket.provenance.prompt_hash);
+});
+
 // ============================================ bokforing × branschpaket bygg
 
-test("golden bokforing×bygg: BYGGFAKTURA → omvänd byggmoms-form, stämplad bokforing@1.0.0", async () => {
+test("golden bokforing×bygg: BYGGFAKTURA → omvänd byggmoms-form, stämplad bokforing@1.1.0", async () => {
   const mall = mallRegistret.bokforing;
   const { proposal } = await byggViaMall(mall, BYGGFAKTURA, "kund_b");
   // Samma facit som kontering.test.ts (ML 16 kap. 13 §): säljaren
@@ -245,7 +364,7 @@ test("golden bokforing×bygg: BYGGFAKTURA → omvänd byggmoms-form, stämplad b
     ["2647", 250_000, 0],
   ]);
   assert.equal(proposal.mall_id, "bokforing");
-  assert.equal(proposal.mall_version, "1.0.0");
+  assert.equal(proposal.mall_version, "1.1.0");
   assert.equal(proposal.module, "bokforing");
   valideraKontrakt(proposal);
 });
@@ -261,7 +380,7 @@ test("golden bokforing×restaurang: kaffefaktura juli (6 %) → 4010/2641/2440, 
     ["2440", 0, 106_000],
   ]);
   assert.equal(proposal.mall_id, "bokforing");
-  assert.equal(proposal.mall_version, "1.0.0");
+  assert.equal(proposal.mall_version, "1.1.0");
   assert.equal(proposal.confidence, bokforingsKonfidens("fallback", forslag));
   valideraKontrakt(proposal);
 });
@@ -274,7 +393,7 @@ test("golden bokforing×restaurang: mars-faktura (12 %) → regelversioneringen 
     ["2641", 12_000, 0],
     ["2440", 0, 112_000],
   ]);
-  assert.equal(proposal.mall_version, "1.0.0");
+  assert.equal(proposal.mall_version, "1.1.0");
   valideraKontrakt(proposal);
 });
 
@@ -302,7 +421,7 @@ test("golden bokforing: agentens major-pekare löser mot registrets 1.x.y", () =
 
 // ====================================================== leverantorsreskontra
 
-test("golden reskontra: kaffefaktura genom reskontrarollen, stämplad leverantorsreskontra@1.0.0", async () => {
+test("golden reskontra: kaffefaktura genom reskontrarollen, stämplad leverantorsreskontra@1.1.0", async () => {
   const mall = mallRegistret.leverantorsreskontra;
   const { proposal } = await byggViaMall(mall, kaffefaktura("2026-07-08", 6), "kund_a");
   assert.deepEqual(tuples(proposal), [
@@ -311,7 +430,7 @@ test("golden reskontra: kaffefaktura genom reskontrarollen, stämplad leverantor
     ["2440", 0, 106_000],
   ]);
   assert.equal(proposal.mall_id, "leverantorsreskontra");
-  assert.equal(proposal.mall_version, "1.0.0");
+  assert.equal(proposal.mall_version, "1.1.0");
   valideraKontrakt(proposal);
 });
 
@@ -394,10 +513,10 @@ function lonProposal(overrides: Partial<Proposal> = {}): Proposal {
   return { ...utan, hash: overrides.hash ?? hashProposal(utan) } as Proposal;
 }
 
-test("golden lon: payroll_run-batch stämplad lon@1.0.0 validerar och balanserar", () => {
+test("golden lon: payroll_run-batch stämplad lon@1.1.0 validerar och balanserar", () => {
   const proposal = lonProposal();
   assert.equal(proposal.mall_id, "lon");
-  assert.equal(proposal.mall_version, "1.0.0");
+  assert.equal(proposal.mall_version, "1.1.0");
   assert.equal(mallRegistret.lon.module, "loner");
   valideraKontrakt(proposal);
   const debet = proposal.lines.reduce((s, l) => s + l.debet_ore, 0);

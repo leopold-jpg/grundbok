@@ -5,7 +5,7 @@ import { withTenant } from "../src/lib/db/tenant";
 import { kontera } from "../src/lib/kontering";
 import { byggBokforingsProposal, bokforingsKonfidens } from "../src/lib/bokforing-modul";
 import { handleProposal, decideProposal, type Principal } from "../src/lib/decisions";
-import type { Extraktion } from "../src/lib/extract/schema";
+import { OBSERVATIONS_DEFAULTS, type Extraktion } from "../src/lib/extract/schema";
 
 // WP3: v1-flödets assertions — nu genom förslagskontraktet. Samma
 // beteenden som gamla ledger.test.ts, men enda vägen till huvudboken
@@ -14,6 +14,7 @@ import type { Extraktion } from "../src/lib/extract/schema";
 const db = await createDb();
 
 const extraktion: Extraktion = {
+  ...OBSERVATIONS_DEFAULTS,
   motpart: "Kafferosteriet Exempel AB",
   beskrivning: "Kaffebönor, mörkrost 20 kg",
   datum: "2026-07-08",

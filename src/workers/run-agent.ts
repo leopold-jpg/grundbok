@@ -3,7 +3,8 @@ import type { ModuleId } from "@/contracts";
 import { withTenant } from "@/lib/db/tenant";
 import { handleProposal, type Principal, type Scope } from "@/lib/decisions";
 import { MODUL_REGISTRY } from "@/modules/registry";
-import { hamtaMallForMajor } from "@/mallar/registry";
+import { hamtaMallForMajor, byggSystemPrompt, aktivaBranschpaket } from "@/mallar/registry";
+import type { GranskningsKontext } from "@/lib/granskning";
 import { uuidv5 } from "@/lib/uuid5";
 import type { AgentJobb } from "@/lib/queue";
 
@@ -84,7 +85,27 @@ export async function körJobb(db: PGlite, jobb: AgentJobb): Promise<JobbUtfall>
     ? hamtaMallForMajor(agent.template_id, agent.template_version)
     : null;
 
-  const proposal = await runtime.buildProposal({
+  // Branschpaketen in i LLM-vägen (WP31): tenantens branschmall
+  // (tenants.mall) aktiverar paketen, och den kompletta systemprompten
+  // vävs ihop här — per jobb, aldrig lagrad på agentraden (en bransch-
+  // ändring hos tenanten slår igenom utan agentmigration, ADR-0005).
+  // Tenant-raden slås upp EN gång och följer med som granskningskontext;
+  // paketaktiveringen är mall∩tenant-snittet — en mall-lös agent kör
+  // inga paketregler, varken i prompten eller i granskningsmotorn.
+  const t = await db.query<{ namn: string; mall: string }>(
+    `SELECT namn, mall FROM tenants WHERE id = $1`,
+    [jobb.tenant_id],
+  );
+  const tenantNamn = t.rows[0]?.namn ?? "";
+  const tenantMall = t.rows[0]?.mall ?? "";
+  const systemPrompt = mall ? byggSystemPrompt(mall, tenantMall) : undefined;
+  const granskningsKontext: GranskningsKontext = {
+    tenantNamn,
+    tenantMall,
+    aktivaPaket: mall ? aktivaBranschpaket(mall, tenantMall).map((p) => p.id) : [],
+  };
+
+  const { proposal, flaggor } = await runtime.buildProposal({
     db,
     tenantId: jobb.tenant_id,
     underlag: underlag.raw,
@@ -92,6 +113,8 @@ export async function körJobb(db: PGlite, jobb: AgentJobb): Promise<JobbUtfall>
     proposalId,
     agentRuntime: WORKER_RUNTIME,
     mall: mall ? { id: mall.id, version: mall.version } : undefined,
+    systemPrompt,
+    granskningsKontext,
   });
 
   const principal: Principal = {
@@ -103,7 +126,10 @@ export async function körJobb(db: PGlite, jobb: AgentJobb): Promise<JobbUtfall>
     agent_id: agent.id,
   };
 
-  const resultat = await handleProposal(db, principal, proposal);
+  // Modulens granskningsflaggor (WP32) följer med som betrodd runtime-
+  // metadata — porten persisterar dem i proposals.flaggor tillsammans
+  // med sina egna (injection-screening).
+  const resultat = await handleProposal(db, principal, proposal, flaggor);
   switch (resultat.status) {
     case "duplicate":
       return { utfall: "duplicate", proposal_id: resultat.proposal_id };

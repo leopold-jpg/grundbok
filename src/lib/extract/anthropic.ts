@@ -22,15 +22,36 @@ REGLER:
 - Belopp anges i ören som heltal: "1 000,00 kr" = 100000. Svenska dokument
   använder decimalkomma och mellanslag som tusentalsavgränsare.
 - Du väljer aldrig bokföringskonton eller momssats — det gör den
-  deterministiska regelmotorn. Du rapporterar bara vad dokumentet säger.`;
+  deterministiska regelmotorn. Du rapporterar bara vad dokumentet säger.
+- Observationsfälten (mottagare, forskott, privat_indikation, order_ref,
+  rest_utan_underlag_ore) rapporteras ALLTID när dokumentet ger underlag
+  för dem — den deterministiska granskningen fattar besluten utifrån dem.
+  Osäker eller ej angiven observation = null (respektive false).`;
 
-export async function tolkaMedAnthropic(text: string): Promise<Extraktion> {
+export async function tolkaMedAnthropic(
+  text: string,
+  systemTillagg?: string,
+): Promise<Extraktion> {
   const client = new Anthropic({ timeout: 25_000, maxRetries: 1 });
+
+  // Rollkontexten (agentmallens prompt + aktiva branschpakets regler,
+  // WP31) läggs EFTER extraktionsreglerna: skyddsreglerna ovan är
+  // ovillkorliga och får aldrig förhandlas bort av mallinnehåll.
+  // Avgränsningen är explicit (WP34-granskningen): rollprompten beskriver
+  // agentens HELA uppdrag inkl. Proposal-output, men DETTA anrop är
+  // enbart extraktionssteget — annars faller parse():en mot schemat och
+  // körningen degraderar tyst till fallback.
+  const system = systemTillagg
+    ? `${SYSTEM}\n\nROLLKONTEXT (agentmall + tenantens aktiva branschpaket) — beskriver
+agentens hela uppdrag. DETTA anrop utför ENBART extraktionssteget:
+svara uteslutande enligt det begärda schemat; flaggor, kontering och
+Proposal-bygget utförs av efterföljande deterministiska steg.\n${systemTillagg}`
+    : SYSTEM;
 
   const response = await client.messages.parse({
     model: MODEL,
     max_tokens: 2048,
-    system: SYSTEM,
+    system,
     messages: [
       {
         role: "user",
