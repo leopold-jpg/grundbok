@@ -3,7 +3,7 @@ import type { ModuleId } from "@/contracts";
 import { withTenant } from "@/lib/db/tenant";
 import { handleProposal, type Principal, type Scope } from "@/lib/decisions";
 import { MODUL_REGISTRY } from "@/modules/registry";
-import { hamtaMallForMajor } from "@/mallar/registry";
+import { hamtaMallForMajor, byggSystemPrompt } from "@/mallar/registry";
 import { uuidv5 } from "@/lib/uuid5";
 import type { AgentJobb } from "@/lib/queue";
 
@@ -84,6 +84,18 @@ export async function körJobb(db: PGlite, jobb: AgentJobb): Promise<JobbUtfall>
     ? hamtaMallForMajor(agent.template_id, agent.template_version)
     : null;
 
+  // Branschpaketen in i LLM-vägen (WP31): tenantens branschmall
+  // (tenants.mall) aktiverar paketen, och den kompletta systemprompten
+  // vävs ihop här — per jobb, aldrig lagrad på agentraden (en bransch-
+  // ändring hos tenanten slår igenom utan agentmigration, ADR-0005).
+  let systemPrompt: string | undefined;
+  if (mall) {
+    const t = await db.query<{ mall: string }>(`SELECT mall FROM tenants WHERE id = $1`, [
+      jobb.tenant_id,
+    ]);
+    systemPrompt = byggSystemPrompt(mall, t.rows[0]?.mall ?? "");
+  }
+
   const proposal = await runtime.buildProposal({
     db,
     tenantId: jobb.tenant_id,
@@ -92,6 +104,7 @@ export async function körJobb(db: PGlite, jobb: AgentJobb): Promise<JobbUtfall>
     proposalId,
     agentRuntime: WORKER_RUNTIME,
     mall: mall ? { id: mall.id, version: mall.version } : undefined,
+    systemPrompt,
   });
 
   const principal: Principal = {

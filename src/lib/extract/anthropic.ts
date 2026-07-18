@@ -24,13 +24,23 @@ REGLER:
 - Du väljer aldrig bokföringskonton eller momssats — det gör den
   deterministiska regelmotorn. Du rapporterar bara vad dokumentet säger.`;
 
-export async function tolkaMedAnthropic(text: string): Promise<Extraktion> {
+export async function tolkaMedAnthropic(
+  text: string,
+  systemTillagg?: string,
+): Promise<Extraktion> {
   const client = new Anthropic({ timeout: 25_000, maxRetries: 1 });
+
+  // Rollkontexten (agentmallens prompt + aktiva branschpakets regler,
+  // WP31) läggs EFTER extraktionsreglerna: skyddsreglerna ovan är
+  // ovillkorliga och får aldrig förhandlas bort av mallinnehåll.
+  const system = systemTillagg
+    ? `${SYSTEM}\n\nROLLKONTEXT (agentmall + tenantens aktiva branschpaket):\n${systemTillagg}`
+    : SYSTEM;
 
   const response = await client.messages.parse({
     model: MODEL,
     max_tokens: 2048,
-    system: SYSTEM,
+    system,
     messages: [
       {
         role: "user",

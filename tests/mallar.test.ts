@@ -36,6 +36,7 @@ import {
   paketForTenantMall,
   aktivaBranschpaket,
   effektivaRegler,
+  byggSystemPrompt,
   type MallDefinition,
 } from "../src/mallar/registry";
 import { tolka } from "../src/lib/extract";
@@ -280,6 +281,69 @@ test("branschpaket: effektiva regler = mallens + aktiva paketens, utan id-kollis
       assert.equal(new Set(ids).size, ids.length, `${mall.id}×${tenantMall} har regelkollision`);
     }
   }
+});
+
+// ================================================ LLM-vägen (WP31)
+
+test("WP31: samma roll hos tenant med/utan paket → olika promptinnehåll", () => {
+  const bokforing = mallRegistret.bokforing;
+  const hosBygg = byggSystemPrompt(bokforing, "bygg");
+  const hosKonsult = byggSystemPrompt(bokforing, "konsultbyra");
+  assert.notEqual(hosBygg, hosKonsult);
+
+  // Byggtenanten får paketreglerna invävda — inkl. nya ÄTA-vaksamheten…
+  assert.ok(hosBygg.includes("omvand-byggmoms"));
+  assert.ok(hosBygg.includes("ata-vaksamhet") && hosBygg.includes("needs_review"));
+  assert.ok(hosBygg.includes("bygg@1.1.0"));
+  // …paketlös tenant får dem inte, men mallens funktionsregler följer alltid.
+  assert.ok(!hosKonsult.includes("omvand-byggmoms"));
+  assert.ok(hosKonsult.includes("kvittomatchning"));
+  assert.ok(hosKonsult.includes("AKTIVA BRANSCHPAKET: inga"));
+  // Rollprompten (WP30) ligger alltid först i den sammanvävda prompten.
+  assert.ok(hosBygg.startsWith(bokforing.systemPrompt.trim()));
+});
+
+test("WP31: restaurangpaketet är datumstyrt i prompt och regelverk — aldrig hårdkodad sats", () => {
+  const hosCafe = byggSystemPrompt(mallRegistret.bokforing, "cafe");
+  assert.ok(hosCafe.includes("livsmedelsmoms") && hosCafe.includes("DATUMSTYRD"));
+  assert.ok(hosCafe.includes("restaurang@1.1.0"));
+  assert.ok(!hosCafe.includes("ata-vaksamhet"));
+  // Kassarapportlogiken är en uttalad stub i detta pass.
+  assert.ok(hosCafe.includes("kassarapport"));
+  // Satsen styrs av rules.json-perioderna (12→6→12), inte av prompttexten:
+  // regeln nämner fönstret som dokumentation men regelmotorn äger beslutet
+  // — verifierat i moms.test.ts (bestamMoms per datum).
+});
+
+test("WP31: branschneutral roll aktiverar inga paket oavsett tenant", () => {
+  const lonHosBygg = byggSystemPrompt(mallRegistret.lon, "bygg");
+  assert.ok(lonHosBygg.includes("AKTIVA BRANSCHPAKET: inga"));
+  assert.ok(!lonHosBygg.includes("omvand-byggmoms"));
+});
+
+test("WP31: prompt_hash bär den sammanvävda systemprompten — paketbyte syns i provenansen", async () => {
+  const mall = mallRegistret.bokforing;
+  const tolkning = await tolka(kaffefaktura("2026-07-08", 6));
+  const forslag = kontera(tolkning.extraktion, "kund_a");
+  const bygg = (systemPrompt?: string) =>
+    byggBokforingsProposal({
+      tenantId: "kund_a",
+      documentId: "00000000-0000-4000-8000-000000000001",
+      extraktion: tolkning.extraktion,
+      forslag,
+      motor: tolkning.motor,
+      motorDetalj: tolkning.motor_detalj,
+      id: "00000000-0000-4000-8000-000000000002",
+      mall: { id: mall.id, version: mall.version },
+      systemPrompt,
+    });
+  const utanPaket = bygg(byggSystemPrompt(mall, "konsultbyra"));
+  const medPaket = bygg(byggSystemPrompt(mall, "cafe"));
+  const utanMall = bygg(undefined);
+  assert.notEqual(utanPaket.provenance.prompt_hash, medPaket.provenance.prompt_hash);
+  assert.notEqual(utanMall.provenance.prompt_hash, medPaket.provenance.prompt_hash);
+  // Samma tenantMall → deterministiskt samma hash.
+  assert.equal(bygg(byggSystemPrompt(mall, "cafe")).provenance.prompt_hash, medPaket.provenance.prompt_hash);
 });
 
 // ============================================ bokforing × branschpaket bygg

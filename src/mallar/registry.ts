@@ -214,13 +214,16 @@ export const branschpaketRegistret: Record<BranschPaketId, BranschPaket> = {
   bygg: {
     id: "bygg",
     displayName: "Bygg",
-    version: "1.0.0",
+    // 1.1.0 (WP31): ÄTA-vaksamheten in i paketet — paketen är nu
+    // runtime-aktiva i LLM-vägen (byggSystemPrompt).
+    version: "1.1.0",
     regler: [
       {
         id: "omvand-byggmoms",
         beskrivning:
           "Byggtjänst från underentreprenör: säljaren fakturerar utan moms, " +
-          "köparen redovisar ut- och ingående moms (rutor 24/30/48).",
+          "köparen redovisar ut- och ingående moms (2617/2647-logiken via " +
+          "regelmotorn; rutor 24/30/48).",
         lagrum: "ML (2023:200) 16 kap. 13 §",
       },
       {
@@ -230,26 +233,42 @@ export const branschpaketRegistret: Record<BranschPaketId, BranschPaket> = {
           "skattereduktionsunderlaget.",
         lagrum: "IL (1999:1229) 67 kap.",
       },
+      {
+        id: "ata-vaksamhet",
+        beskrivning:
+          "ÄTA-vaksamhet: åberopar fakturan en känd order och beloppet " +
+          "avviker från det kända ordervärdet (ÄTA-arbeten utan dokumenterad " +
+          "beställning) → needs_review, aldrig auto — konsulten stämmer av " +
+          "mot beställningen.",
+        lagrum: "AB 04 / ABT 06 kap. 2 (ÄTA-arbeten)",
+      },
     ],
   },
 
   restaurang: {
     id: "restaurang",
     displayName: "Restaurang",
-    version: "1.0.0",
+    // 1.1.0 (WP31): livsmedelsmomsen uttryckligen DATUMSTYRD — satsen
+    // slås alltid upp i se/moms rules.json per affärshändelsedatum,
+    // aldrig hårdkodad i regeltext eller prompt.
+    version: "1.1.0",
     regler: [
       {
         id: "livsmedelsmoms",
         beskrivning:
-          "Livsmedel: tillfälligt sänkt momssats fr.o.m. 2026-04-01 — " +
-          "satsen styrs av affärshändelsedatum, inte kvittot.",
-        lagrum: "Prop. 2025/26:55",
+          "Livsmedel: momssatsen är DATUMSTYRD och slås upp per " +
+          "affärshändelsedatum i regelverket se/moms (12 % t.o.m. " +
+          "2026-03-31; tillfälligt 6 % 2026-04-01–2027-12-31 enligt " +
+          "lagändringen; 12 % igen fr.o.m. 2028-01-01). Satsen hårdkodas " +
+          "aldrig — affärshändelsedatumet styr, inte kvittot.",
+        lagrum: "ML (2023:200) 9 kap.; prop. 2025/26:55",
       },
       {
         id: "kassarapport",
         beskrivning:
-          "Kontantförsäljning bokförs per dags-Z-rapport ur certifierat " +
-          "kassaregister — aldrig per enskilt kvitto.",
+          "STUB (kassarapportlogik, nästa pass): kontantförsäljning bokförs " +
+          "per dags-Z-rapport ur certifierat kassaregister — aldrig per " +
+          "enskilt kvitto.",
         lagrum: "SFL (2011:1244) 39 kap. 11–12 §§",
       },
     ],
@@ -460,4 +479,27 @@ export function aktivaBranschpaket(
  *  läses sist), id-kollisioner är förbjudna via golden-testerna. */
 export function effektivaRegler(mall: MallDefinition, tenantMall: string): MallRegel[] {
   return [...mall.regler, ...aktivaBranschpaket(mall, tenantMall).flatMap((p) => p.regler)];
+}
+
+/** Den KOMPLETTA systemprompt en agent kör med (WP31): rollprompten +
+ *  de effektiva reglerna (mallens + tenantens aktiva branschpakets).
+ *  Detta är enda vägen från branschpaket till LLM:en — paketen blir
+ *  runtime-aktiva här, aldrig genom egen kod i konteringsmotorn (den
+ *  deterministiska logiken, t.ex. omvänd byggmoms, styrs som förut av
+ *  kundconfig/regelverk). Samma underlag hos tenant med/utan paket ger
+ *  därmed olika promptinnehåll — golden-testat. */
+export function byggSystemPrompt(mall: MallDefinition, tenantMall: string): string {
+  const paket = aktivaBranschpaket(mall, tenantMall);
+  const rader: string[] = [mall.systemPrompt.trim(), ""];
+  rader.push("EFFEKTIVA REGLER (funktionsmallens + tenantens aktiva branschpakets):");
+  for (const regel of effektivaRegler(mall, tenantMall)) {
+    rader.push(`- [${regel.id}] ${regel.beskrivning}${regel.lagrum ? ` — ${regel.lagrum}` : ""}`);
+  }
+  rader.push(
+    "",
+    paket.length > 0
+      ? `AKTIVA BRANSCHPAKET: ${paket.map((p) => `${p.id}@${p.version}`).join(", ")}`
+      : "AKTIVA BRANSCHPAKET: inga — tenantens bransch aktiverar inget paket för denna roll.",
+  );
+  return rader.join("\n");
 }

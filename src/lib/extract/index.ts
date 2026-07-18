@@ -12,7 +12,13 @@ export type TolkningsResultat = {
  * finns och nätet svarar; annars den deterministiska mocken — samma
  * schema, samma flöde. UI:t visar diskret vilket läge som kör.
  */
-export async function tolka(text: string): Promise<TolkningsResultat> {
+export async function tolka(
+  text: string,
+  /** Rollkontext (WP31): agentmallens systemprompt + aktiva branschpakets
+   *  regler. Når endast den riktiga LLM-vägen — fallbacken är
+   *  deterministisk och promptokänslig per definition. */
+  systemTillagg?: string,
+): Promise<TolkningsResultat> {
   const harNyckel = Boolean(process.env.ANTHROPIC_API_KEY);
   const tvingaFallback = process.env.GRUNDBOK_FORCE_FALLBACK === "1";
 
@@ -20,7 +26,7 @@ export async function tolka(text: string): Promise<TolkningsResultat> {
     try {
       // Importeras lazy så att fallback-läget fungerar helt utan nät/SDK-init.
       const { tolkaMedAnthropic } = await import("./anthropic");
-      const extraktion = await tolkaMedAnthropic(text);
+      const extraktion = await tolkaMedAnthropic(text, systemTillagg);
       return {
         extraktion,
         motor: "anthropic",

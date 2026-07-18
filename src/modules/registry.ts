@@ -23,6 +23,10 @@ export type ModulInput = {
   /** Mallstämpeln (WP11, ADR-0004): läses ur agentraden av runtime-lagret
    *  och stämplas på förslaget. Utelämnad för mall-lösa agenter. */
   mall?: { id: string; version: string };
+  /** Den kompletta systemprompten (WP31): rollprompt + tenantens aktiva
+   *  branschpakets regler (byggSystemPrompt). Går till LLM-vägen och in i
+   *  provenance.prompt_hash. Utelämnad för mall-lösa agenter. */
+  systemPrompt?: string;
 };
 
 export interface ModulRuntime {
@@ -33,9 +37,10 @@ export interface ModulRuntime {
 const bokforing: ModulRuntime = {
   id: "bokforing",
   async buildProposal(input) {
-    const tolkning = await tolka(input.underlag);
+    const tolkning = await tolka(input.underlag, input.systemPrompt);
     const forslag = kontera(tolkning.extraktion, input.tenantId);
     return byggBokforingsProposal({
+      systemPrompt: input.systemPrompt,
       tenantId: input.tenantId,
       // payload_ref är ett dokument i kärnan lokalt — dess uuid blir
       // input_ref. Runtime-lagret har redan verifierat att det finns.

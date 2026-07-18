@@ -45,6 +45,9 @@ export function byggBokforingsProposal(input: {
   /** Mallstämpeln (v0.3, ADR-0004): agentens mall + registrets exakta
    *  version. Utelämnad för mall-lösa körningar (intag-UI, äldre agenter). */
   mall?: { id: string; version: string };
+  /** Den kompletta systemprompt körningen använde (WP31) — ingår i
+   *  prompt_hash så att branschpaketändringar syns i provenansen. */
+  systemPrompt?: string;
 }): Proposal {
   const { forslag } = input;
 
@@ -83,9 +86,13 @@ export function byggBokforingsProposal(input: {
     provenance: {
       ...(input.agentRuntime ? { agent_runtime: input.agentRuntime } : {}),
       model: input.motor === "anthropic" ? input.motorDetalj : "fallback:deterministisk",
+      // prompt_hash täcker modulversion + skillversioner + (när mallen
+      // körs, WP31) hela den sammanvävda systemprompten — ett bumpat
+      // branschpaket ger nytt hash och syns i revisionsspåret.
       prompt_hash: sha256Hex(
         `grundbok-bokforing@${BOKFORING_MODULE_VERSION}|` +
-          JSON.stringify(forslag.skill_versions),
+          JSON.stringify(forslag.skill_versions) +
+          (input.systemPrompt ? `|prompt:${sha256Hex(input.systemPrompt)}` : ""),
       ),
       module_version: BOKFORING_MODULE_VERSION,
       input_refs: [`document:${input.documentId}`],
