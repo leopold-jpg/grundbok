@@ -1,26 +1,44 @@
 import { NextResponse } from "next/server";
 import { getDb } from "@/lib/db/client";
 import { kravOperator } from "@/auth/session";
-import { MALL_IDS, mallRegistret } from "@/mallar/registry";
+import {
+  BRANSCHPAKET_IDS,
+  MALL_IDS,
+  branschpaketRegistret,
+  mallRegistret,
+  tenantmallTillPaket,
+} from "@/mallar/registry";
 
 export const runtime = "nodejs";
 
 // GET /api/operator/agentmallar — katalogens METADATA för provisionerings-
-// valet. Endast id/namn/version/paket-id:n: systemPrompt och regler är
-// mallens hjärna och ska aldrig hamna i en publikt servad klient-bundle
-// (registret importeras därför bara på serversidan). Branschpaket-id:n är
-// metadata på samma nivå som mall-id:n — reglerna i paketen är det inte.
+// flödet (WP27). Endast id/namn/version/paket-id:n: systemPrompt och
+// regler är mallens hjärna och ska aldrig hamna i en publikt servad
+// klient-bundle (registret importeras därför bara på serversidan).
+// Aktiveringskartan (tenantmall → paket) skickas med så steg 2 kan VISA
+// vilka paket klientens bransch aktiverar — branschen väljs aldrig
+// manuellt, den härleds ur tenant-kontexten (ADR-0005).
 export async function GET(req: Request) {
   const db = await getDb();
   const krav = await kravOperator(db, req);
   if ("http" in krav) return NextResponse.json({ fel: krav.fel }, { status: krav.http });
 
-  return NextResponse.json(
-    MALL_IDS.map((id) => ({
+  return NextResponse.json({
+    mallar: MALL_IDS.map((id) => ({
       id,
       displayName: mallRegistret[id].displayName,
       version: mallRegistret[id].version,
       branschpaket: mallRegistret[id].branschpaket ?? [],
     })),
-  );
+    paket: Object.fromEntries(
+      BRANSCHPAKET_IDS.map((id) => [
+        id,
+        {
+          displayName: branschpaketRegistret[id].displayName,
+          version: branschpaketRegistret[id].version,
+        },
+      ]),
+    ),
+    tenantmall_till_paket: tenantmallTillPaket(),
+  });
 }

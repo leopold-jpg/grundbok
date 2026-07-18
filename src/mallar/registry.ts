@@ -319,6 +319,13 @@ export function paketForTenantMall(tenantMall: string): BranschPaketId[] {
   return TENANTMALL_TILL_PAKET[tenantMall] ?? [];
 }
 
+/** Kopia av aktiveringskartan för operatörs-UI:t (WP27): provisionerings-
+ *  flödet visar vilka paket klientens bransch AKTIVERAR — metadata på
+ *  id-nivå; paketens regler följer aldrig med till klienten. */
+export function tenantmallTillPaket(): Record<string, BranschPaketId[]> {
+  return { ...TENANTMALL_TILL_PAKET };
+}
+
 /** De paket som faktiskt är aktiva för (funktionsmall, tenant): snittet av
  *  vad mallen kan aktivera och vad tenantens bransch pekar ut. */
 export function aktivaBranschpaket(

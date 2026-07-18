@@ -293,7 +293,13 @@ export type FlottRad = {
   andel_korrigerade: number | null;
   senaste_aktivitet: string | null;
   varningar: FlottVarning[];
+  /** Antal förslag per dygn, äldst→nyast (7 platser) — sparkline-datat i
+   *  översikten (WP27). Ett ANTAL per dygn, aldrig innehåll. */
+  forslag_dagar: number[];
 };
+
+/** UTC-dygnet som nyckel — samma normalisering för DB-rader och JS-datum. */
+const dagNyckel = (d: Date) => d.toISOString().slice(0, 10);
 
 /** Hela flottan ur agent_telemetry (service-vägen — operatören ser alla
  *  tenants). Samma innehållsregel som resten av filen: aggregat och
@@ -325,6 +331,22 @@ export async function flottoversikt(db: PGlite): Promise<FlottRad[]> {
      LEFT JOIN byraer b ON b.id = tn.byra_id
      ORDER BY b.namn NULLS LAST, tn.namn, t.display_name`,
   );
+
+  // Sparkline-datat: antal förslag per agent och UTC-dygn senaste 7
+  // dygnen. Endast count — summary/belopp/motpart läses aldrig.
+  const dagar = await db.query<{ agent_id: string; dag: Date | string; n: string }>(
+    `SELECT agent_id, date_trunc('day', created_at) AS dag, count(*) AS n
+     FROM proposals
+     WHERE agent_id IS NOT NULL AND created_at > now() - interval '7 days'
+     GROUP BY agent_id, date_trunc('day', created_at)`,
+  );
+  const perAgentDag = new Map<string, Map<string, number>>();
+  for (const rad of dagar.rows) {
+    const nyckel = dagNyckel(rad.dag instanceof Date ? rad.dag : new Date(rad.dag));
+    let m = perAgentDag.get(rad.agent_id);
+    if (!m) perAgentDag.set(rad.agent_id, (m = new Map()));
+    m.set(nyckel, Number(rad.n));
+  }
 
   const nu = Date.now();
   return r.rows.map((rad) => {
@@ -375,6 +397,10 @@ export async function flottoversikt(db: PGlite): Promise<FlottRad[]> {
       andel_korrigerade: andelKorr,
       senaste_aktivitet: senaste ? senaste.toISOString() : null,
       varningar,
+      forslag_dagar: Array.from({ length: 7 }, (_, i) => {
+        const dag = dagNyckel(new Date(nu - (6 - i) * 86_400_000));
+        return perAgentDag.get(rad.agent_id)?.get(dag) ?? 0;
+      }),
     };
   });
 }
@@ -391,6 +417,10 @@ export type DetaljProposal = {
   skapad: string;
 };
 
+/** Livslinjens händelser (WP27) — driftmetadata ur audit_log, aldrig
+ *  innehåll: bara VAD som hände med agenten och när. */
+export type LivslinjeHandelse = "skapad" | "pausad" | "aterupptagen" | "avslutad";
+
 export type AgentDetalj = {
   agent: FlottRad & { scopes: Scope[]; max_concurrency: number; provisioned_by: string; skapad: string };
   policy: {
@@ -403,6 +433,10 @@ export type AgentDetalj = {
    *  mallstämpel — aldrig summary, belopp, motpart eller payload-innehåll
    *  (operatörsregeln; innehållet är byråns värld). */
   senaste: DetaljProposal[];
+  /** skapad → pausad → återupptagen … ur audit-händelserna. */
+  livslinje: { tid: string; handelse: LivslinjeHandelse }[];
+  /** Kö-djup och senaste worker-körning för AGENTENS tenant (WP27). */
+  tenant_drift: { ko_djup: number; senaste_korning: string | null };
 };
 
 export async function agentDetalj(db: PGlite, agentId: string): Promise<AgentDetalj | null> {
@@ -463,6 +497,40 @@ export async function agentDetalj(db: PGlite, agentId: string): Promise<AgentDet
     [agentId],
   );
 
+  // Livslinjen ur audit_log: provisionerad + statusändringar för agenten.
+  // Payload-läsningen är agentId/status — driftfält, aldrig innehåll.
+  const liv = await db.query<{ event_type: string; status: string | null; tid: Date | string }>(
+    `SELECT event_type, payload->>'status' AS status, created_at AS tid
+     FROM audit_log
+     WHERE payload->>'agentId' = $1
+       AND event_type IN ('agent_provisionerad', 'agent_statusandrad')
+     ORDER BY created_at`,
+    [agentId],
+  );
+  const livslinje = liv.rows.flatMap((rad) => {
+    const handelse: LivslinjeHandelse | null =
+      rad.event_type === "agent_provisionerad"
+        ? "skapad"
+        : rad.status === "paused"
+          ? "pausad"
+          : rad.status === "active"
+            ? "aterupptagen"
+            : rad.status === "canceled"
+              ? "avslutad"
+              : null;
+    if (!handelse) return [];
+    return [{ tid: (rad.tid instanceof Date ? rad.tid : new Date(rad.tid)).toISOString(), handelse }];
+  });
+
+  // Tenantens driftläge: kö-djup nu + senaste worker-körning — jobben
+  // pekar på tenanten via message-kuvertet (payload_ref läses aldrig).
+  const drift = await db.query<{ djup: string; senaste: Date | string | null }>(
+    `SELECT count(*) FILTER (WHERE archived_at IS NULL) AS djup,
+            max(archived_at) AS senaste
+     FROM agent_jobs WHERE message->>'tenant_id' = $1`,
+    [rad.tenant_id],
+  );
+
   return {
     agent: {
       ...rad,
@@ -486,6 +554,16 @@ export async function agentDetalj(db: PGlite, agentId: string): Promise<AgentDet
         : new Date(row.created_at)
       ).toISOString(),
     })),
+    livslinje,
+    tenant_drift: {
+      ko_djup: Number(drift.rows[0]?.djup ?? 0),
+      senaste_korning: drift.rows[0]?.senaste
+        ? (drift.rows[0].senaste instanceof Date
+            ? drift.rows[0].senaste
+            : new Date(drift.rows[0].senaste)
+          ).toISOString()
+        : null,
+    },
   };
 }
 
@@ -496,23 +574,51 @@ export type Halsa = {
   senaste_korning: string | null;
   /** Meddelanden som krävt omförsök (read_ct > 1) senaste dygnet. */
   omforsok_24h: number;
+  /** Äldsta oarkiverade jobbets enqueued_at — null när kön är tom (WP27). */
+  aldsta_vantande: string | null;
+  /** Kö-djup och omförsök per modul — drift, aldrig innehåll (WP27). */
+  per_modul: { module: string; ko_djup: number; omforsok_24h: number }[];
 };
 
 export async function halsa(db: PGlite): Promise<Halsa> {
   const djup = await new PgliteKo(db).depth();
-  const r = await db.query<{ senaste: Date | string | null; omforsok: string }>(
+  const r = await db.query<{
+    senaste: Date | string | null;
+    aldsta: Date | string | null;
+    omforsok: string;
+  }>(
     `SELECT max(archived_at) AS senaste,
+            min(enqueued_at) FILTER (WHERE archived_at IS NULL) AS aldsta,
             count(*) FILTER (
               WHERE read_ct > 1 AND enqueued_at > now() - interval '24 hours'
             ) AS omforsok
      FROM agent_jobs`,
   );
-  const senaste = r.rows[0]?.senaste ?? null;
+  // Per modul ur jobbkuvertet (message->>'module' är driftmetadata) —
+  // endast moduler med något att visa.
+  const moduler = await db.query<{ module: string | null; ko_djup: string; omforsok: string }>(
+    `SELECT message->>'module' AS module,
+            count(*) FILTER (WHERE archived_at IS NULL) AS ko_djup,
+            count(*) FILTER (
+              WHERE read_ct > 1 AND enqueued_at > now() - interval '24 hours'
+            ) AS omforsok
+     FROM agent_jobs
+     GROUP BY message->>'module'
+     ORDER BY message->>'module'`,
+  );
+  const tillIso = (v: Date | string | null) =>
+    v ? (v instanceof Date ? v : new Date(v)).toISOString() : null;
   return {
     ko_djup: djup,
-    senaste_korning: senaste
-      ? (senaste instanceof Date ? senaste : new Date(senaste)).toISOString()
-      : null,
+    senaste_korning: tillIso(r.rows[0]?.senaste ?? null),
     omforsok_24h: Number(r.rows[0]?.omforsok ?? 0),
+    aldsta_vantande: tillIso(r.rows[0]?.aldsta ?? null),
+    per_modul: moduler.rows
+      .map((m) => ({
+        module: m.module ?? "(okänd)",
+        ko_djup: Number(m.ko_djup),
+        omforsok_24h: Number(m.omforsok),
+      }))
+      .filter((m) => m.ko_djup > 0 || m.omforsok_24h > 0),
   };
 }

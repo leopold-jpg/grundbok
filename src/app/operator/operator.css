@@ -13,8 +13,9 @@
   color: var(--fg-subtle);
 }
 
-.operator .halsa-rad { display: grid; gap: var(--sp-4); grid-template-columns: 1fr; }
-@media (min-width: 640px) { .operator .halsa-rad { grid-template-columns: 1fr 1fr 1fr; } }
+.operator .halsa-rad { display: grid; gap: var(--sp-4); grid-template-columns: 1fr; margin-bottom: var(--sp-4); }
+@media (min-width: 640px) { .operator .halsa-rad { grid-template-columns: 1fr 1fr; } }
+@media (min-width: 980px) { .operator .halsa-rad { grid-template-columns: 1fr 1fr 1fr 1fr; } }
 .operator .halsa-kort {
   border: 1px solid var(--border);
   border-radius: var(--r-lg); /* kortnivån (kanon §4) */
@@ -52,28 +53,6 @@
 .operator input[type="text"]:focus,
 .operator input[type="number"]:focus { outline: 2px solid var(--ring); outline-offset: 1px; }
 .operator input[type="checkbox"] { accent-color: var(--accent); }
-
-.operator .provisionera-rad {
-  display: flex;
-  gap: var(--sp-2);
-  align-items: center;
-  flex-wrap: wrap;
-  margin-bottom: var(--sp-4);
-}
-.operator .provisionera-rad input[type="text"] { min-width: 240px; }
-
-.operator .nyckel-klartext {
-  font-family: var(--font-mono);
-  font-size: 13px;
-  background: var(--bg-sunken);
-  border: 1px solid var(--border);
-  border-radius: var(--r-sm);
-  padding: var(--sp-2) var(--sp-3);
-  margin-top: var(--sp-2);
-  word-break: break-all;
-  user-select: all;
-}
-.operator .nyckel-varning { font-size: 13px; color: var(--warning); }
 
 .operator .mall-rad {
   display: flex;
@@ -159,10 +138,10 @@ body:has(main.operator) {
   box-shadow: var(--skugga-kort);
 }
 
-/* Bolagsvalet: raden är klickyta för pekare, men det TILLGÄNGLIGA
-   valet är knappen i klientbolags-cellen — tabbbar, Enter/Space,
+/* Radvalet i översikten: raden är klickyta för pekare, men det
+   TILLGÄNGLIGA valet är knappen i agent-cellen — tabbar, Enter/Space,
    aria-pressed. Blå text signalerar interaktionen (EN accent). */
-.operator .valj-bolag {
+.operator .valj-rad {
   background: none;
   border: none;
   padding: 0;
@@ -172,27 +151,14 @@ body:has(main.operator) {
   text-align: left;
   transition: none;
 }
-.operator .valj-bolag:hover:not(:disabled) {
+.operator .valj-rad:hover:not(:disabled) {
   background: none;
   border: none;
   text-decoration: underline;
 }
-.operator tr[data-vald="true"] .valj-bolag {
+.operator tr[data-vald="true"] .valj-rad {
   font-weight: 600;
 }
-
-/* Nyckel-avslöjandet är information om en engångshändelse — blå
-   markering, INTE .bokford (grönt är ENDAST status, kanon §2). */
-.operator .nyckel-avslojande {
-  border: 1px solid var(--linje);
-  border-left: 3px solid var(--bla);
-  border-radius: var(--r-md);
-  background: var(--kort);
-  padding: var(--sp-4);
-  margin-bottom: var(--sp-3);
-  box-shadow: var(--skugga-kort);
-}
-.operator .nyckel-kopiera { margin-top: var(--sp-2); }
 
 /* Tabellsvep och åtgärdscell (ersätter inline-styles). */
 .operator .svep { overflow-x: auto; }
@@ -251,3 +217,144 @@ body:has(main.operator) {
   color: var(--fg-muted);
   margin-bottom: var(--sp-3);
 }
+
+/* ------------------------------------------------------------------
+   WP27: översikten, provisioneringsflödet, livslinjen, hälsotoner. */
+
+/* Översikten: bolagsraden är gruppens rubrik — byrå → klientbolag →
+   agenter i EN tabell. */
+.operator table.oversikt .bolagsrad th {
+  text-transform: none;
+  letter-spacing: var(--tracking-normal);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink);
+  padding-top: var(--sp-4);
+  border-bottom: 1px solid var(--border-strong);
+  background: var(--bg-sunken);
+}
+.operator table.oversikt .bolagsrad .bolags-aggregat {
+  font-weight: 400;
+  margin-left: var(--sp-3);
+}
+.operator tbody[data-markerad="true"] .bolagsrad th {
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+.operator table.oversikt .sparkline { margin-right: var(--sp-2); }
+
+/* Livslinjen: skapad → pausad → återupptagen … som stilla kedja. */
+.operator .livslinje {
+  list-style: none;
+  display: flex;
+  align-items: baseline;
+  gap: var(--sp-2);
+  flex-wrap: wrap;
+  margin: 0 0 var(--sp-3);
+  padding: 0;
+  font-size: 13px;
+}
+.operator .livslinje li { display: inline-flex; gap: var(--sp-1); align-items: baseline; }
+.operator .livslinje li + li::before {
+  content: "→";
+  color: var(--ink-svag);
+  margin-right: var(--sp-2);
+}
+.operator .livslinje .liv-handelse { font-weight: 500; }
+
+/* Detaljens åtgärder: rotation/avslut bekräftas inline, aldrig confirm(). */
+.operator .detalj-atgarder {
+  display: flex;
+  gap: var(--sp-2) var(--sp-3);
+  align-items: center;
+  flex-wrap: wrap;
+  margin-bottom: var(--sp-3);
+}
+.operator .bekrafta-rad {
+  display: inline-flex;
+  gap: var(--sp-2);
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+/* Provisioneringsflödet: tre steg i samma kort. Inaktiva steg tonas —
+   fälten är dessutom disabled så tabb-ordningen hoppar över dem. */
+.operator .prov-steg {
+  display: flex;
+  gap: var(--sp-2) var(--sp-3);
+  align-items: center;
+  flex-wrap: wrap;
+  border: none;
+  margin: 0 0 var(--sp-4);
+  padding: 0;
+  font-size: 14px;
+}
+.operator .prov-steg[data-inaktiv="true"] { opacity: 0.45; }
+.operator .prov-steg label { font-weight: 500; }
+.operator .prov-nr {
+  font-weight: 600;
+  font-size: 16px;
+  color: var(--bla);
+  min-width: 1.2em;
+}
+.operator .prov-steg input[type="text"] { min-width: 240px; }
+
+/* Steg 2: funktionsrollerna som radiokort — fyra roller, granskad-badge
+   och de paket klientens bransch aktiverar. */
+.operator .prov-mallar { display: block; }
+.operator .prov-mallar legend {
+  display: flex;
+  gap: var(--sp-2);
+  align-items: baseline;
+  flex-wrap: wrap;
+  padding: 0;
+  margin-bottom: var(--sp-2);
+  font-size: 14px;
+  font-weight: 500;
+}
+.operator .mallval {
+  display: grid;
+  gap: var(--sp-2);
+  grid-template-columns: 1fr;
+}
+@media (min-width: 760px) { .operator .mallval { grid-template-columns: 1fr 1fr; } }
+.operator .mallkort {
+  display: block;
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--bg-elev);
+  padding: var(--sp-3);
+  cursor: pointer;
+}
+.operator .mallkort[data-vald="true"] {
+  border-color: var(--bla);
+  box-shadow: inset 3px 0 0 var(--bla);
+}
+.operator .mallkort:has(input:focus-visible) {
+  outline: 2px solid var(--bla);
+  outline-offset: 2px;
+}
+.operator .mallkort input[type="radio"] { accent-color: var(--accent); margin-right: var(--sp-2); }
+.operator .mallkort .mall-titel { font-weight: 600; font-size: 14px; }
+.operator .mallkort .mall-meta {
+  display: flex;
+  gap: var(--sp-2);
+  align-items: center;
+  flex-wrap: wrap;
+  margin-top: var(--sp-2);
+}
+
+/* Granskad-badgen: statuspunkt i grönt (status, aldrig dekor) på
+   globals badge-receptet. */
+.operator .badge.granskad .dot { background: var(--gron); }
+
+/* Hälsotoner: statusgrönt/varning som punkt + värdesfärg (WP27). */
+.operator .halsa-kort .ton-punkt {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--gron);
+  margin-right: var(--sp-1);
+}
+.operator .halsa-kort[data-ton="varning"] .ton-punkt { background: var(--varning); }
+.operator .halsa-kort[data-ton="varning"] .varde { color: var(--varning); }

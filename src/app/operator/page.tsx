@@ -1,14 +1,25 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { plexMono } from "../_publik/fonter";
+import { byggKommandon, type Kommando } from "@/ytor/komponenter/kommandon";
+import { KommandoPalett } from "@/ytor/komponenter/KommandoPalett";
+import { Chip } from "@/ytor/komponenter/Chip";
+import { StatusPunkt, type AgentStatus } from "@/ytor/komponenter/StatusPunkt";
+import { TomtLage } from "@/ytor/komponenter/TomtLage";
+import { Nyckelkort } from "@/ytor/komponenter/Nyckelkort";
+import { Sparkline } from "@/ytor/komponenter/Sparkline";
+import "../../ytor/komponenter/komponenter.css";
 import "./operator.css";
 
-// Operatörskonsolen (WP14) — grundarens vy: bolag → agenter → status,
-// provisionering med policymall, nyckelrotation som ETT flöde, hälsa.
-// Regeln från masterplanen: attest bor hos byrån, drift hos operatören —
-// här visas AGGREGAT, aldrig kvitton, belopp eller förslags-innehåll.
+// Operatörskonsolen (WP14, agentfabriken i WP27) — grundarens vy.
+// Startvyn är översikten byrå → klientbolag → agenter: statuspunkt,
+// modul-chip, mallversion, förslag/vecka som sparkline, felindikator.
+// Provisionering är ETT flöde i tre steg (klient → funktionsroll →
+// namn → nyckel EN gång); agentdetaljen bär livslinje, policy-läge,
+// nyckelrotation och tenantens driftläge. Regeln som allt lyder under:
+// operatören ser AGGREGAT, aldrig kvitton, belopp eller förslags-innehåll.
 
 type BolagsRad = {
   byra: string;
@@ -21,15 +32,6 @@ type BolagsRad = {
   beslut_7d: number;
 };
 
-type AgentVy = {
-  id: string;
-  module: string;
-  namn: string;
-  scopes: string[];
-  status: "active" | "paused" | "canceled";
-  created_at: string;
-};
-
 type PolicyMall = {
   id: string;
   namn: string;
@@ -40,10 +42,16 @@ type PolicyMall = {
   tillatna_kinds: string[];
 };
 
-type Halsa = { ko_djup: number; senaste_korning: string | null; omforsok_24h: number };
+type Halsa = {
+  ko_djup: number;
+  senaste_korning: string | null;
+  omforsok_24h: number;
+  aldsta_vantande: string | null;
+  per_modul: { module: string; ko_djup: number; omforsok_24h: number }[];
+};
 
-// Flottöversikten (WP13, ADR-0004) — speglar FlottRad/AgentDetalj i
-// src/ytor/operator.ts: aggregat och driftmetadata, aldrig innehåll.
+// Speglar FlottRad/AgentDetalj i src/ytor/operator.ts: aggregat och
+// driftmetadata, aldrig innehåll.
 type FlottVarning = "inaktiv_7d" | "hog_korrigeringsandel" | "versionsdrift";
 
 type FlottRad = {
@@ -57,7 +65,7 @@ type FlottRad = {
   template_version: string;
   mall_aktuell_version: string | null;
   branschpaket: string[];
-  status: "active" | "paused" | "canceled";
+  status: AgentStatus;
   forslag_7d: number;
   auto_7d: number;
   rejected_7d: number;
@@ -66,7 +74,10 @@ type FlottRad = {
   andel_korrigerade: number | null;
   senaste_aktivitet: string | null;
   varningar: FlottVarning[];
+  forslag_dagar: number[];
 };
+
+type LivslinjeHandelse = "skapad" | "pausad" | "aterupptagen" | "avslutad";
 
 type AgentDetalj = {
   agent: FlottRad & {
@@ -89,11 +100,19 @@ type AgentDetalj = {
     mall_version: string | null;
     skapad: string;
   }[];
+  livslinje: { tid: string; handelse: LivslinjeHandelse }[];
+  tenant_drift: { ko_djup: number; senaste_korning: string | null };
 };
 
 /** Katalogmetadata från /api/operator/agentmallar — aldrig registret
- *  självt i klienten: systemPrompt/regler ska inte in i en publik bundle. */
-type AgentmallVal = { id: string; displayName: string; version: string; branschpaket: string[] };
+ *  självt i klienten: systemPrompt/regler ska inte in i en publik bundle.
+ *  Aktiveringskartan låter steg 2 VISA vilka paket klientens bransch
+ *  aktiverar — branschen väljs aldrig manuellt (ADR-0005). */
+type Agentkatalog = {
+  mallar: { id: string; displayName: string; version: string; branschpaket: string[] }[];
+  paket: Record<string, { displayName: string; version: string }>;
+  tenantmall_till_paket: Record<string, string[]>;
+};
 
 const VARNINGSTEXT: Record<FlottVarning, string> = {
   inaktiv_7d: "ingen aktivitet 7 d",
@@ -101,15 +120,21 @@ const VARNINGSTEXT: Record<FlottVarning, string> = {
   versionsdrift: "versionsdrift",
 };
 
+const LIVSTEXT: Record<LivslinjeHandelse, string> = {
+  skapad: "skapad",
+  pausad: "pausad",
+  aterupptagen: "återupptagen",
+  avslutad: "avslutad",
+};
+
 const pct = (x: number | null) => (x === null ? "—" : `${Math.round(x * 100)} %`);
 
 /** Filtervärde för mall-lösa agenter — kolliderar aldrig med ett mall-id. */
 const UTAN_MALL = "__utan_mall__";
 
-/** Mall + version för tabellen: registrets exakta version när pekaren
- *  löser, annars major-pekaren (versionsdriften får sin varningschip).
- *  Aktiva branschpaket (ADR-0005) hängs på som +paket — de är en del av
- *  agentens verksamma regeluppsättning, härledd ur tenanten. */
+/** Mall + version: registrets exakta version när pekaren löser, annars
+ *  major-pekaren (versionsdriften får sin varningschip). Aktiva bransch-
+ *  paket (ADR-0005) hängs på som +paket — härledda ur tenanten. */
 const mallEtikett = (r: FlottRad) =>
   r.template_id
     ? `${r.template_id} ${r.mall_aktuell_version ?? `v${r.template_version}`}${r.branschpaket
@@ -119,6 +144,20 @@ const mallEtikett = (r: FlottRad) =>
 
 const tid = (iso: string) =>
   new Date(iso).toLocaleString("sv-SE", { dateStyle: "short", timeStyle: "short" });
+
+/** Relativ ålder för hälsovyn — verklig klocka, avrundad grovt. */
+function sedan(iso: string): string {
+  const min = Math.round((Date.now() - new Date(iso).getTime()) / 60_000);
+  if (min < 1) return "under 1 min";
+  if (min < 60) return `${min} min`;
+  const tim = Math.round(min / 60);
+  if (tim < 48) return `${tim} tim`;
+  return `${Math.round(tim / 24)} dygn`;
+}
+
+/** Larmtröskel: ett väntande jobb äldre än så här är en varning —
+ *  workern ska hinna runt på minuter, inte kvartar. */
+const ALDSTA_VARNING_MS = 15 * 60_000;
 
 // Bakgrundshämtningar: utgången session → inloggningen, inte tyst
 // gammal data (samma mönster som /byra, Bugbot PR #2).
@@ -155,31 +194,51 @@ export default function OperatorSida() {
   const router = useRouter();
   const [inloggad, setInloggad] = useState(false);
   const [bolag, setBolag] = useState<BolagsRad[]>([]);
-  const [valtBolag, setValtBolag] = useState<string | null>(null);
-  const [agenter, setAgenter] = useState<AgentVy[]>([]);
   const [mallar, setMallar] = useState<PolicyMall[]>([]);
   const [halsa, setHalsa] = useState<Halsa | null>(null);
   const [fel, setFel] = useState("");
 
-  // Flottan (WP13): filtrering på mall + status, radklick → detalj.
+  // Översikten: filtrering på mall + status, radval → detalj.
   const [flotta, setFlotta] = useState<FlottRad[]>([]);
   const [filtMall, setFiltMall] = useState("");
   const [filtStatus, setFiltStatus] = useState("");
   const [valdAgent, setValdAgent] = useState<string | null>(null);
   const [detalj, setDetalj] = useState<AgentDetalj | null>(null);
-  const [agentmallar, setAgentmallar] = useState<AgentmallVal[]>([]);
+  const [katalog, setKatalog] = useState<Agentkatalog | null>(null);
 
-  // Provisioneringsflödet: mall → namn → nyckel (visas en gång).
-  const [nyMall, setNyMall] = useState<string>("");
-  const [nyNamn, setNyNamn] = useState("");
-  const [visadNyckel, setVisadNyckel] = useState<{ rubrik: string; nyckel: string } | null>(null);
+  // Provisioneringsflödet (WP27): klient → funktionsroll → namn → nyckel.
+  const [provKlient, setProvKlient] = useState("");
+  const [provMall, setProvMall] = useState("");
+  const [provNamn, setProvNamn] = useState("");
+  const [provNyckel, setProvNyckel] = useState<{ rubrik: string; nyckel: string } | null>(null);
   const [arbetar, setArbetar] = useState(false);
+
+  // Detaljens flöden: rotation/avslut bekräftas INLINE (aldrig
+  // window.confirm — samma tillgängliga mönster som attestkons avvisning).
+  const [roteraBekrafta, setRoteraBekrafta] = useState(false);
+  const [avslutaBekrafta, setAvslutaBekrafta] = useState(false);
+  const [detaljNyckel, setDetaljNyckel] = useState<{
+    agentId: string;
+    rubrik: string;
+    nyckel: string;
+  } | null>(null);
+
+  // Cmd+K.
+  const [palettOppen, setPalettOppen] = useState(false);
+  const [markeratBolag, setMarkeratBolag] = useState<string | null>(null);
 
   // Mall-redigering: formulärstate per mall-id ("" = ny mall).
   const [mallFormer, setMallFormer] = useState<
     Record<string, { namn: string; belopp_kr: string; konfidens: string; kanda: boolean; auto: boolean }>
   >({});
   const [mallSparat, setMallSparat] = useState<Record<string, string>>({});
+
+  const oversiktRef = useRef<HTMLElement>(null);
+  const halsaRef = useRef<HTMLElement>(null);
+  const mallarRef = useRef<HTMLElement>(null);
+  const provRef = useRef<HTMLElement>(null);
+  const provKlientRef = useRef<HTMLSelectElement>(null);
+  const detaljRef = useRef<HTMLDivElement>(null);
 
   const laddaBolag = useCallback(async () => {
     const r = await fetch("/api/operator/bolag");
@@ -215,19 +274,14 @@ export default function OperatorSida() {
     if (h) setHalsa(h);
   }, []);
 
-  const laddaAgenter = useCallback(async (tenant: string) => {
-    const a = await hamta<AgentVy[]>(`/api/agents?tenant=${tenant}`);
-    if (a) setAgenter(a);
-  }, []);
-
   const laddaFlotta = useCallback(async () => {
     const f = await hamta<FlottRad[]>("/api/operator/flotta");
     if (f) setFlotta(f);
   }, []);
 
-  const laddaAgentmallar = useCallback(async () => {
-    const m = await hamta<AgentmallVal[]>("/api/operator/agentmallar");
-    if (m) setAgentmallar(m);
+  const laddaKatalog = useCallback(async () => {
+    const k = await hamta<Agentkatalog>("/api/operator/agentmallar");
+    if (k) setKatalog(k);
   }, []);
 
   const laddaDetalj = useCallback(async (agentId: string) => {
@@ -242,21 +296,70 @@ export default function OperatorSida() {
         laddaMallar();
         laddaHalsa();
         laddaFlotta();
-        laddaAgentmallar();
+        laddaKatalog();
       }
     })();
-  }, [laddaBolag, laddaMallar, laddaHalsa, laddaFlotta, laddaAgentmallar]);
-
-  useEffect(() => {
-    setVisadNyckel(null);
-    setFel("");
-    if (valtBolag) laddaAgenter(valtBolag);
-  }, [valtBolag, laddaAgenter]);
+  }, [laddaBolag, laddaMallar, laddaHalsa, laddaFlotta, laddaKatalog]);
 
   useEffect(() => {
     setDetalj(null);
+    setRoteraBekrafta(false);
+    setAvslutaBekrafta(false);
     if (valdAgent) laddaDetalj(valdAgent);
   }, [valdAgent, laddaDetalj]);
+
+  // Cmd+K öppnar paletten — kommandokatalogen kommer ur den delade
+  // byggaren (operatörsrollen; konsulten ser aldrig dessa, WP29).
+  useEffect(() => {
+    function pa(e: KeyboardEvent) {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        setPalettOppen((o) => !o);
+      }
+    }
+    window.addEventListener("keydown", pa);
+    return () => window.removeEventListener("keydown", pa);
+  }, []);
+
+  const kommandon = useMemo(
+    () =>
+      byggKommandon({
+        roll: "operator",
+        bolag: bolag.map((b) => ({
+          tenant_id: b.tenant_id,
+          tenant_namn: b.tenant_namn,
+          byra: b.byra,
+        })),
+        agenter: flotta
+          .filter((r) => r.status !== "canceled")
+          .map((r) => ({
+            agent_id: r.agent_id,
+            display_name: r.display_name,
+            tenant_namn: r.tenant_namn,
+          })),
+      }),
+    [bolag, flotta],
+  );
+
+  const korKommando = useCallback((k: Kommando) => {
+    const skilj = k.id.indexOf(":");
+    const typ = k.id.slice(0, skilj);
+    const varde = k.id.slice(skilj + 1);
+    if (typ === "vy") {
+      const mal =
+        varde === "halsa" ? halsaRef.current : varde === "mallar" ? mallarRef.current : oversiktRef.current;
+      mal?.scrollIntoView({ block: "start" });
+    } else if (typ === "atgard" && varde === "provisionera") {
+      provRef.current?.scrollIntoView({ block: "start" });
+      provKlientRef.current?.focus();
+    } else if (typ === "bolag") {
+      setMarkeratBolag(varde);
+      document.getElementById(`bolag-${varde}`)?.scrollIntoView({ block: "center" });
+    } else if (typ === "agent") {
+      setValdAgent(varde);
+      detaljRef.current?.scrollIntoView({ block: "start" });
+    }
+  }, []);
 
   async function loggaUt() {
     await fetch("/api/auth/logout", { method: "POST" });
@@ -264,24 +367,20 @@ export default function OperatorSida() {
   }
 
   async function provisionera() {
-    if (!valtBolag || !nyNamn.trim()) return;
+    if (!provKlient || !provMall || !provNamn.trim()) return;
     setArbetar(true);
     setFel("");
     try {
-      // Tre vägar: agentmall (versionerad, ADR-0004), policymall (WP14)
-      // eller rå bokforing-modul utan mall.
       const r = await post<{ agent_id: string; nyckel: string }>("/api/agents", {
-        tenant_id: valtBolag,
-        display_name: nyNamn.trim(),
-        ...(nyMall.startsWith("agentmall:")
-          ? { agentmall: nyMall.slice("agentmall:".length) }
-          : nyMall
-            ? { mall_id: nyMall }
-            : { module: "bokforing" }),
+        tenant_id: provKlient,
+        display_name: provNamn.trim(),
+        agentmall: provMall,
       });
-      setVisadNyckel({ rubrik: `Nyckel för ${nyNamn.trim()}`, nyckel: r.nyckel });
-      setNyNamn("");
-      await Promise.all([laddaAgenter(valtBolag), laddaBolag(), laddaFlotta()]);
+      // Klartextnyckeln finns bara i detta svar — nyckelkortet visar den
+      // EN gång.
+      setProvNyckel({ rubrik: `Nyckel för ${provNamn.trim()}`, nyckel: r.nyckel });
+      setProvNamn("");
+      await Promise.all([laddaBolag(), laddaFlotta()]);
     } catch (e) {
       setFel(e instanceof Error ? e.message : String(e));
     } finally {
@@ -289,21 +388,23 @@ export default function OperatorSida() {
     }
   }
 
-  async function rotera(agent: AgentVy) {
-    if (!valtBolag) return;
-    const ok = window.confirm(
-      `Rotera nyckeln för ${agent.namn}? En ny agent med samma konfiguration skapas och den gamla avslutas — den gamla nyckeln slutar gälla direkt.`,
-    );
-    if (!ok) return;
+  async function roteraNyckel() {
+    if (!detalj) return;
     setArbetar(true);
     setFel("");
     try {
       const r = await post<{ agent_id: string; nyckel: string }>(
-        `/api/agents/${agent.id}/rotera`,
-        { tenant_id: valtBolag },
+        `/api/agents/${detalj.agent.agent_id}/rotera`,
+        { tenant_id: detalj.agent.tenant_id },
       );
-      setVisadNyckel({ rubrik: `Ny nyckel för ${agent.namn} (rotation)`, nyckel: r.nyckel });
-      await Promise.all([laddaAgenter(valtBolag), laddaBolag(), laddaFlotta()]);
+      // Rotationen skapar en NY agentrad — öppna den och visa nyckeln där.
+      setDetaljNyckel({
+        agentId: r.agent_id,
+        rubrik: `Ny nyckel för ${detalj.agent.display_name} (rotation)`,
+        nyckel: r.nyckel,
+      });
+      setValdAgent(r.agent_id);
+      await Promise.all([laddaBolag(), laddaFlotta()]);
     } catch (e) {
       setFel(e instanceof Error ? e.message : String(e));
     } finally {
@@ -311,28 +412,14 @@ export default function OperatorSida() {
     }
   }
 
-  async function sattStatus(agentId: string, metod: "DELETE" | "PATCH", status?: "paused" | "active") {
-    if (!valtBolag) return;
+  async function sattStatus(metod: "DELETE" | "PATCH", status?: "paused" | "active") {
+    if (!detalj) return;
+    const { agent_id, tenant_id } = detalj.agent;
     setFel("");
     try {
-      await post(`/api/agents/${agentId}`, { tenant_id: valtBolag, status }, metod);
-      await Promise.all([laddaAgenter(valtBolag), laddaBolag(), laddaFlotta()]);
-      // Samma agent kan stå öppen i flottans detaljpanel — håll den synkad.
-      if (valdAgent === agentId) await laddaDetalj(agentId);
-    } catch (e) {
-      setFel(e instanceof Error ? e.message : String(e));
-    }
-  }
-
-  // Flottans enda skrivväg (WP13): pausa/återuppta via samma PATCH som
-  // agentsektionen — tenanten kommer ur flottraden, inte bolagsvalet.
-  async function sattFlottStatus(rad: FlottRad, status: "paused" | "active") {
-    setFel("");
-    try {
-      await post(`/api/agents/${rad.agent_id}`, { tenant_id: rad.tenant_id, status }, "PATCH");
-      await Promise.all([laddaFlotta(), laddaBolag()]);
-      if (valdAgent) await laddaDetalj(valdAgent);
-      if (valtBolag === rad.tenant_id) await laddaAgenter(rad.tenant_id);
+      await post(`/api/agents/${agent_id}`, { tenant_id, status }, metod);
+      await Promise.all([laddaBolag(), laddaFlotta(), laddaDetalj(agent_id)]);
+      setAvslutaBekrafta(false);
     } catch (e) {
       setFel(e instanceof Error ? e.message : String(e));
     }
@@ -381,15 +468,38 @@ export default function OperatorSida() {
     );
   }
 
-  const bolagsNamn = bolag.find((b) => b.tenant_id === valtBolag)?.tenant_namn;
-
-  // Flottans filter + fasta sortering: korrigeringsandel fallande — hög
-  // andel överst, det är den raden som behöver ses över (kickoff WP13).
   const mallVal = [...new Set(flotta.map((r) => r.template_id ?? UTAN_MALL))].sort();
   const visadFlotta = flotta
     .filter((r) => !filtMall || (r.template_id ?? UTAN_MALL) === filtMall)
-    .filter((r) => !filtStatus || r.status === filtStatus)
-    .sort((a, b) => (b.andel_korrigerade ?? -1) - (a.andel_korrigerade ?? -1));
+    .filter((r) => !filtStatus || r.status === filtStatus);
+  const flottaPerTenant = new Map<string, FlottRad[]>();
+  for (const r of visadFlotta) {
+    const lista = flottaPerTenant.get(r.tenant_id);
+    if (lista) lista.push(r);
+    else flottaPerTenant.set(r.tenant_id, [r]);
+  }
+
+  // Steg 2:s härledda branschpaket: klientens branschmall → paket-id:n,
+  // snittade mot vad den valda funktionsrollen KAN aktivera.
+  const provBolag = bolag.find((b) => b.tenant_id === provKlient) ?? null;
+  const aktivaPaketFor = (mall: { branschpaket: string[] }): string[] => {
+    if (!provBolag || !katalog) return [];
+    const tenantPaket = katalog.tenantmall_till_paket[provBolag.mall] ?? [];
+    return mall.branschpaket.filter((p) => tenantPaket.includes(p));
+  };
+
+  // Hälsans larmtoner: statusgrönt/varning enligt systemet — tonen är
+  // en punkt + värdesfärg, texten bär alltid betydelsen.
+  const aldstaGammal = Boolean(
+    halsa?.aldsta_vantande &&
+      Date.now() - new Date(halsa.aldsta_vantande).getTime() > ALDSTA_VARNING_MS,
+  );
+  const ton = {
+    ko: halsa && halsa.ko_djup > 0 && aldstaGammal ? "varning" : "ok",
+    aldsta: aldstaGammal ? "varning" : "ok",
+    omforsok: halsa && halsa.omforsok_24h > 0 ? "varning" : "ok",
+    korning: halsa && halsa.ko_djup > 0 && !halsa.senaste_korning ? "varning" : "ok",
+  } as const;
 
   return (
     <main className={`operator ${plexMono.variable}`}>
@@ -402,41 +512,30 @@ export default function OperatorSida() {
           <span className="undertitel">operatörskonsol</span>
         </div>
         <div className="topbar-meta">
+          <button
+            onClick={() => setPalettOppen(true)}
+            aria-label="Öppna kommandopaletten (Cmd+K)"
+            title="Kommandopaletten (Cmd+K)"
+          >
+            ⌘K
+          </button>
           <button onClick={loggaUt}>Logga ut</button>
         </div>
       </div>
 
-      {/* Hälsa */}
-      <section className="steg">
-        <div className="steg-rubrik">
-          <h2 className="steg-titel">Hälsa</h2>
-          <span className="steg-not">kön och workern — drift, aldrig innehåll</span>
-        </div>
-        {halsa && (
-          <div className="halsa-rad">
-            <div className="halsa-kort">
-              <div className="varde">{halsa.ko_djup}</div>
-              <div className="etikett">jobb i kön</div>
-            </div>
-            <div className="halsa-kort">
-              <div className="varde">{halsa.senaste_korning ? tid(halsa.senaste_korning) : "—"}</div>
-              <div className="etikett">senaste worker-körning</div>
-            </div>
-            <div className="halsa-kort">
-              <div className="varde">{halsa.omforsok_24h}</div>
-              <div className="etikett">omförsök senaste dygnet</div>
-            </div>
-          </div>
-        )}
-      </section>
+      <KommandoPalett
+        oppen={palettOppen}
+        kommandon={kommandon}
+        onVal={korKommando}
+        onStang={() => setPalettOppen(false)}
+      />
 
-      {/* Flottan (WP13, ADR-0004) */}
-      <section className="steg">
+      {/* Översikten (WP27) — startvyn: byrå → klientbolag → agenter. */}
+      <section className="steg" ref={oversiktRef}>
         <div className="steg-rubrik">
-          <h2 className="steg-titel">Flottan</h2>
+          <h2 className="steg-titel">Översikt</h2>
           <span className="steg-not">
-            alla agenter, sorterade på korrigeringsandel — hög andel betyder att mallen
-            eller kontexten behöver ses över
+            alla agenters hälsa på en skärm · antal är drift, innehållet är byråns
           </span>
         </div>
 
@@ -465,59 +564,108 @@ export default function OperatorSida() {
           </select>
         </div>
 
-        {visadFlotta.length === 0 ? (
-          <p className="tyst">
-            {flotta.length === 0
-              ? "Inga agenter i flottan ännu — provisionera den första under ett bolag nedan."
-              : "Inga agenter matchar filtret."}
-          </p>
+        {bolag.length === 0 ? (
+          <TomtLage>
+            Inga bolag ännu — provisionera det första när en byrå skrivit på.
+          </TomtLage>
         ) : (
           <div className="svep">
-            <table className="rader">
+            <table className="rader oversikt">
               <thead>
                 <tr>
                   <th>Agent</th>
-                  <th>Klientbolag</th>
-                  <th>Mall</th>
                   <th>Status</th>
-                  <th className="tal">Förslag 7 d</th>
-                  <th className="tal">Auto</th>
-                  <th className="tal">Korrigerade</th>
+                  <th>Modul</th>
+                  <th>Mall</th>
+                  <th className="tal">Förslag/vecka</th>
                   <th className="tal">Senast aktiv</th>
-                  <th></th>
+                  <th>Fel</th>
                 </tr>
               </thead>
-              <tbody>
-                {visadFlotta.map((r) => (
-                  <tr
-                    key={r.agent_id}
-                    data-vald={valdAgent === r.agent_id}
-                    onClick={() => setValdAgent(valdAgent === r.agent_id ? null : r.agent_id)}
+              {bolag.map((b) => {
+                const agenter = flottaPerTenant.get(b.tenant_id) ?? [];
+                return (
+                  <tbody
+                    key={b.tenant_id}
+                    id={`bolag-${b.tenant_id}`}
+                    data-markerad={markeratBolag === b.tenant_id}
                   >
-                    <td>{r.display_name}</td>
-                    <td>
-                      {r.tenant_namn} <span className="tyst">({r.byra})</span>
-                    </td>
-                    <td>{mallEtikett(r)}</td>
-                    <td>
-                      {r.status === "active" && "aktiv"}
-                      {r.status === "paused" && <span className="tyst">pausad</span>}
-                      {r.status === "canceled" && <span className="tyst">avslutad</span>}
-                    </td>
-                    <td className="tal">{r.forslag_7d}</td>
-                    <td className="tal">{pct(r.andel_auto)}</td>
-                    <td className="tal">{pct(r.andel_korrigerade)}</td>
-                    <td className="tal">{r.senaste_aktivitet ? tid(r.senaste_aktivitet) : "—"}</td>
-                    <td>
-                      {r.varningar.map((v) => (
-                        <span key={v} className="chip chip-varning">
-                          {VARNINGSTEXT[v]}
+                    <tr className="bolagsrad ej-klickbar">
+                      <th colSpan={7} scope="colgroup">
+                        <span className="tyst">{b.byra}</span> · {b.tenant_namn}{" "}
+                        <Chip>{b.mall}</Chip>
+                        <span className="tyst bolags-aggregat">
+                          {b.forslag_7d} förslag · {b.beslut_7d} beslut senaste 7 d
                         </span>
-                      ))}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
+                      </th>
+                    </tr>
+                    {agenter.length === 0 ? (
+                      <tr className="ej-klickbar">
+                        <td colSpan={7} className="tyst">
+                          {flotta.some((r) => r.tenant_id === b.tenant_id)
+                            ? "inga agenter matchar filtret"
+                            : "inga agenter ännu — provisionera nedan"}
+                        </td>
+                      </tr>
+                    ) : (
+                      agenter.map((r) => (
+                        <tr
+                          key={r.agent_id}
+                          data-vald={valdAgent === r.agent_id}
+                          onClick={() =>
+                            setValdAgent(valdAgent === r.agent_id ? null : r.agent_id)
+                          }
+                        >
+                          <td>
+                            {/* Det tangentbordsnåbara valet — radens onClick
+                                är bara en större pekyta för samma sak. */}
+                            <button
+                              className="valj-rad"
+                              aria-pressed={valdAgent === r.agent_id}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setValdAgent(
+                                  valdAgent === r.agent_id ? null : r.agent_id,
+                                );
+                              }}
+                            >
+                              {r.display_name}
+                            </button>
+                          </td>
+                          <td>
+                            <StatusPunkt status={r.status} />
+                          </td>
+                          <td>
+                            <Chip>{r.module}</Chip>
+                          </td>
+                          <td>{mallEtikett(r)}</td>
+                          <td className="tal">
+                            <Sparkline
+                              varden={r.forslag_dagar}
+                              etikett={`${r.forslag_7d} förslag senaste 7 dygnen`}
+                            />{" "}
+                            {r.forslag_7d}
+                          </td>
+                          <td className="tal">
+                            {r.senaste_aktivitet ? tid(r.senaste_aktivitet) : "—"}
+                          </td>
+                          <td>
+                            {r.varningar.length === 0 ? (
+                              <span className="tyst">—</span>
+                            ) : (
+                              r.varningar.map((v) => (
+                                <Chip key={v} varning>
+                                  {VARNINGSTEXT[v]}
+                                </Chip>
+                              ))
+                            )}
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                );
+              })}
             </table>
           </div>
         )}
@@ -525,269 +673,316 @@ export default function OperatorSida() {
         {/* Renderingsvakt mot stale-response-racen: en detalj som hann
             hämtas för en TIDIGARE vald rad renderas aldrig — knapparna
             kan därmed aldrig agera på fel agent. */}
-        {valdAgent && detalj && detalj.agent.agent_id === valdAgent && (
-          <div className="flotta-detalj">
-            <div className="detalj-rubrik">
-              <strong>{detalj.agent.display_name}</strong>
-              <span className="tyst">
-                {detalj.agent.tenant_namn} · {mallEtikett(detalj.agent)} · provisionerad{" "}
-                {tid(detalj.agent.skapad)} av {detalj.agent.provisioned_by}
-              </span>
-              {detalj.agent.status === "active" && (
-                <button onClick={() => sattFlottStatus(detalj.agent, "paused")}>Pausa</button>
-              )}
-              {detalj.agent.status === "paused" && (
-                <button onClick={() => sattFlottStatus(detalj.agent, "active")}>Återuppta</button>
-              )}
-            </div>
-
-            <p className="policy-rad">
-              policy:{" "}
-              {detalj.policy
-                ? `bokför själv upp till ${(detalj.policy.max_belopp_ore / 100).toLocaleString(
-                    "sv-SE",
-                  )} kr · minst ${detalj.policy.min_confidence} i konfidens · ${
-                    detalj.policy.kanda_motparter_endast ? "endast kända motparter" : "alla motparter"
-                  } · kinds: ${
-                    detalj.policy.tillatna_kinds.join(", ") || "inga (allt attesteras)"
-                  }`
-                : "ingen autonomipolicy — allt attesteras"}
-              {" · scopes: "}
-              {detalj.agent.scopes.map((s) => (
-                <span key={s} className="chip">
-                  {s}
+        <div ref={detaljRef}>
+          {valdAgent && detalj && detalj.agent.agent_id === valdAgent && (
+            <div className="flotta-detalj">
+              <div className="detalj-rubrik">
+                <strong>{detalj.agent.display_name}</strong>
+                <StatusPunkt status={detalj.agent.status} />
+                <span className="tyst">
+                  {detalj.agent.tenant_namn} · {mallEtikett(detalj.agent)} ·
+                  provisionerad av {detalj.agent.provisioned_by}
                 </span>
-              ))}
-            </p>
-
-            {detalj.senaste.length === 0 ? (
-              <p className="tyst">Inga förslag från den här agenten ännu.</p>
-            ) : (
-              <div className="svep">
-                <table className="rader">
-                  <thead>
-                    <tr>
-                      <th>Förslag</th>
-                      <th>Kind</th>
-                      <th>Status</th>
-                      <th className="tal">Konfidens</th>
-                      <th>Mallversion</th>
-                      <th className="tal">Skapat</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {detalj.senaste.map((p) => (
-                      <tr key={p.id} className="ej-klickbar">
-                        <td className="tal">{p.id.slice(0, 8)}</td>
-                        <td>{p.kind}</td>
-                        <td>{p.status}</td>
-                        <td className="tal">{p.confidence.toFixed(2)}</td>
-                        <td>{p.mall_version ?? <span className="tyst">ostämplad</span>}</td>
-                        <td className="tal">{tid(p.skapad)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
               </div>
-            )}
-          </div>
-        )}
-      </section>
 
-      {/* Bolag */}
-      <section className="steg">
-        <div className="steg-rubrik">
-          <h2 className="steg-titel">Bolag</h2>
-          <span className="steg-not">
-            byråer → klientbolag → agenter · antal förslag är drift, innehållet är byråns
-          </span>
-        </div>
-        {bolag.length === 0 ? (
-          <p className="tyst">Inga bolag ännu — provisionera det första när en byrå skrivit på.</p>
-        ) : (
-          <div className="svep">
-            <table className="rader">
-              <thead>
-                <tr>
-                  <th>Byrå</th>
-                  <th>Klientbolag</th>
-                  <th>Mall</th>
-                  <th className="tal">Agenter</th>
-                  <th className="tal">Förslag 7 d</th>
-                  <th className="tal">Beslut 7 d</th>
-                </tr>
-              </thead>
-              <tbody>
-                {bolag.map((b) => (
-                  <tr
-                    key={b.tenant_id}
-                    data-vald={valtBolag === b.tenant_id}
-                    onClick={() => setValtBolag(b.tenant_id)}
-                  >
-                    <td>{b.byra}</td>
-                    <td>
-                      {/* Det tangentbordsnåbara valet — radens onClick är
-                          bara en större pekyta för samma sak. */}
-                      <button
-                        className="valj-bolag"
-                        aria-pressed={valtBolag === b.tenant_id}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setValtBolag(b.tenant_id);
-                        }}
-                      >
-                        {b.tenant_namn}
-                      </button>
-                    </td>
-                    <td>{b.mall}</td>
-                    <td className="tal">
-                      {b.agenter_aktiva}
-                      {b.agenter_pausade > 0 && (
-                        <span className="tyst"> (+{b.agenter_pausade} pausade)</span>
-                      )}
-                    </td>
-                    <td className="tal">{b.forslag_7d}</td>
-                    <td className="tal">{b.beslut_7d}</td>
-                  </tr>
+              {detaljNyckel && detaljNyckel.agentId === valdAgent && (
+                <Nyckelkort rubrik={detaljNyckel.rubrik} nyckel={detaljNyckel.nyckel} />
+              )}
+
+              {/* Livslinjen: skapad → pausad → återupptagen … ur
+                  audit-händelserna — drift, aldrig innehåll. */}
+              <ol className="livslinje" aria-label="Agentens livslinje">
+                {detalj.livslinje.map((h, i) => (
+                  <li key={i}>
+                    <span className="liv-handelse">{LIVSTEXT[h.handelse]}</span>{" "}
+                    <span className="tyst">{tid(h.tid)}</span>
+                  </li>
                 ))}
-              </tbody>
-            </table>
-          </div>
-        )}
+              </ol>
+
+              <p className="policy-rad">
+                policy:{" "}
+                {detalj.policy
+                  ? `bokför själv upp till ${(detalj.policy.max_belopp_ore / 100).toLocaleString(
+                      "sv-SE",
+                    )} kr · minst ${detalj.policy.min_confidence} i konfidens · ${
+                      detalj.policy.kanda_motparter_endast
+                        ? "endast kända motparter"
+                        : "alla motparter"
+                    } · kinds: ${
+                      detalj.policy.tillatna_kinds.join(", ") || "inga (allt attesteras)"
+                    }`
+                  : "ingen autonomipolicy — allt attesteras"}
+                {" · scopes: "}
+                {detalj.agent.scopes.map((s) => (
+                  <span key={s} className="chip">
+                    {s}
+                  </span>
+                ))}
+              </p>
+
+              <p className="policy-rad">
+                utfall 7 d: auto {pct(detalj.agent.andel_auto)} · korrigerade{" "}
+                {pct(detalj.agent.andel_korrigerade)} · tenantens kö:{" "}
+                {detalj.tenant_drift.ko_djup} jobb · senaste worker-körning{" "}
+                {detalj.tenant_drift.senaste_korning
+                  ? tid(detalj.tenant_drift.senaste_korning)
+                  : "—"}
+              </p>
+
+              <div className="detalj-atgarder">
+                {detalj.agent.status === "active" && (
+                  <button onClick={() => sattStatus("PATCH", "paused")}>Pausa</button>
+                )}
+                {detalj.agent.status === "paused" && (
+                  <button onClick={() => sattStatus("PATCH", "active")}>Återuppta</button>
+                )}
+                {detalj.agent.status === "active" &&
+                  (roteraBekrafta ? (
+                    <span className="bekrafta-rad">
+                      <span className="tyst">
+                        en ny agent med samma konfiguration skapas — den gamla
+                        nyckeln slutar gälla direkt:
+                      </span>
+                      <button className="primar" onClick={roteraNyckel} disabled={arbetar}>
+                        {arbetar ? "Roterar …" : "Rotera"}
+                      </button>
+                      <button onClick={() => setRoteraBekrafta(false)} disabled={arbetar}>
+                        Avbryt
+                      </button>
+                    </span>
+                  ) : (
+                    <button onClick={() => setRoteraBekrafta(true)} disabled={arbetar}>
+                      Rotera nyckel
+                    </button>
+                  ))}
+                {detalj.agent.status !== "canceled" &&
+                  (avslutaBekrafta ? (
+                    <span className="bekrafta-rad">
+                      <span className="tyst">
+                        agenten avslutas och nyckeln slutar gälla — historiken
+                        finns kvar:
+                      </span>
+                      <button className="primar" onClick={() => sattStatus("DELETE")}>
+                        Avsluta
+                      </button>
+                      <button onClick={() => setAvslutaBekrafta(false)}>Avbryt</button>
+                    </span>
+                  ) : (
+                    <button onClick={() => setAvslutaBekrafta(true)}>Avsluta</button>
+                  ))}
+              </div>
+
+              {detalj.senaste.length === 0 ? (
+                <TomtLage>Inga förslag från den här agenten ännu.</TomtLage>
+              ) : (
+                <div className="svep">
+                  <table className="rader">
+                    <thead>
+                      <tr>
+                        <th>Förslag</th>
+                        <th>Kind</th>
+                        <th>Status</th>
+                        <th className="tal">Konfidens</th>
+                        <th>Mallversion</th>
+                        <th className="tal">Skapat</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {detalj.senaste.map((p) => (
+                        <tr key={p.id} className="ej-klickbar">
+                          <td className="tal">{p.id.slice(0, 8)}</td>
+                          <td>{p.kind}</td>
+                          <td>{p.status}</td>
+                          <td className="tal">{p.confidence.toFixed(2)}</td>
+                          <td>{p.mall_version ?? <span className="tyst">ostämplad</span>}</td>
+                          <td className="tal">{tid(p.skapad)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
       </section>
 
-      {/* Agenter för valt bolag */}
-      <section className="steg" data-inaktiv={!valtBolag}>
+      {/* Provisioneringen som flöde (WP27): tre steg, tangentbordsvänligt. */}
+      <section className="steg" ref={provRef}>
         <div className="steg-rubrik">
-          <h2 className="steg-titel">
-            Agenter{bolagsNamn ? ` — ${bolagsNamn}` : ""}
-          </h2>
+          <h2 className="steg-titel">Provisionera agent</h2>
           <span className="steg-not">
-            en agent är en rad, inte en maskin (ADR-0003) · nyckeln kan föreslå, aldrig bokföra
+            klient → funktionsroll → namn · nyckeln visas EN gång
           </span>
         </div>
 
-        {!valtBolag && <p className="tyst">Välj ett bolag i tabellen ovan.</p>}
+        {provNyckel && <Nyckelkort rubrik={provNyckel.rubrik} nyckel={provNyckel.nyckel} />}
 
-        {valtBolag && (
-          <>
-            {visadNyckel && (
-              <div className="nyckel-avslojande">
-                {visadNyckel.rubrik} —{" "}
-                <span className="nyckel-varning">
-                  kopiera nu, den visas aldrig igen (endast hashen lagras):
-                </span>
-                <div className="nyckel-klartext">{visadNyckel.nyckel}</div>
-                <button
-                  className="nyckel-kopiera"
-                  onClick={() => navigator.clipboard.writeText(visadNyckel.nyckel)}
-                >
-                  Kopiera nyckeln
-                </button>
-              </div>
-            )}
+        <div className="prov-steg">
+          <span className="prov-nr">1.</span>
+          <label htmlFor="prov-klient">Klient</label>
+          <select
+            id="prov-klient"
+            ref={provKlientRef}
+            value={provKlient}
+            onChange={(e) => setProvKlient(e.target.value)}
+          >
+            <option value="">välj klientbolag …</option>
+            {bolag.map((b) => (
+              <option key={b.tenant_id} value={b.tenant_id}>
+                {b.tenant_namn} — {b.byra}
+              </option>
+            ))}
+          </select>
+          {provBolag && (
+            <span className="tyst">
+              bransch ur kundconfig: <span className="chip">{provBolag.mall}</span>
+            </span>
+          )}
+        </div>
 
-            <div className="provisionera-rad">
-              <select value={nyMall} onChange={(e) => setNyMall(e.target.value)}>
-                <option value="">utan mall (bokforing, manuell policy)</option>
-                <optgroup label="agentmallar — funktionsroller (ADR-0005)">
-                  {agentmallar.map((m) => (
-                    <option key={m.id} value={`agentmall:${m.id}`}>
-                      {m.displayName} · {m.version}
-                      {m.branschpaket.length > 0 &&
-                        ` · paket via tenant: ${m.branschpaket.join(", ")}`}
-                    </option>
-                  ))}
-                </optgroup>
-                <optgroup label="policymallar — endast autonomi">
-                  {mallar.map((m) => (
-                    <option key={m.id} value={m.id}>
-                      {m.namn}
-                    </option>
-                  ))}
-                </optgroup>
-              </select>
-              <input
-                type="text"
-                value={nyNamn}
-                onChange={(e) => setNyNamn(e.target.value)}
-                placeholder="Agentens namn, t.ex. kvittoagent-butik-2"
-              />
-              <button className="primar" onClick={provisionera} disabled={arbetar || !nyNamn.trim()}>
-                {arbetar ? "Provisionerar …" : "Provisionera agent"}
-              </button>
-            </div>
-
-            {agenter.length === 0 ? (
-              <p className="tyst">
-                Inga agenter för det här bolaget ännu — provisionera den första ovan.
-              </p>
-            ) : (
-              <div className="svep">
-                <table className="rader">
-                  <thead>
-                    <tr>
-                      <th>Agent</th>
-                      <th>Modul</th>
-                      <th>Scopes</th>
-                      <th>Skapad</th>
-                      <th>Status</th>
-                      <th></th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {agenter.map((a) => (
-                      <tr key={a.id} className="ej-klickbar">
-                        <td>{a.namn}</td>
-                        <td>{a.module}</td>
-                        <td>
-                          {a.scopes.map((s) => (
-                            <span key={s} className="chip">
-                              {s}
-                            </span>
-                          ))}
-                        </td>
-                        <td className="tal">{tid(a.created_at)}</td>
-                        <td>
-                          {a.status === "active" && "aktiv"}
-                          {a.status === "paused" && <span className="tyst">pausad</span>}
-                          {a.status === "canceled" && <span className="tyst">avslutad</span>}
-                        </td>
-                        <td className="atgarder">
-                          {a.status === "active" && (
-                            <>
-                              <button onClick={() => sattStatus(a.id, "PATCH", "paused")}>Pausa</button>{" "}
-                              <button onClick={() => rotera(a)} disabled={arbetar}>
-                                Rotera nyckel
-                              </button>{" "}
-                            </>
-                          )}
-                          {a.status === "paused" && (
-                            <button onClick={() => sattStatus(a.id, "PATCH", "active")}>
-                              Återuppta
-                            </button>
-                          )}{" "}
-                          {a.status !== "canceled" && (
-                            <button onClick={() => sattStatus(a.id, "DELETE")}>Avsluta</button>
-                          )}
-                        </td>
-                      </tr>
+        <fieldset className="prov-steg prov-mallar" data-inaktiv={!provKlient} disabled={!provKlient}>
+          <legend>
+            <span className="prov-nr">2.</span> Funktionsroll{" "}
+            <span className="tyst">
+              — fyra roller ur den granskade katalogen; branschen härleds ur
+              klienten och väljs aldrig här (ADR-0005)
+            </span>
+          </legend>
+          <div className="mallval" role="radiogroup" aria-label="Funktionsroll">
+            {(katalog?.mallar ?? []).map((m) => {
+              const aktiva = aktivaPaketFor(m);
+              return (
+                <label key={m.id} className="mallkort" data-vald={provMall === m.id}>
+                  <input
+                    type="radio"
+                    name="prov-mall"
+                    value={m.id}
+                    checked={provMall === m.id}
+                    onChange={() => setProvMall(m.id)}
+                  />
+                  <span className="mall-titel">{m.displayName}</span>
+                  <span className="mall-meta">
+                    <span className="badge granskad">
+                      <span className="dot" aria-hidden="true" />
+                      granskad
+                    </span>
+                    <Chip tal>v{m.version}</Chip>
+                    {aktiva.map((p) => (
+                      <Chip key={p}>
+                        +{katalog?.paket[p]?.displayName ?? p}{" "}
+                        {katalog?.paket[p]?.version ?? ""}
+                      </Chip>
                     ))}
-                  </tbody>
-                </table>
+                    {provKlient && m.branschpaket.length > 0 && aktiva.length === 0 && (
+                      <span className="tyst">inga paket för klientens bransch</span>
+                    )}
+                  </span>
+                </label>
+              );
+            })}
+          </div>
+        </fieldset>
+
+        <div className="prov-steg" data-inaktiv={!provKlient || !provMall}>
+          <span className="prov-nr">3.</span>
+          <label htmlFor="prov-namn">Namn</label>
+          <input
+            id="prov-namn"
+            type="text"
+            value={provNamn}
+            disabled={!provKlient || !provMall}
+            onChange={(e) => setProvNamn(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                provisionera();
+              }
+            }}
+            placeholder="t.ex. kvittoagent-butik-2"
+          />
+          <button
+            className="primar"
+            onClick={provisionera}
+            disabled={arbetar || !provKlient || !provMall || !provNamn.trim()}
+          >
+            {arbetar ? "Provisionerar …" : "Provisionera agent"}
+          </button>
+        </div>
+      </section>
+
+      {/* Hälsovyn (WP27): kön och workern — drift, aldrig innehåll. */}
+      <section className="steg" ref={halsaRef}>
+        <div className="steg-rubrik">
+          <h2 className="steg-titel">Hälsa</h2>
+          <span className="steg-not">kön och workern — drift, aldrig innehåll</span>
+        </div>
+        {halsa && (
+          <>
+            <div className="halsa-rad">
+              <div className="halsa-kort" data-ton={ton.ko}>
+                <div className="varde">{halsa.ko_djup}</div>
+                <div className="etikett">
+                  <span className="ton-punkt" aria-hidden="true" /> jobb i kön
+                </div>
               </div>
+              <div className="halsa-kort" data-ton={ton.aldsta}>
+                <div className="varde">
+                  {halsa.aldsta_vantande ? sedan(halsa.aldsta_vantande) : "—"}
+                </div>
+                <div className="etikett">
+                  <span className="ton-punkt" aria-hidden="true" /> äldsta väntande jobb
+                </div>
+              </div>
+              <div className="halsa-kort" data-ton={ton.omforsok}>
+                <div className="varde">{halsa.omforsok_24h}</div>
+                <div className="etikett">
+                  <span className="ton-punkt" aria-hidden="true" /> omförsök senaste dygnet
+                </div>
+              </div>
+              <div className="halsa-kort" data-ton={ton.korning}>
+                <div className="varde">
+                  {halsa.senaste_korning ? tid(halsa.senaste_korning) : "—"}
+                </div>
+                <div className="etikett">
+                  <span className="ton-punkt" aria-hidden="true" /> senaste worker-körning
+                </div>
+              </div>
+            </div>
+            {halsa.per_modul.length > 0 && (
+              <table className="rader">
+                <thead>
+                  <tr>
+                    <th>Modul</th>
+                    <th className="tal">Jobb i kön</th>
+                    <th className="tal">Omförsök 24 h</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {halsa.per_modul.map((m) => (
+                    <tr key={m.module} className="ej-klickbar">
+                      <td>
+                        <Chip>{m.module}</Chip>
+                      </td>
+                      <td className="tal">{m.ko_djup}</td>
+                      <td className="tal">{m.omforsok_24h}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             )}
           </>
         )}
       </section>
 
       {/* Policymallar */}
-      <section className="steg">
+      <section className="steg" ref={mallarRef}>
         <div className="steg-rubrik">
           <h2 className="steg-titel">Policymallar</h2>
           <span className="steg-not">
-            väljs vid provisionering och kopieras till bolagets policy — byrån kan
-            sedan justera i sin arbetsyta
+            autonomiförval — funktionsrollernas förval seedar vid provisionering;
+            byrån justerar sedan i sin arbetsyta
           </span>
         </div>
 
