@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { plexMono } from "../_publik/fonter";
 import "./operator.css";
 
 // Operatörskonsolen (WP14) — grundarens vy: bolag → agenter → status,
@@ -247,7 +248,7 @@ export default function OperatorSida() {
 
   if (!inloggad) {
     return (
-      <main className="operator">
+      <main className={`operator ${plexMono.variable}`}>
         <p className="laddar">laddar …</p>
       </main>
     );
@@ -256,7 +257,8 @@ export default function OperatorSida() {
   const bolagsNamn = bolag.find((b) => b.tenant_id === valtBolag)?.tenant_namn;
 
   return (
-    <main className="operator">
+    <main className={`operator ${plexMono.variable}`}>
+      <h1 className="sr-rubrik">Operatörskonsolen</h1>
       <div className="topbar">
         <div className="wordmark-rad">
           <div className="wordmark">
@@ -272,7 +274,7 @@ export default function OperatorSida() {
       {/* Hälsa */}
       <section className="steg">
         <div className="steg-rubrik">
-          <span className="steg-titel">Hälsa</span>
+          <h2 className="steg-titel">Hälsa</h2>
           <span className="steg-not">kön och workern — drift, aldrig innehåll</span>
         </div>
         {halsa && (
@@ -296,7 +298,7 @@ export default function OperatorSida() {
       {/* Bolag */}
       <section className="steg">
         <div className="steg-rubrik">
-          <span className="steg-titel">Bolag</span>
+          <h2 className="steg-titel">Bolag</h2>
           <span className="steg-not">
             byråer → klientbolag → agenter · antal förslag är drift, innehållet är byråns
           </span>
@@ -304,7 +306,7 @@ export default function OperatorSida() {
         {bolag.length === 0 ? (
           <p className="tyst">Inga bolag ännu — provisionera det första när en byrå skrivit på.</p>
         ) : (
-          <div style={{ overflowX: "auto" }}>
+          <div className="svep">
             <table className="rader">
               <thead>
                 <tr>
@@ -324,7 +326,20 @@ export default function OperatorSida() {
                     onClick={() => setValtBolag(b.tenant_id)}
                   >
                     <td>{b.byra}</td>
-                    <td>{b.tenant_namn}</td>
+                    <td>
+                      {/* Det tangentbordsnåbara valet — radens onClick är
+                          bara en större pekyta för samma sak. */}
+                      <button
+                        className="valj-bolag"
+                        aria-pressed={valtBolag === b.tenant_id}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setValtBolag(b.tenant_id);
+                        }}
+                      >
+                        {b.tenant_namn}
+                      </button>
+                    </td>
                     <td>{b.mall}</td>
                     <td className="tal">
                       {b.agenter_aktiva}
@@ -345,9 +360,9 @@ export default function OperatorSida() {
       {/* Agenter för valt bolag */}
       <section className="steg" data-inaktiv={!valtBolag}>
         <div className="steg-rubrik">
-          <span className="steg-titel">
+          <h2 className="steg-titel">
             Agenter{bolagsNamn ? ` — ${bolagsNamn}` : ""}
-          </span>
+          </h2>
           <span className="steg-not">
             en agent är en rad, inte en maskin (ADR-0003) · nyckeln kan föreslå, aldrig bokföra
           </span>
@@ -358,14 +373,14 @@ export default function OperatorSida() {
         {valtBolag && (
           <>
             {visadNyckel && (
-              <div className="bokford" style={{ marginBottom: "var(--sp-3)" }}>
+              <div className="nyckel-avslojande">
                 {visadNyckel.rubrik} —{" "}
                 <span className="nyckel-varning">
                   kopiera nu, den visas aldrig igen (endast hashen lagras):
                 </span>
                 <div className="nyckel-klartext">{visadNyckel.nyckel}</div>
                 <button
-                  style={{ marginTop: "var(--sp-2)" }}
+                  className="nyckel-kopiera"
                   onClick={() => navigator.clipboard.writeText(visadNyckel.nyckel)}
                 >
                   Kopiera nyckeln
@@ -398,7 +413,7 @@ export default function OperatorSida() {
                 Inga agenter för det här bolaget ännu — provisionera den första ovan.
               </p>
             ) : (
-              <div style={{ overflowX: "auto" }}>
+              <div className="svep">
                 <table className="rader">
                   <thead>
                     <tr>
@@ -428,7 +443,7 @@ export default function OperatorSida() {
                           {a.status === "paused" && <span className="tyst">pausad</span>}
                           {a.status === "canceled" && <span className="tyst">avslutad</span>}
                         </td>
-                        <td style={{ whiteSpace: "nowrap" }}>
+                        <td className="atgarder">
                           {a.status === "active" && (
                             <>
                               <button onClick={() => sattStatus(a.id, "PATCH", "paused")}>Pausa</button>{" "}
@@ -459,7 +474,7 @@ export default function OperatorSida() {
       {/* Policymallar */}
       <section className="steg">
         <div className="steg-rubrik">
-          <span className="steg-titel">Policymallar</span>
+          <h2 className="steg-titel">Policymallar</h2>
           <span className="steg-not">
             väljs vid provisionering och kopieras till bolagets policy — byrån kan
             sedan justera i sin arbetsyta
@@ -488,7 +503,7 @@ export default function OperatorSida() {
                   checked={f.auto}
                   onChange={(e) => uppdateraMall(id, { auto: e.target.checked })}
                 />
-                <label htmlFor={`mall-${id || "ny"}-auto`} style={{ all: "unset", cursor: "pointer" }}>
+                <label htmlFor={`mall-${id || "ny"}-auto`}>
                   bokför själv upp till
                 </label>
               </span>
@@ -508,7 +523,7 @@ export default function OperatorSida() {
                   checked={f.kanda}
                   onChange={(e) => uppdateraMall(id, { kanda: e.target.checked })}
                 />
-                <label htmlFor={`mall-${id || "ny"}-kanda`} style={{ all: "unset", cursor: "pointer" }}>
+                <label htmlFor={`mall-${id || "ny"}-kanda`}>
                   endast kända motparter
                 </label>
               </span>

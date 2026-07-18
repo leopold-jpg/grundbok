@@ -437,29 +437,30 @@ står medvetet kvar på studio-skinnet; /login-punkterna är öppna.*
   "proposals"), ingen glass, inget kvitto-manér, inga påhittade
   siffror.
 
-### /operator (operator.css + operator/page.tsx)
+### /operator (operator.css + operator/page.tsx) — ÅTGÄRDAT 2026-07-18
 
-- Samma systemiska studio-skin (varma ytor, terracotta fokus/checkbox/
-  ordmärkes-em, `button.primar` brunsvart för "Provisionera agent",
-  varm grön/röd/amber).
-- `.bokford` (grön statuskant) återanvänds som container för
-  nyckel-avslöjandet — grönt på något som inte är status: bryter
-  "grönt ENDAST status".
-- Typografi: sektionsrubriker i serif 22px; hälsokortens VÄRDEN (rena
-  siffror + tidsstämpel) i serif 28px — dubbelfel, ska vara mono;
-  scope-chips i mono (löptext); etiketter 400/500.
-- Kort: `.halsa-kort` radie `--r-md` (10px) mot kortnivån `--r-lg`;
-  ingen skugga.
-- A11y (allvarligast på denna yta): bolagsval via `onClick` på `<tr>`
-  utan tabIndex/role/tangentbordshantering — hela agent-sektionen
-  onåbar utan mus; ingen rubrikhierarki alls (h1–h6 saknas, allt är
-  div/span); nyckelvarningen "kopiera nu …" 13px amber ≈ 3,7:1 (under
-  AA); inputs 14px; kontrastbrott på all tertiärtext.
-- Sju inline-styles i JSX inkl. `style={{ all: "unset" }}` på
-  checkbox-labels (nollställer även fokus-stil).
-- Berättar: föredömligt — endast driftaggregat (aldrig belopp/
-  motparter), ärliga tomlägen, ärlig nyckel-copy, inga påhittade
-  siffror. Inga berättar-avvikelser.
+- **LÖST via skin-mappningen:** studio-skinnet borta — fokus/checkbox/
+  ordmärkes-em blå, `button.primar` ("Provisionera agent") blå CTA,
+  status i kanonens `--gron`/`--fel`/`--varning`.
+- **LÖST:** nyckel-avslöjandet flyttat från `.bokford` till egen
+  `.nyckel-avslojande` (blå markeringskant) — grönt är åter ENDAST
+  status.
+- **LÖST typografi:** sektionsrubriker Inter 600 18px (h2);
+  hälsokortens värden mono 26px tabular-nums; scope-chips sans
+  (löptext-beslutet); etiketter 600 / 0.08em.
+- **LÖST kort:** `.halsa-kort` radie `--r-lg` + `--skugga-kort`;
+  `.steg` bär `--skugga-kort`.
+- **LÖST a11y:** bolagsvalet är tangentbordsnåbart — klientbolags-
+  cellen bär en riktig `<button className="valj-bolag">` med
+  `aria-pressed` och blå `:focus-visible`-ring (radens onClick är kvar
+  som större pekyta); rubrikhierarki h1 (`.sr-rubrik`) + h2;
+  nyckelvarningen i `--varning` (5,0:1 på vitt, AA); inputs/select
+  ≥16px; tertiärtexten via `--ink-svag` (4,8:1).
+- **LÖST:** alla sju inline-styles ersatta med klasser
+  (`.nyckel-avslojande`, `.nyckel-kopiera`, `.svep`, `.atgarder`);
+  `all: unset` på checkbox-labels borttagen.
+- **Berättar: föredömligt redan innan** — endast driftaggregat, ärliga
+  tomlägen, ärlig nyckel-copy, inga påhittade siffror. Oförändrat.
 
 ### /login (login.css + login/page.tsx)
 

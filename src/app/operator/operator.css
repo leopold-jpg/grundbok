@@ -1,5 +1,8 @@
-/* grundbok — operatörskonsolen (WP14). Scopad under .operator enligt
-   samma mönster som byra.css/publik.css. Grundarens vy: drift, aldrig
+/* grundbok — operatörskonsolen (WP14, omskinnad i D2-passet). Scopad
+   under .operator enligt samma mönster som byra.css/publik.css.
+   Färgerna kommer ur arbetsyte-mappningen i design.tokens.css
+   (grammatik-slots → grundbok-värden); här bor typografi enligt kanon,
+   kortskuggor, fokus och reduced motion. Grundarens vy: drift, aldrig
    innehåll — här finns inga belopp, motparter eller summaries. */
 
 .operator .wordmark-rad { display: flex; align-items: baseline; gap: var(--sp-3); }
@@ -14,11 +17,17 @@
 @media (min-width: 640px) { .operator .halsa-rad { grid-template-columns: 1fr 1fr 1fr; } }
 .operator .halsa-kort {
   border: 1px solid var(--border);
-  border-radius: var(--r-md);
+  border-radius: var(--r-lg); /* kortnivån (kanon §4) */
   background: var(--bg-elev);
   padding: var(--sp-4);
+  box-shadow: var(--skugga-kort);
 }
-.operator .halsa-kort .varde { font-family: var(--font-serif); font-size: 28px; }
+/* Hälsovärdena är verkliga driftsiffror ur systemet — mono (kanon §3). */
+.operator .halsa-kort .varde {
+  font-family: var(--font-mono);
+  font-size: 26px;
+  font-variant-numeric: tabular-nums;
+}
 .operator .halsa-kort .etikett {
   font-size: 11px;
   letter-spacing: var(--tracking-wide);
@@ -33,7 +42,7 @@
 .operator input[type="text"],
 .operator input[type="number"] {
   font-family: var(--font-sans);
-  font-size: 14px;
+  font-size: 16px; /* ≥16px hindrar iOS-zoom (kanon §5) */
   color: var(--fg);
   background: var(--bg-elev);
   border: 1px solid var(--border);
@@ -80,3 +89,122 @@
 .operator .mall-rad input[type="number"] { width: 100px; }
 .operator .check-val { display: inline-flex; align-items: center; gap: var(--sp-2); font-size: 13px; }
 .operator .sparat { font-size: 13px; color: var(--success); }
+
+/* ------------------------------------------------------------------
+   Grundbok-passet (D2): det skin-mappningen inte når. */
+
+/* Basstorlek 16px och innehållsbredd 1120px — D2-beslutet (samma som
+   /byra): arbetsytan följer publika ytans mått. */
+.operator {
+  font-size: 16px;
+  max-width: 1120px;
+}
+
+/* Rubrikhierarki: Inter bär rubrikerna (kanon §3); h2 i flex-rader. */
+.operator .steg-titel {
+  font-family: var(--font-sans);
+  font-weight: 600;
+  font-size: 18px;
+  letter-spacing: var(--tracking-snug);
+  margin: 0;
+}
+
+/* Synlig för skärmläsare, osynlig på skärmen (sidans h1). */
+.operator .sr-rubrik {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Etiketter är grotesk small-caps 600 med 0.08em (kanon §3). */
+.operator .undertitel,
+.operator .halsa-kort .etikett,
+.operator .falt dt,
+.operator table.rader th {
+  font-weight: 600;
+  letter-spacing: 0.08em;
+}
+
+/* Chips är sans-etiketter (scopes är löptext här — §9-beslutet);
+   verkliga värden skulle bära .chip.tal i mono. */
+.operator .chip {
+  font-family: var(--font-sans);
+  font-weight: 500;
+  padding: 0 var(--sp-2);
+  line-height: 20px;
+}
+.operator .chip.tal {
+  font-family: var(--font-mono);
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Kortreceptet: hårfin kant + vilande skugga (kanon §4). */
+.operator .steg {
+  box-shadow: var(--skugga-kort);
+}
+
+/* Bolagsvalet: raden är klickyta för pekare, men det TILLGÄNGLIGA
+   valet är knappen i klientbolags-cellen — tabbbar, Enter/Space,
+   aria-pressed. Blå text signalerar interaktionen (EN accent). */
+.operator .valj-bolag {
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  color: var(--bla);
+  cursor: pointer;
+  text-align: left;
+  transition: none;
+}
+.operator .valj-bolag:hover:not(:disabled) {
+  background: none;
+  border: none;
+  text-decoration: underline;
+}
+.operator tr[data-vald="true"] .valj-bolag {
+  font-weight: 600;
+}
+
+/* Nyckel-avslöjandet är information om en engångshändelse — blå
+   markering, INTE .bokford (grönt är ENDAST status, kanon §2). */
+.operator .nyckel-avslojande {
+  border: 1px solid var(--linje);
+  border-left: 3px solid var(--bla);
+  border-radius: var(--r-md);
+  background: var(--kort);
+  padding: var(--sp-4);
+  margin-bottom: var(--sp-3);
+  box-shadow: var(--skugga-kort);
+}
+.operator .nyckel-kopiera { margin-top: var(--sp-2); }
+
+/* Tabellsvep och åtgärdscell (ersätter inline-styles). */
+.operator .svep { overflow-x: auto; }
+.operator .atgarder { white-space: nowrap; }
+
+.operator select { font-size: 16px; }
+.operator .check-val label { cursor: pointer; }
+
+/* Knappfokus — blå synlig ring (systemluckan stängd för ytan). */
+.operator button:focus-visible,
+.operator select:focus-visible {
+  outline: 2px solid var(--bla);
+  outline-offset: 2px;
+}
+
+/* Reduced motion: släck mikrotransitions när användaren bett om det. */
+@media (prefers-reduced-motion: reduce) {
+  .operator *,
+  .operator *::before,
+  .operator *::after {
+    transition: none !important;
+    animation: none !important;
+  }
+}
