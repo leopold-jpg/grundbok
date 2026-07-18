@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { EXEMPEL } from "@/lib/exempel";
+import { plexMono } from "../_publik/fonter";
 import "./byra.css";
 
 // Byråns arbetsyta (WP13) — produkten. Inloggad konsult ser SIN byrås
@@ -232,7 +233,7 @@ function AttestSektion({
   return (
     <section className="steg">
       <div className="steg-rubrik">
-        <span className="steg-titel">Att attestera</span>
+        <h2 className="steg-titel">Att attestera</h2>
         <span className="steg-not">
           {ko.length === 0 ? "inget väntar" : `${ko.length} väntar`} · avvikelsen mot er policy
           räknas om vid varje hämtning
@@ -263,8 +264,8 @@ function AttestSektion({
             {visaKlient && <span className="chip">{k.tenant_namn}</span>}
             <span className="chip">{k.module}</span>
             <span className="chip">konfidens {Math.round(k.confidence * 100)} %</span>
-            <span className="chip">hash {k.hash.slice(0, 12)}…</span>
-            {k.belopp_ore > 0 && <span className="chip">{kr(k.belopp_ore)} kr</span>}
+            <span className="chip tal">hash {k.hash.slice(0, 12)}…</span>
+            {k.belopp_ore > 0 && <span className="chip tal">{kr(k.belopp_ore)} kr</span>}
             {k.motpart && <span className="chip">{k.motpart}</span>}
           </div>
 
@@ -371,12 +372,16 @@ function IntagSektion({
   const [forslag, setForslag] = useState<ForslagSvar | null>(null);
   const [konterar, setKonterar] = useState(false);
   const [beslutar, setBeslutar] = useState(false);
+  const [avvisar, setAvvisar] = useState(false);
+  const [motivering, setMotivering] = useState("");
   const [utfall, setUtfall] = useState("");
   const [fel, setFel] = useState("");
 
   function nollstall() {
     setTolkning(null);
     setForslag(null);
+    setAvvisar(false);
+    setMotivering("");
     setUtfall("");
     setFel("");
     setDatum("");
@@ -392,7 +397,7 @@ function IntagSektion({
     return (
       <section className="steg">
         <div className="steg-rubrik">
-          <span className="steg-titel">Underlag in</span>
+          <h2 className="steg-titel">Underlag in</h2>
         </div>
         <p className="tyst">Välj en klient i väljaren uppe till höger för att ta in underlag.</p>
       </section>
@@ -445,13 +450,10 @@ function IntagSektion({
     }
   }
 
-  async function attesteraDirekt(beslut: "godkand" | "avvisad") {
+  // Avvisning motiveras i det tillgängliga inline-mönstret (samma som
+  // attestkön) — inte window.prompt (ostylat, skärmläsarfientligt).
+  async function attesteraDirekt(beslut: "godkand" | "avvisad", reason?: string) {
     if (!forslag) return;
-    let reason: string | undefined;
-    if (beslut === "avvisad") {
-      reason = window.prompt("Motivering för avvisningen (obligatorisk):") ?? undefined;
-      if (!reason?.trim()) return;
-    }
     setBeslutar(true);
     setFel("");
     try {
@@ -469,6 +471,8 @@ function IntagSektion({
           ? `Attesterad — bokförd som verifikation ${r.verifikation?.nummer} (kvitterad: ${r.verifikation?.extern_ref}).`
           : "Avvisad — beslutet och motiveringen är loggade, inget bokfördes.",
       );
+      setAvvisar(false);
+      setMotivering("");
       await onNyttForslag();
     } catch (e) {
       setFel(e instanceof Error ? e.message : String(e));
@@ -484,9 +488,9 @@ function IntagSektion({
       <section className="steg">
         <div className="steg-rubrik">
           <span className="steg-nr">1.</span>
-          <span className="steg-titel">Underlag in — {klient.namn}</span>
+          <h2 className="steg-titel">Underlag in — {klient.namn}</h2>
           <span className="steg-not">
-            untrusted input — injection-kontrolleras och ramas in som data
+            underlaget behandlas som data, aldrig som instruktion
             {/* TODO S3: mejladress per klient och kundappens foto landar i samma flöde. */}
           </span>
         </div>
@@ -520,7 +524,7 @@ function IntagSektion({
       <section className="steg" data-inaktiv={!tolkning}>
         <div className="steg-rubrik">
           <span className="steg-nr">2.</span>
-          <span className="steg-titel">Tolkning</span>
+          <h2 className="steg-titel">Tolkning</h2>
           {tolkning && (
             <span className="steg-not">
               {tolkning.motor === "anthropic"
@@ -564,6 +568,7 @@ function IntagSektion({
                   }}
                 />
               </label>
+              <span className="tyst">exempeldatum:</span>
               {["2026-03-15", "2026-07-08"].map((d) => (
                 <button
                   key={d}
@@ -587,7 +592,7 @@ function IntagSektion({
       <section className="steg" data-inaktiv={!forslag}>
         <div className="steg-rubrik">
           <span className="steg-nr">3.</span>
-          <span className="steg-titel">Förslag</span>
+          <h2 className="steg-titel">Förslag</h2>
           {konterar && <span className="steg-not laddar">konterar …</span>}
           {forslag && !konterar && (
             <span className="steg-not">
@@ -652,8 +657,8 @@ function IntagSektion({
                   {skill}@{version}
                 </span>
               ))}
-              <span className="chip">hash {forslag.hash.slice(0, 12)}…</span>
-              <span className="chip">konfidens {forslag.confidence.toFixed(2)}</span>
+              <span className="chip tal">hash {forslag.hash.slice(0, 12)}…</span>
+              <span className="chip">konfidens {Math.round(forslag.confidence * 100)} %</span>
             </div>
 
             {forslag.status === "pending" && forslag.missade_villkor.length > 0 && (
@@ -668,7 +673,34 @@ function IntagSektion({
               </div>
             )}
 
-            {!utfall && forslag.status === "pending" && (
+            {!utfall && forslag.status === "pending" && avvisar && (
+              <div className="avvisa-rad">
+                <input
+                  type="text"
+                  value={motivering}
+                  onChange={(e) => setMotivering(e.target.value)}
+                  placeholder="Motivering (krävs för avvisning)"
+                  autoFocus
+                />
+                <button
+                  onClick={() => attesteraDirekt("avvisad", motivering)}
+                  disabled={!motivering.trim() || beslutar || konterar}
+                >
+                  {beslutar ? "Avvisar …" : "Skicka avvisning"}
+                </button>
+                <button
+                  onClick={() => {
+                    setAvvisar(false);
+                    setMotivering("");
+                  }}
+                  disabled={beslutar}
+                >
+                  Avbryt
+                </button>
+              </div>
+            )}
+
+            {!utfall && forslag.status === "pending" && !avvisar && (
               <div className="beslutsrad">
                 <button
                   className="godkann"
@@ -677,7 +709,13 @@ function IntagSektion({
                 >
                   {beslutar ? "Bokför …" : "Attestera och bokför"}
                 </button>
-                <button onClick={() => attesteraDirekt("avvisad")} disabled={beslutar || konterar}>
+                <button
+                  onClick={() => {
+                    setAvvisar(true);
+                    setMotivering("");
+                  }}
+                  disabled={beslutar || konterar}
+                >
                   Avvisa
                 </button>
                 <span className="tyst" style={{ maxWidth: 380 }}>
@@ -726,7 +764,7 @@ function ChattSektion({ klient, userId }: { klient: Klient | null; userId: strin
     return (
       <section className="steg">
         <div className="steg-rubrik">
-          <span className="steg-titel">Chatt</span>
+          <h2 className="steg-titel">Chatt</h2>
         </div>
         <p className="tyst">
           Välj en klient — saldofrågor besvaras ur den valda klientens huvudbok.
@@ -772,7 +810,7 @@ function ChattSektion({ klient, userId }: { klient: Klient | null; userId: strin
   return (
     <section className="steg">
       <div className="steg-rubrik">
-        <span className="steg-titel">Chatt — {klient.namn}</span>
+        <h2 className="steg-titel">Chatt — {klient.namn}</h2>
         <span className="steg-not">
           konton, moms, lagrum och saldon · varje svar loggas med lagrum och konfidens
         </span>
@@ -791,7 +829,7 @@ function ChattSektion({ klient, userId }: { klient: Klient | null; userId: strin
             {m.roll === "agent" && (
               <div className="bubbla-meta">
                 {m.saldo && (
-                  <span className="chip">
+                  <span className="chip tal">
                     saldo {m.saldo.konto}: {m.saldo.formaterat}
                   </span>
                 )}
@@ -836,7 +874,7 @@ function LoggSektion({ logg, visaKlient }: { logg: LoggRad[]; visaKlient: boolea
   return (
     <section className="steg">
       <div className="steg-rubrik">
-        <span className="steg-titel">Beslutslogg</span>
+        <h2 className="steg-titel">Beslutslogg</h2>
         <span className="steg-not">append-only — senaste 50, nyast först</span>
       </div>
 
@@ -955,7 +993,7 @@ function KlientSektion({
     return (
       <section className="steg">
         <div className="steg-rubrik">
-          <span className="steg-titel">Klient</span>
+          <h2 className="steg-titel">Klient</h2>
         </div>
         <p className="tyst">Välj en klient i väljaren uppe till höger.</p>
       </section>
@@ -1025,7 +1063,7 @@ function KlientSektion({
       {/* Policy — trösklar i attest-språk */}
       <section className="steg">
         <div className="steg-rubrik">
-          <span className="steg-titel">Policy — {klient.namn}</span>
+          <h2 className="steg-titel">Policy — {klient.namn}</h2>
           <span className="steg-not">
             allt utanför gränserna hamnar i attestkön · rättelser kräver alltid människa
           </span>
@@ -1044,7 +1082,7 @@ function KlientSektion({
                     checked={f.auto}
                     onChange={(e) => uppdatera(modul, { auto: e.target.checked })}
                   />
-                  <label htmlFor={`${modul}-auto`} style={{ all: "unset", cursor: "pointer" }}>
+                  <label htmlFor={`${modul}-auto`}>
                     {modul === "bokforing"
                       ? "Bokför själv upp till"
                       : "Svara själv på frågor upp till"}
@@ -1066,7 +1104,7 @@ function KlientSektion({
                     checked={f.kanda}
                     onChange={(e) => uppdatera(modul, { kanda: e.target.checked })}
                   />
-                  <label htmlFor={`${modul}-kanda`} style={{ all: "unset", cursor: "pointer" }}>
+                  <label htmlFor={`${modul}-kanda`}>
                     endast kända motparter
                   </label>
                 </span>
@@ -1098,7 +1136,7 @@ function KlientSektion({
       {/* Agenter — läsvy */}
       <section className="steg">
         <div className="steg-rubrik">
-          <span className="steg-titel">Agenter</span>
+          <h2 className="steg-titel">Agenter</h2>
           <span className="steg-not">
             läsvy — provisionering och drift sköts av operatören, aldrig här
           </span>
@@ -1136,7 +1174,7 @@ function KlientSektion({
       {/* Huvudbok */}
       <section className="steg">
         <div className="steg-rubrik">
-          <span className="steg-titel">Verifikationer — {klient.namn}</span>
+          <h2 className="steg-titel">Verifikationer — {klient.namn}</h2>
           <span className="steg-not">
             append-only — fel rättas med rättelsepost, aldrig genom ändring (BFL 5:5)
           </span>
@@ -1154,7 +1192,7 @@ function KlientSektion({
               <span className="beskr">{v.beskrivning}</span>
               <span className="tyst">{v.affarshandelsedatum.slice(0, 10)}</span>
               {v.rattar_verifikation && <span className="rattelse-tag">rättelsepost</span>}
-              {v.extern_ref && <span className="chip">{v.extern_ref}</span>}
+              {v.extern_ref && <span className="chip tal">{v.extern_ref}</span>}
               <span className="hoger">
                 {!v.rattar_verifikation && (
                   <button onClick={() => rattelse(v.id)}>Skapa rättelsepost</button>
@@ -1229,7 +1267,7 @@ export default function ByraSida() {
 
   if (!session) {
     return (
-      <main className="byra">
+      <main className={`byra ${plexMono.variable}`}>
         <p className="laddar">laddar …</p>
       </main>
     );
@@ -1238,7 +1276,8 @@ export default function ByraSida() {
   const valdKlient = session.klienter.find((k) => k.id === val) ?? null;
 
   return (
-    <main className="byra">
+    <main className={`byra ${plexMono.variable}`}>
+      <h1 className="sr-rubrik">Byråns arbetsyta — {session.byra}</h1>
       <div className="topbar">
         <div className="wordmark-rad">
           <div className="wordmark">

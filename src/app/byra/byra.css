@@ -1,7 +1,10 @@
-/* grundbok — byråns arbetsyta (WP13). Scopad under .byra enligt samma
-   mönster som admin.css/publik.css. Återanvänder globals.css-klasserna
-   (.steg, .rader, .chip, .flagga, .godkann, .bokford, .tyst, .fel);
-   kö-kortet är flyttat från v0-admin, inte ombyggt. Allt via Gesso-tokens. */
+/* grundbok — byråns arbetsyta (WP13, omskinnad i D2-passet). Scopad
+   under .byra enligt samma mönster som publik.css. Återanvänder
+   globals.css-klasserna (.steg, .rader, .chip, .flagga, .godkann,
+   .bokford, .tyst, .fel); färgerna kommer ur arbetsyte-mappningen i
+   design.tokens.css (grammatik-slots → grundbok-värden). Här bor bara
+   det mappningen inte når: typografi enligt kanon (Inter bär rubriker,
+   mono ENDAST värden), kortskuggor, fokus och reduced motion. */
 
 .byra .wordmark-rad { display: flex; align-items: baseline; gap: var(--sp-3); }
 .byra .undertitel {
@@ -37,11 +40,14 @@
 .byra .flik .antal {
   font-size: 11px;
   font-family: var(--font-mono);
-  padding: 1px 7px;
+  font-variant-numeric: tabular-nums;
+  padding: 0 var(--sp-2);
+  line-height: 18px;
   border-radius: var(--r-pill);
   background: var(--accent);
   color: var(--accent-fg);
-  margin-left: 6px;
+  margin-left: var(--sp-1);
+  display: inline-block;
 }
 
 /* Kö-kortet — flyttat från v0-admin. */
@@ -86,7 +92,7 @@
 .byra input[type="text"],
 .byra input[type="number"] {
   font-family: var(--font-sans);
-  font-size: 14px;
+  font-size: 16px; /* ≥16px hindrar iOS-zoom (kanon §5) */
   color: var(--fg);
   background: var(--bg-elev);
   border: 1px solid var(--border);
@@ -125,7 +131,7 @@
 /* Klientvyn */
 .byra .policy-enkel { border-top: 1px solid var(--divider); padding: var(--sp-4) 0; }
 .byra .policy-enkel:first-of-type { border-top: none; padding-top: 0; }
-.byra .policy-namn { font-family: var(--font-serif); font-size: 19px; margin: 0 0 var(--sp-2); }
+.byra .policy-namn { font-weight: 600; font-size: 16px; letter-spacing: var(--tracking-snug); margin: 0 0 var(--sp-2); }
 .byra .policy-rad {
   display: flex;
   gap: var(--sp-3) var(--sp-4);
@@ -146,10 +152,114 @@
   overflow-x: auto; /* kontoraderna får skrolla i telefon, inte spränga kortet */
 }
 .byra .verifikation .huvud { display: flex; align-items: baseline; gap: var(--sp-3); flex-wrap: wrap; }
-.byra .verifikation .nr { font-family: var(--font-serif); font-size: 18px; }
+.byra .verifikation .nr { font-family: var(--font-mono); font-weight: 700; font-size: 15px; font-variant-numeric: tabular-nums; }
 .byra .verifikation .beskr { color: var(--fg-muted); }
 .byra .verifikation .huvud .hoger { margin-left: auto; display: flex; gap: var(--sp-2); }
 .byra .rattelse-tag { color: var(--accent); font-size: 12px; }
+
+/* ------------------------------------------------------------------
+   Grundbok-passet (D2): det skin-mappningen inte når. */
+
+/* Basstorlek 16px och innehållsbredd 1120px — D2-beslutet: arbetsytan
+   följer publika ytans mått, inte studio-arvets 15px/980px. */
+.byra {
+  font-size: 16px;
+  max-width: 1120px;
+}
+
+/* Rubrikhierarki: Inter bär rubrikerna (kanon §3) — serifen är ENDAST
+   ordmärkets krydda. h2 ligger i flex-rader; nollställ marginalen. */
+.byra .steg-titel {
+  font-family: var(--font-sans);
+  font-weight: 600;
+  font-size: 18px;
+  letter-spacing: var(--tracking-snug);
+  margin: 0;
+}
+.byra .steg-nr {
+  font-family: var(--font-sans);
+  font-weight: 600;
+  font-size: 18px;
+}
+
+/* Synlig för skärmläsare, osynlig på skärmen (sidans h1). */
+.byra .sr-rubrik {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Etiketter är grotesk small-caps 600 med 0.08em (kanon §3). */
+.byra .undertitel,
+.byra .diff-rubrik,
+.byra .falt dt,
+.byra table.rader th {
+  font-weight: 600;
+  letter-spacing: 0.08em;
+}
+
+/* Chips är sans-etiketter; ENDAST verkliga värden (hash, belopp,
+   saldo, extern ref) bär mono via .chip.tal (kanon §3). */
+.byra .chip {
+  font-family: var(--font-sans);
+  font-weight: 500;
+  padding: 0 var(--sp-2);
+  line-height: 20px;
+}
+.byra .chip.tal {
+  font-family: var(--font-mono);
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Kortreceptet: vit yta, hårfin kant, vilande skugga (kanon §4). */
+.byra .steg,
+.byra .ko-kort,
+.byra .verifikation,
+.byra .bokford {
+  box-shadow: var(--skugga-kort);
+}
+
+/* Intagets textarea är inmatning, inte kvitto-manér: sans, ≥16px. */
+.byra textarea {
+  font-family: var(--font-sans);
+  font-size: 16px;
+  line-height: 1.6;
+}
+.byra select,
+.byra input[type="date"] {
+  font-size: 16px;
+}
+
+/* Knappfokus — systemluckan stängd för ytan: blå synlig ring. */
+.byra button:focus-visible,
+.byra select:focus-visible {
+  outline: 2px solid var(--bla);
+  outline-offset: 2px;
+}
+.byra .flik:focus-visible {
+  outline: 2px solid var(--bla);
+  outline-offset: -2px;
+}
+
+.byra .check-val label { cursor: pointer; }
+
+/* Reduced motion: ytan har bara mikrotransitions (hover/fokus) —
+   släck dem helt när användaren bett om stillhet. */
+@media (prefers-reduced-motion: reduce) {
+  .byra *,
+  .byra *::before,
+  .byra *::after {
+    transition: none !important;
+    animation: none !important;
+  }
+}
 
 /* Mobil: kö-kortets beslutsrad ska vara lätt att träffa. */
 @media (max-width: 600px) {
