@@ -217,3 +217,37 @@ body:has(main.operator) {
     animation: none !important;
   }
 }
+
+/* Flottan (WP13): filter, varningschips och detaljpanelen. */
+.operator .filter-rad {
+  display: flex;
+  gap: var(--sp-2);
+  align-items: center;
+  flex-wrap: wrap;
+  margin-bottom: var(--sp-3);
+}
+.operator .chip-varning {
+  background: transparent;
+  border: 1px solid var(--warning);
+  color: var(--warning);
+  white-space: nowrap;
+}
+.operator .flotta-detalj {
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--bg-elev);
+  padding: var(--sp-4);
+  margin-top: var(--sp-4);
+}
+.operator .flotta-detalj .detalj-rubrik {
+  display: flex;
+  align-items: baseline;
+  gap: var(--sp-3);
+  flex-wrap: wrap;
+  margin-bottom: var(--sp-2);
+}
+.operator .flotta-detalj .policy-rad {
+  font-size: 13px;
+  color: var(--fg-muted);
+  margin-bottom: var(--sp-3);
+}

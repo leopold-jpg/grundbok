@@ -1,6 +1,7 @@
 import { randomBytes } from "node:crypto";
 import type { PGlite } from "@electric-sql/pglite";
 import { sha256Hex, type ModuleId, type ProposalKind } from "@/contracts";
+import { hamtaMallForMajor } from "@/mallar/registry";
 import { provisionAgent, type ProvisioneradAgent } from "@/lib/provisioning";
 import { auditera } from "@/lib/ledger";
 import { PgliteKo } from "@/lib/queue";
@@ -251,6 +252,227 @@ export async function roteraNyckel(
   });
 
   return { agent_id: nyttId, nyckel, ersatte: agentId };
+}
+
+// ------------------------------------------------------- flottan (WP13)
+
+/** Hårdkodad nu — görs konfigurerbar senare (kickoff WP13). Andelen
+ *  räknas på (rejected + corrected) / förslag: båda är "konsulten höll
+ *  inte med", före respektive efter bokföring. */
+export const KORRIGERINGSTROSKEL = 0.3;
+
+export type FlottVarning = "inaktiv_7d" | "hog_korrigeringsandel" | "versionsdrift";
+
+export type FlottRad = {
+  agent_id: string;
+  byra: string;
+  tenant_id: string;
+  tenant_namn: string;
+  display_name: string;
+  module: string;
+  /** Agentmall ur mallregistret — null = mall-lös modulagent. */
+  template_id: string | null;
+  /** Major-pekaren på agentraden ('1'). */
+  template_version: string;
+  /** Registrets aktuella exakta version för pekaren — null = mall-lös
+   *  agent eller versionsdrift (major saknas i katalogen, ADR-0004). */
+  mall_aktuell_version: string | null;
+  status: string;
+  forslag_7d: number;
+  auto_7d: number;
+  rejected_7d: number;
+  corrected_7d: number;
+  /** null när förslag saknas — 0 % och "inget underlag" är olika saker. */
+  andel_auto: number | null;
+  andel_korrigerade: number | null;
+  senaste_aktivitet: string | null;
+  varningar: FlottVarning[];
+};
+
+/** Hela flottan ur agent_telemetry (service-vägen — operatören ser alla
+ *  tenants). Samma innehållsregel som resten av filen: aggregat och
+ *  driftmetadata, aldrig summary/belopp/motpart. */
+export async function flottoversikt(db: PGlite): Promise<FlottRad[]> {
+  const r = await db.query<{
+    agent_id: string;
+    byra: string | null;
+    tenant_id: string;
+    tenant_namn: string;
+    display_name: string;
+    module: string;
+    template_id: string | null;
+    template_version: string;
+    status: string;
+    proposals_7d: string;
+    auto_7d: string;
+    rejected_7d: string;
+    corrected_7d: string;
+    last_activity: Date | string | null;
+  }>(
+    `SELECT t.agent_id, b.namn AS byra, t.tenant_id, tn.namn AS tenant_namn,
+            t.display_name, t.module, t.template_id, t.template_version, t.status,
+            t.proposals_7d, t.auto_7d, t.rejected_7d, t.corrected_7d, t.last_activity
+     FROM agent_telemetry t
+     JOIN tenants tn ON tn.id = t.tenant_id
+     LEFT JOIN byraer b ON b.id = tn.byra_id
+     ORDER BY b.namn NULLS LAST, tn.namn, t.display_name`,
+  );
+
+  const nu = Date.now();
+  return r.rows.map((rad) => {
+    const forslag = Number(rad.proposals_7d);
+    const auto = Number(rad.auto_7d);
+    const rejected = Number(rad.rejected_7d);
+    const corrected = Number(rad.corrected_7d);
+    const mall = rad.template_id
+      ? hamtaMallForMajor(rad.template_id, rad.template_version)
+      : null;
+    const senaste = rad.last_activity
+      ? rad.last_activity instanceof Date
+        ? rad.last_activity
+        : new Date(rad.last_activity)
+      : null;
+    const andelKorr = forslag > 0 ? (rejected + corrected) / forslag : null;
+
+    const varningar: FlottVarning[] = [];
+    // Pausad/avslutad agent är väntat inaktiv — varningen gäller aktiva.
+    if (rad.status === "active" && (!senaste || nu - senaste.getTime() > 7 * 86_400_000)) {
+      varningar.push("inaktiv_7d");
+    }
+    if (andelKorr !== null && andelKorr > KORRIGERINGSTROSKEL) {
+      varningar.push("hog_korrigeringsandel");
+    }
+    if (rad.template_id && !mall) varningar.push("versionsdrift");
+
+    return {
+      agent_id: rad.agent_id,
+      byra: rad.byra ?? "(utan byrå)",
+      tenant_id: rad.tenant_id,
+      tenant_namn: rad.tenant_namn,
+      display_name: rad.display_name,
+      module: rad.module,
+      template_id: rad.template_id,
+      template_version: rad.template_version,
+      mall_aktuell_version: mall?.version ?? null,
+      status: rad.status,
+      forslag_7d: forslag,
+      auto_7d: auto,
+      rejected_7d: rejected,
+      corrected_7d: corrected,
+      andel_auto: forslag > 0 ? auto / forslag : null,
+      andel_korrigerade: andelKorr,
+      senaste_aktivitet: senaste ? senaste.toISOString() : null,
+      varningar,
+    };
+  });
+}
+
+export type DetaljProposal = {
+  id: string;
+  kind: ProposalKind;
+  status: string;
+  confidence: number;
+  /** Stämpeln ur payloaden — driftmetadata, inte innehåll. */
+  mall_version: string | null;
+  skapad: string;
+};
+
+export type AgentDetalj = {
+  agent: FlottRad & { scopes: Scope[]; max_concurrency: number; provisioned_by: string; skapad: string };
+  policy: {
+    max_belopp_ore: number;
+    min_confidence: number;
+    kanda_motparter_endast: boolean;
+    tillatna_kinds: ProposalKind[];
+  } | null;
+  /** Senaste 20 förslagen som DRIFTRADER: id, kind, status, konfidens och
+   *  mallstämpel — aldrig summary, belopp, motpart eller payload-innehåll
+   *  (operatörsregeln; innehållet är byråns värld). */
+  senaste: DetaljProposal[];
+};
+
+export async function agentDetalj(db: PGlite, agentId: string): Promise<AgentDetalj | null> {
+  const flotta = await flottoversikt(db);
+  const rad = flotta.find((a) => a.agent_id === agentId);
+  if (!rad) return null;
+
+  const a = await db.query<{
+    scopes: Scope[];
+    max_concurrency: number;
+    provisioned_by: string;
+    created_at: Date | string;
+    policy_id: string | null;
+  }>(
+    `SELECT scopes, max_concurrency, provisioned_by, created_at, policy_id
+     FROM agents WHERE id = $1`,
+    [agentId],
+  );
+  const agentRad = a.rows[0];
+  if (!agentRad) return null;
+
+  // Policyn via agentens länk, med fallback till tenant+modul-raden —
+  // samma uppslag som provisioneringen länkade mot.
+  const p = await db.query<{
+    max_belopp_ore: string;
+    min_confidence: string;
+    kanda_motparter_endast: boolean;
+    tillatna_kinds: ProposalKind[];
+  }>(
+    agentRad.policy_id
+      ? `SELECT max_belopp_ore, min_confidence, kanda_motparter_endast, tillatna_kinds
+         FROM autonomy_policies WHERE id = $1`
+      : `SELECT max_belopp_ore, min_confidence, kanda_motparter_endast, tillatna_kinds
+         FROM autonomy_policies WHERE tenant_id = $1 AND module = $2`,
+    agentRad.policy_id ? [agentRad.policy_id] : [rad.tenant_id, rad.module],
+  );
+  const policy = p.rows[0]
+    ? {
+        max_belopp_ore: Number(p.rows[0].max_belopp_ore),
+        min_confidence: Number(p.rows[0].min_confidence),
+        kanda_motparter_endast: p.rows[0].kanda_motparter_endast,
+        tillatna_kinds: p.rows[0].tillatna_kinds,
+      }
+    : null;
+
+  const s = await db.query<{
+    id: string;
+    kind: ProposalKind;
+    status: string;
+    confidence: string;
+    mall_version: string | null;
+    created_at: Date | string;
+  }>(
+    `SELECT id, kind, status, confidence,
+            payload->>'mall_version' AS mall_version, created_at
+     FROM proposals WHERE agent_id = $1
+     ORDER BY created_at DESC LIMIT 20`,
+    [agentId],
+  );
+
+  return {
+    agent: {
+      ...rad,
+      scopes: agentRad.scopes,
+      max_concurrency: Number(agentRad.max_concurrency),
+      provisioned_by: agentRad.provisioned_by,
+      skapad: (agentRad.created_at instanceof Date
+        ? agentRad.created_at
+        : new Date(agentRad.created_at)
+      ).toISOString(),
+    },
+    policy,
+    senaste: s.rows.map((row) => ({
+      id: row.id,
+      kind: row.kind,
+      status: row.status,
+      confidence: Number(row.confidence),
+      mall_version: row.mall_version,
+      skapad: (row.created_at instanceof Date
+        ? row.created_at
+        : new Date(row.created_at)
+      ).toISOString(),
+    })),
+  };
 }
 
 // --------------------------------------------------------------- hälsa

@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
 import { getDb } from "@/lib/db/client";
-import { listaAgenter } from "@/lib/provisioning";
+import { listaAgenter, provisionAgent } from "@/lib/provisioning";
 import { provisioneraMedMall } from "@/ytor/operator";
 import { MODULE_IDS, SCOPES } from "@/contracts";
+import { MALL_IDS, type MallId } from "@/mallar/registry";
 import { kravOperator } from "@/auth/session";
 
 export const runtime = "nodejs";
@@ -32,6 +33,9 @@ export async function POST(req: Request) {
     module?: (typeof MODULE_IDS)[number];
     /** Vald policymall — mallens värden kopieras till tenantens policy. */
     mall_id?: string;
+    /** Agentmall ur mallregistret (WP11, ADR-0004): sätter modul,
+     *  mallpekare och förvald policy — den versionerade vägen. */
+    agentmall?: MallId;
     display_name?: string;
     scopes?: (typeof SCOPES)[number][];
   } | null;
@@ -39,28 +43,40 @@ export async function POST(req: Request) {
   if (
     !body?.tenant_id ||
     !body.display_name?.trim() ||
-    (!body.module && !body.mall_id) ||
+    (!body.module && !body.mall_id && !body.agentmall) ||
     (body.module && !MODULE_IDS.includes(body.module)) ||
+    (body.agentmall && !MALL_IDS.includes(body.agentmall)) ||
     (body.scopes && body.scopes.some((s) => !SCOPES.includes(s)))
   ) {
     return NextResponse.json(
-      { fel: "tenant_id, display_name och module eller mall_id krävs" },
+      { fel: "tenant_id, display_name och module, mall_id eller agentmall krävs" },
       { status: 400 },
     );
   }
 
   try {
-    const ny = await provisioneraMedMall(
-      db,
-      {
-        tenantId: body.tenant_id,
-        displayName: body.display_name.trim(),
-        mallId: body.mall_id,
-        module: body.module,
-        scopes: body.scopes,
-      },
-      `operator:${krav.session.user.id}`,
-    );
+    const ny = body.agentmall
+      ? await provisionAgent(
+          db,
+          {
+            tenantId: body.tenant_id,
+            mall: body.agentmall,
+            displayName: body.display_name.trim(),
+            scopes: body.scopes,
+          },
+          `operator:${krav.session.user.id}`,
+        )
+      : await provisioneraMedMall(
+          db,
+          {
+            tenantId: body.tenant_id,
+            displayName: body.display_name.trim(),
+            mallId: body.mall_id,
+            module: body.module,
+            scopes: body.scopes,
+          },
+          `operator:${krav.session.user.id}`,
+        );
     // Klartextnyckeln finns bara i detta svar.
     return NextResponse.json(ny, { status: 201 });
   } catch (err) {

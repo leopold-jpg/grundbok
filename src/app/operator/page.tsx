@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { plexMono } from "../_publik/fonter";
+import { MALL_IDS, mallRegistret } from "@/mallar/registry";
 import "./operator.css";
 
 // Operatörskonsolen (WP14) — grundarens vy: bolag → agenter → status,
@@ -41,6 +42,72 @@ type PolicyMall = {
 };
 
 type Halsa = { ko_djup: number; senaste_korning: string | null; omforsok_24h: number };
+
+// Flottöversikten (WP13, ADR-0004) — speglar FlottRad/AgentDetalj i
+// src/ytor/operator.ts: aggregat och driftmetadata, aldrig innehåll.
+type FlottVarning = "inaktiv_7d" | "hog_korrigeringsandel" | "versionsdrift";
+
+type FlottRad = {
+  agent_id: string;
+  byra: string;
+  tenant_id: string;
+  tenant_namn: string;
+  display_name: string;
+  module: string;
+  template_id: string | null;
+  template_version: string;
+  mall_aktuell_version: string | null;
+  status: "active" | "paused" | "canceled";
+  forslag_7d: number;
+  auto_7d: number;
+  rejected_7d: number;
+  corrected_7d: number;
+  andel_auto: number | null;
+  andel_korrigerade: number | null;
+  senaste_aktivitet: string | null;
+  varningar: FlottVarning[];
+};
+
+type AgentDetalj = {
+  agent: FlottRad & {
+    scopes: string[];
+    max_concurrency: number;
+    provisioned_by: string;
+    skapad: string;
+  };
+  policy: {
+    max_belopp_ore: number;
+    min_confidence: number;
+    kanda_motparter_endast: boolean;
+    tillatna_kinds: string[];
+  } | null;
+  senaste: {
+    id: string;
+    kind: string;
+    status: string;
+    confidence: number;
+    mall_version: string | null;
+    skapad: string;
+  }[];
+};
+
+const VARNINGSTEXT: Record<FlottVarning, string> = {
+  inaktiv_7d: "ingen aktivitet 7 d",
+  hog_korrigeringsandel: "hög korrigeringsandel",
+  versionsdrift: "versionsdrift",
+};
+
+const pct = (x: number | null) => (x === null ? "—" : `${Math.round(x * 100)} %`);
+
+/** Filtervärde för mall-lösa agenter — kolliderar aldrig med ett mall-id. */
+const UTAN_MALL = "__utan_mall__";
+
+/** Mall + version för tabellen: registrets exakta version när pekaren
+ *  löser, annars major-pekaren (versionsdriften får sin varningschip). */
+const mallEtikett = (r: FlottRad) =>
+  r.template_id
+    ? `${r.template_id} ${r.mall_aktuell_version ?? `v${r.template_version}`}`
+    : `${r.module} (utan mall)`;
 
 const tid = (iso: string) =>
   new Date(iso).toLocaleString("sv-SE", { dateStyle: "short", timeStyle: "short" });
@@ -85,6 +152,13 @@ export default function OperatorSida() {
   const [mallar, setMallar] = useState<PolicyMall[]>([]);
   const [halsa, setHalsa] = useState<Halsa | null>(null);
   const [fel, setFel] = useState("");
+
+  // Flottan (WP13): filtrering på mall + status, radklick → detalj.
+  const [flotta, setFlotta] = useState<FlottRad[]>([]);
+  const [filtMall, setFiltMall] = useState("");
+  const [filtStatus, setFiltStatus] = useState("");
+  const [valdAgent, setValdAgent] = useState<string | null>(null);
+  const [detalj, setDetalj] = useState<AgentDetalj | null>(null);
 
   // Provisioneringsflödet: mall → namn → nyckel (visas en gång).
   const [nyMall, setNyMall] = useState<string>("");
@@ -137,21 +211,37 @@ export default function OperatorSida() {
     if (a) setAgenter(a);
   }, []);
 
+  const laddaFlotta = useCallback(async () => {
+    const f = await hamta<FlottRad[]>("/api/operator/flotta");
+    if (f) setFlotta(f);
+  }, []);
+
+  const laddaDetalj = useCallback(async (agentId: string) => {
+    const d = await hamta<AgentDetalj>(`/api/operator/flotta/${agentId}`);
+    setDetalj(d);
+  }, []);
+
   useEffect(() => {
     (async () => {
       if (await laddaBolag()) {
         setInloggad(true);
         laddaMallar();
         laddaHalsa();
+        laddaFlotta();
       }
     })();
-  }, [laddaBolag, laddaMallar, laddaHalsa]);
+  }, [laddaBolag, laddaMallar, laddaHalsa, laddaFlotta]);
 
   useEffect(() => {
     setVisadNyckel(null);
     setFel("");
     if (valtBolag) laddaAgenter(valtBolag);
   }, [valtBolag, laddaAgenter]);
+
+  useEffect(() => {
+    setDetalj(null);
+    if (valdAgent) laddaDetalj(valdAgent);
+  }, [valdAgent, laddaDetalj]);
 
   async function loggaUt() {
     await fetch("/api/auth/logout", { method: "POST" });
@@ -163,10 +253,16 @@ export default function OperatorSida() {
     setArbetar(true);
     setFel("");
     try {
+      // Tre vägar: agentmall (versionerad, ADR-0004), policymall (WP14)
+      // eller rå bokforing-modul utan mall.
       const r = await post<{ agent_id: string; nyckel: string }>("/api/agents", {
         tenant_id: valtBolag,
         display_name: nyNamn.trim(),
-        ...(nyMall ? { mall_id: nyMall } : { module: "bokforing" }),
+        ...(nyMall.startsWith("agentmall:")
+          ? { agentmall: nyMall.slice("agentmall:".length) }
+          : nyMall
+            ? { mall_id: nyMall }
+            : { module: "bokforing" }),
       });
       setVisadNyckel({ rubrik: `Nyckel för ${nyNamn.trim()}`, nyckel: r.nyckel });
       setNyNamn("");
@@ -205,7 +301,21 @@ export default function OperatorSida() {
     setFel("");
     try {
       await post(`/api/agents/${agentId}`, { tenant_id: valtBolag, status }, metod);
-      await Promise.all([laddaAgenter(valtBolag), laddaBolag()]);
+      await Promise.all([laddaAgenter(valtBolag), laddaBolag(), laddaFlotta()]);
+    } catch (e) {
+      setFel(e instanceof Error ? e.message : String(e));
+    }
+  }
+
+  // Flottans enda skrivväg (WP13): pausa/återuppta via samma PATCH som
+  // agentsektionen — tenanten kommer ur flottraden, inte bolagsvalet.
+  async function sattFlottStatus(rad: FlottRad, status: "paused" | "active") {
+    setFel("");
+    try {
+      await post(`/api/agents/${rad.agent_id}`, { tenant_id: rad.tenant_id, status }, "PATCH");
+      await Promise.all([laddaFlotta(), laddaBolag()]);
+      if (valdAgent) await laddaDetalj(valdAgent);
+      if (valtBolag === rad.tenant_id) await laddaAgenter(rad.tenant_id);
     } catch (e) {
       setFel(e instanceof Error ? e.message : String(e));
     }
@@ -256,6 +366,14 @@ export default function OperatorSida() {
 
   const bolagsNamn = bolag.find((b) => b.tenant_id === valtBolag)?.tenant_namn;
 
+  // Flottans filter + fasta sortering: korrigeringsandel fallande — hög
+  // andel överst, det är den raden som behöver ses över (kickoff WP13).
+  const mallVal = [...new Set(flotta.map((r) => r.template_id ?? UTAN_MALL))].sort();
+  const visadFlotta = flotta
+    .filter((r) => !filtMall || (r.template_id ?? UTAN_MALL) === filtMall)
+    .filter((r) => !filtStatus || r.status === filtStatus)
+    .sort((a, b) => (b.andel_korrigerade ?? -1) - (a.andel_korrigerade ?? -1));
+
   return (
     <main className={`operator ${plexMono.variable}`}>
       <h1 className="sr-rubrik">Operatörskonsolen</h1>
@@ -291,6 +409,167 @@ export default function OperatorSida() {
               <div className="varde">{halsa.omforsok_24h}</div>
               <div className="etikett">omförsök senaste dygnet</div>
             </div>
+          </div>
+        )}
+      </section>
+
+      {/* Flottan (WP13, ADR-0004) */}
+      <section className="steg">
+        <div className="steg-rubrik">
+          <span className="steg-titel">Flottan</span>
+          <span className="steg-not">
+            alla agenter, sorterade på korrigeringsandel — hög andel betyder att mallen
+            eller kontexten behöver ses över
+          </span>
+        </div>
+
+        <div className="filter-rad">
+          <select
+            value={filtMall}
+            onChange={(e) => setFiltMall(e.target.value)}
+            aria-label="filtrera på mall"
+          >
+            <option value="">alla mallar</option>
+            {mallVal.map((m) => (
+              <option key={m} value={m}>
+                {m === UTAN_MALL ? "(utan mall)" : m}
+              </option>
+            ))}
+          </select>
+          <select
+            value={filtStatus}
+            onChange={(e) => setFiltStatus(e.target.value)}
+            aria-label="filtrera på status"
+          >
+            <option value="">alla statusar</option>
+            <option value="active">aktiva</option>
+            <option value="paused">pausade</option>
+            <option value="canceled">avslutade</option>
+          </select>
+        </div>
+
+        {visadFlotta.length === 0 ? (
+          <p className="tyst">
+            {flotta.length === 0
+              ? "Inga agenter i flottan ännu — provisionera den första under ett bolag nedan."
+              : "Inga agenter matchar filtret."}
+          </p>
+        ) : (
+          <div style={{ overflowX: "auto" }}>
+            <table className="rader">
+              <thead>
+                <tr>
+                  <th>Agent</th>
+                  <th>Klientbolag</th>
+                  <th>Mall</th>
+                  <th>Status</th>
+                  <th className="tal">Förslag 7 d</th>
+                  <th className="tal">Auto</th>
+                  <th className="tal">Korrigerade</th>
+                  <th className="tal">Senast aktiv</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                {visadFlotta.map((r) => (
+                  <tr
+                    key={r.agent_id}
+                    data-vald={valdAgent === r.agent_id}
+                    onClick={() => setValdAgent(valdAgent === r.agent_id ? null : r.agent_id)}
+                  >
+                    <td>{r.display_name}</td>
+                    <td>
+                      {r.tenant_namn} <span className="tyst">({r.byra})</span>
+                    </td>
+                    <td>{mallEtikett(r)}</td>
+                    <td>
+                      {r.status === "active" && "aktiv"}
+                      {r.status === "paused" && <span className="tyst">pausad</span>}
+                      {r.status === "canceled" && <span className="tyst">avslutad</span>}
+                    </td>
+                    <td className="tal">{r.forslag_7d}</td>
+                    <td className="tal">{pct(r.andel_auto)}</td>
+                    <td className="tal">{pct(r.andel_korrigerade)}</td>
+                    <td className="tal">{r.senaste_aktivitet ? tid(r.senaste_aktivitet) : "—"}</td>
+                    <td>
+                      {r.varningar.map((v) => (
+                        <span key={v} className="chip chip-varning">
+                          {VARNINGSTEXT[v]}
+                        </span>
+                      ))}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {valdAgent && detalj && (
+          <div className="flotta-detalj">
+            <div className="detalj-rubrik">
+              <strong>{detalj.agent.display_name}</strong>
+              <span className="tyst">
+                {detalj.agent.tenant_namn} · {mallEtikett(detalj.agent)} · provisionerad{" "}
+                {tid(detalj.agent.skapad)} av {detalj.agent.provisioned_by}
+              </span>
+              {detalj.agent.status === "active" && (
+                <button onClick={() => sattFlottStatus(detalj.agent, "paused")}>Pausa</button>
+              )}
+              {detalj.agent.status === "paused" && (
+                <button onClick={() => sattFlottStatus(detalj.agent, "active")}>Återuppta</button>
+              )}
+            </div>
+
+            <p className="policy-rad">
+              policy:{" "}
+              {detalj.policy
+                ? `bokför själv upp till ${(detalj.policy.max_belopp_ore / 100).toLocaleString(
+                    "sv-SE",
+                  )} kr · minst ${detalj.policy.min_confidence} i konfidens · ${
+                    detalj.policy.kanda_motparter_endast ? "endast kända motparter" : "alla motparter"
+                  } · kinds: ${
+                    detalj.policy.tillatna_kinds.join(", ") || "inga (allt attesteras)"
+                  }`
+                : "ingen autonomipolicy — allt attesteras"}
+              {" · scopes: "}
+              {detalj.agent.scopes.map((s) => (
+                <span key={s} className="chip">
+                  {s}
+                </span>
+              ))}
+            </p>
+
+            {detalj.senaste.length === 0 ? (
+              <p className="tyst">Inga förslag från den här agenten ännu.</p>
+            ) : (
+              <div style={{ overflowX: "auto" }}>
+                <table className="rader">
+                  <thead>
+                    <tr>
+                      <th>Förslag</th>
+                      <th>Kind</th>
+                      <th>Status</th>
+                      <th className="tal">Konfidens</th>
+                      <th>Mallversion</th>
+                      <th className="tal">Skapat</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {detalj.senaste.map((p) => (
+                      <tr key={p.id} className="ej-klickbar">
+                        <td className="tal">{p.id.slice(0, 8)}</td>
+                        <td>{p.kind}</td>
+                        <td>{p.status}</td>
+                        <td className="tal">{p.confidence.toFixed(2)}</td>
+                        <td>{p.mall_version ?? <span className="tyst">ostämplad</span>}</td>
+                        <td className="tal">{tid(p.skapad)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
         )}
       </section>
@@ -391,11 +670,20 @@ export default function OperatorSida() {
             <div className="provisionera-rad">
               <select value={nyMall} onChange={(e) => setNyMall(e.target.value)}>
                 <option value="">utan mall (bokforing, manuell policy)</option>
-                {mallar.map((m) => (
-                  <option key={m.id} value={m.id}>
-                    mall: {m.namn}
-                  </option>
-                ))}
+                <optgroup label="agentmallar — versionerade hjärnor (ADR-0004)">
+                  {MALL_IDS.map((id) => (
+                    <option key={id} value={`agentmall:${id}`}>
+                      {mallRegistret[id].displayName} · {mallRegistret[id].version}
+                    </option>
+                  ))}
+                </optgroup>
+                <optgroup label="policymallar — endast autonomi">
+                  {mallar.map((m) => (
+                    <option key={m.id} value={m.id}>
+                      {m.namn}
+                    </option>
+                  ))}
+                </optgroup>
               </select>
               <input
                 type="text"
