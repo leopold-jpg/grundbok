@@ -14,6 +14,11 @@ import type { Scope } from "@/lib/decisions";
 // driftmetadata, semver-tvingat av kontraktet vid porten (schema.ts) och
 // kan inte bära fritext. Verifikationer läses aldrig.
 
+/** timestamptz kommer som Date eller sträng beroende på driver — EN
+ *  normalisering till ISO-sträng för hela filen. */
+const tillIsoTid = (v: Date | string | null | undefined): string | null =>
+  v == null ? null : (v instanceof Date ? v : new Date(v)).toISOString();
+
 export type BolagsRad = {
   byra: string;
   tenant_id: string;
@@ -293,6 +298,14 @@ export type FlottRad = {
   andel_korrigerade: number | null;
   senaste_aktivitet: string | null;
   varningar: FlottVarning[];
+  /** Antal förslag per 24-timmarsintervall bakåt från nu, äldst→nyast
+   *  (7 platser) — sparkline-datat i översikten (WP27). Intervallen
+   *  täcker EXAKT samma rullande 7-dygnsfönster som forslag_7d, så
+   *  summan stämmer alltid med räknaren (granskningsfynd WP29:
+   *  kalenderdygns-bucketing tappade fönstrets äldsta timmar och
+   *  blandade databasens och JS:ets tidszoner). Ett ANTAL per intervall,
+   *  aldrig innehåll. */
+  forslag_dagar: number[];
 };
 
 /** Hela flottan ur agent_telemetry (service-vägen — operatören ser alla
@@ -325,6 +338,26 @@ export async function flottoversikt(db: PGlite): Promise<FlottRad[]> {
      LEFT JOIN byraer b ON b.id = tn.byra_id
      ORDER BY b.namn NULLS LAST, tn.namn, t.display_name`,
   );
+
+  // Sparkline-datat: antal förslag per agent och 24-timmarsintervall
+  // bakåt från nu (0 = senaste dygnet … 6 = äldsta). Intervallen räknas
+  // helt i SQL mot samma now() som fönstret — EN tidsauktoritet, ingen
+  // tidszonssöm mot JS. Endast count — summary/belopp/motpart läses aldrig.
+  const dagar = await db.query<{ agent_id: string; dygn_sedan: number; n: string }>(
+    `SELECT agent_id,
+            floor(extract(epoch FROM (now() - created_at)) / 86400)::int AS dygn_sedan,
+            count(*) AS n
+     FROM proposals
+     WHERE agent_id IS NOT NULL AND created_at > now() - interval '7 days'
+     GROUP BY agent_id, 2`,
+  );
+  const perAgentDygn = new Map<string, number[]>();
+  for (const rad of dagar.rows) {
+    let hinkar = perAgentDygn.get(rad.agent_id);
+    if (!hinkar) perAgentDygn.set(rad.agent_id, (hinkar = Array(7).fill(0)));
+    const i = Number(rad.dygn_sedan);
+    if (i >= 0 && i < 7) hinkar[i] += Number(rad.n);
+  }
 
   const nu = Date.now();
   return r.rows.map((rad) => {
@@ -373,8 +406,12 @@ export async function flottoversikt(db: PGlite): Promise<FlottRad[]> {
       corrected_7d: corrected,
       andel_auto: forslag > 0 ? auto / forslag : null,
       andel_korrigerade: andelKorr,
-      senaste_aktivitet: senaste ? senaste.toISOString() : null,
+      senaste_aktivitet: tillIsoTid(senaste),
       varningar,
+      // Äldst→nyast: plats 0 är 6–7 dygn sedan, plats 6 är senaste dygnet.
+      forslag_dagar: (perAgentDygn.get(rad.agent_id) ?? Array(7).fill(0))
+        .slice()
+        .reverse(),
     };
   });
 }
@@ -391,6 +428,10 @@ export type DetaljProposal = {
   skapad: string;
 };
 
+/** Livslinjens händelser (WP27) — driftmetadata ur audit_log, aldrig
+ *  innehåll: bara VAD som hände med agenten och när. */
+export type LivslinjeHandelse = "skapad" | "pausad" | "aterupptagen" | "avslutad";
+
 export type AgentDetalj = {
   agent: FlottRad & { scopes: Scope[]; max_concurrency: number; provisioned_by: string; skapad: string };
   policy: {
@@ -403,6 +444,10 @@ export type AgentDetalj = {
    *  mallstämpel — aldrig summary, belopp, motpart eller payload-innehåll
    *  (operatörsregeln; innehållet är byråns värld). */
   senaste: DetaljProposal[];
+  /** skapad → pausad → återupptagen … ur audit-händelserna. */
+  livslinje: { tid: string; handelse: LivslinjeHandelse }[];
+  /** Kö-djup och senaste worker-körning för AGENTENS tenant (WP27). */
+  tenant_drift: { ko_djup: number; senaste_korning: string | null };
 };
 
 export async function agentDetalj(db: PGlite, agentId: string): Promise<AgentDetalj | null> {
@@ -448,20 +493,64 @@ export async function agentDetalj(db: PGlite, agentId: string): Promise<AgentDet
       }
     : null;
 
-  const s = await db.query<{
-    id: string;
-    kind: ProposalKind;
-    status: string;
-    confidence: string;
-    mall_version: string | null;
-    created_at: Date | string;
-  }>(
-    `SELECT id, kind, status, confidence,
-            payload->>'mall_version' AS mall_version, created_at
-     FROM proposals WHERE agent_id = $1
-     ORDER BY created_at DESC LIMIT 20`,
-    [agentId],
-  );
+  // Tre oberoende läsningar — parallellt, inte i rad (granskningsfynd
+  // WP29): senaste förslagen, livslinjen och tenantens driftläge.
+  const [s, liv, drift] = await Promise.all([
+    db.query<{
+      id: string;
+      kind: ProposalKind;
+      status: string;
+      confidence: string;
+      mall_version: string | null;
+      created_at: Date | string;
+    }>(
+      `SELECT id, kind, status, confidence,
+              payload->>'mall_version' AS mall_version, created_at
+       FROM proposals WHERE agent_id = $1
+       ORDER BY created_at DESC LIMIT 20`,
+      [agentId],
+    ),
+    // Livslinjen ur audit_log: provisionerad + statusändringar för
+    // agenten. Payload-läsningen är agentId/status — driftfält, aldrig
+    // innehåll. OBS kontraktet: nyckeln 'agentId' skrivs av auditera-
+    // anropen i agent-auth.ts och roteraNyckel ovan — byter de stavning
+    // tystnar livslinjen. id som ordningsutjämnare: händelser i samma
+    // transaktion delar created_at (granskningsfynd WP29).
+    db.query<{ event_type: string; status: string | null; tid: Date | string }>(
+      `SELECT event_type, payload->>'status' AS status, created_at AS tid
+       FROM audit_log
+       WHERE payload->>'agentId' = $1
+         AND event_type IN ('agent_provisionerad', 'agent_statusandrad')
+       ORDER BY created_at, id`,
+      [agentId],
+    ),
+    // Tenantens driftläge: kö-djup nu + senaste worker-körning — jobben
+    // pekar på tenanten via message-kuvertet (payload_ref läses aldrig).
+    // OBS: läser agent_jobs-tabellen direkt (som halsa) — byts kön mot
+    // pgmq i Supabase följer dessa aggregat med i adapterbytet.
+    db.query<{ djup: string; senaste: Date | string | null }>(
+      `SELECT count(*) FILTER (WHERE archived_at IS NULL) AS djup,
+              max(archived_at) AS senaste
+       FROM agent_jobs WHERE message->>'tenant_id' = $1`,
+      [rad.tenant_id],
+    ),
+  ]);
+
+  const STATUS_TILL_HANDELSE: Record<string, LivslinjeHandelse> = {
+    paused: "pausad",
+    active: "aterupptagen",
+    canceled: "avslutad",
+  };
+  const livslinje = liv.rows.flatMap((h) => {
+    const handelse =
+      h.event_type === "agent_provisionerad"
+        ? ("skapad" as const)
+        : STATUS_TILL_HANDELSE[h.status ?? ""];
+    // Okänd status (framtida livscykelsteg) hoppar vi över medvetet —
+    // hellre en lucka än en gissad etikett.
+    if (!handelse) return [];
+    return [{ tid: tillIsoTid(h.tid)!, handelse }];
+  });
 
   return {
     agent: {
@@ -469,10 +558,7 @@ export async function agentDetalj(db: PGlite, agentId: string): Promise<AgentDet
       scopes: agentRad.scopes,
       max_concurrency: Number(agentRad.max_concurrency),
       provisioned_by: agentRad.provisioned_by,
-      skapad: (agentRad.created_at instanceof Date
-        ? agentRad.created_at
-        : new Date(agentRad.created_at)
-      ).toISOString(),
+      skapad: tillIsoTid(agentRad.created_at)!,
     },
     policy,
     senaste: s.rows.map((row) => ({
@@ -481,11 +567,13 @@ export async function agentDetalj(db: PGlite, agentId: string): Promise<AgentDet
       status: row.status,
       confidence: Number(row.confidence),
       mall_version: row.mall_version,
-      skapad: (row.created_at instanceof Date
-        ? row.created_at
-        : new Date(row.created_at)
-      ).toISOString(),
+      skapad: tillIsoTid(row.created_at)!,
     })),
+    livslinje,
+    tenant_drift: {
+      ko_djup: Number(drift.rows[0]?.djup ?? 0),
+      senaste_korning: tillIsoTid(drift.rows[0]?.senaste),
+    },
   };
 }
 
@@ -496,23 +584,49 @@ export type Halsa = {
   senaste_korning: string | null;
   /** Meddelanden som krävt omförsök (read_ct > 1) senaste dygnet. */
   omforsok_24h: number;
+  /** Äldsta oarkiverade jobbets enqueued_at — null när kön är tom (WP27). */
+  aldsta_vantande: string | null;
+  /** Kö-djup och omförsök per modul — drift, aldrig innehåll (WP27). */
+  per_modul: { module: string; ko_djup: number; omforsok_24h: number }[];
 };
 
 export async function halsa(db: PGlite): Promise<Halsa> {
   const djup = await new PgliteKo(db).depth();
-  const r = await db.query<{ senaste: Date | string | null; omforsok: string }>(
+  const r = await db.query<{
+    senaste: Date | string | null;
+    aldsta: Date | string | null;
+    omforsok: string;
+  }>(
     `SELECT max(archived_at) AS senaste,
+            min(enqueued_at) FILTER (WHERE archived_at IS NULL) AS aldsta,
             count(*) FILTER (
               WHERE read_ct > 1 AND enqueued_at > now() - interval '24 hours'
             ) AS omforsok
      FROM agent_jobs`,
   );
-  const senaste = r.rows[0]?.senaste ?? null;
+  // Per modul ur jobbkuvertet (message->>'module' är driftmetadata) —
+  // endast moduler med något att visa.
+  const moduler = await db.query<{ module: string | null; ko_djup: string; omforsok: string }>(
+    `SELECT message->>'module' AS module,
+            count(*) FILTER (WHERE archived_at IS NULL) AS ko_djup,
+            count(*) FILTER (
+              WHERE read_ct > 1 AND enqueued_at > now() - interval '24 hours'
+            ) AS omforsok
+     FROM agent_jobs
+     GROUP BY message->>'module'
+     ORDER BY message->>'module'`,
+  );
   return {
     ko_djup: djup,
-    senaste_korning: senaste
-      ? (senaste instanceof Date ? senaste : new Date(senaste)).toISOString()
-      : null,
+    senaste_korning: tillIsoTid(r.rows[0]?.senaste),
     omforsok_24h: Number(r.rows[0]?.omforsok ?? 0),
+    aldsta_vantande: tillIsoTid(r.rows[0]?.aldsta),
+    per_modul: moduler.rows
+      .map((m) => ({
+        module: m.module ?? "(okänd)",
+        ko_djup: Number(m.ko_djup),
+        omforsok_24h: Number(m.omforsok),
+      }))
+      .filter((m) => m.ko_djup > 0 || m.omforsok_24h > 0),
   };
 }

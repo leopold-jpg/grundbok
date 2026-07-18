@@ -1,0 +1,171 @@
+/* grundbok — delade arbetsyte-komponenter (WP28). Importeras av BÅDA
+   ytorna (/byra, /operator); klasserna är unika och tokens resolvar via
+   arbetsyte-mappningen på main.byra/main.operator (design.tokens.css §1
+   lager 4). Här bor bara komponenternas egna stilar — sidlayout bor i
+   respektive ytas CSS. */
+
+/* ------------------------------------------------------------ Cmd+K */
+
+.kpalett-fond {
+  position: fixed;
+  inset: 0;
+  background: var(--scrim);
+  z-index: 50;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding: var(--sp-16) var(--sp-4) var(--sp-4); /* ur skalan, inte vh (kanon §5) */
+}
+
+.kpalett {
+  width: 100%;
+  max-width: 560px;
+  background: var(--kort);
+  border: 1px solid var(--linje);
+  border-radius: var(--r-lg);
+  box-shadow: var(--skugga-lyft); /* svävande krom förtjänar lyft-skuggan */
+  padding: var(--sp-3);
+}
+
+.kpalett input[type="text"] {
+  width: 100%;
+  font-family: var(--font-sans);
+  font-size: 16px; /* ≥16px hindrar iOS-zoom (kanon §5) */
+  color: var(--ink);
+  background: var(--kort);
+  border: 1px solid var(--linje);
+  border-radius: var(--r-md);
+  padding: var(--sp-2) var(--sp-3);
+}
+.kpalett input[type="text"]:focus {
+  outline: 2px solid var(--bla);
+  outline-offset: 1px;
+}
+
+.kpalett ul {
+  list-style: none;
+  margin: var(--sp-2) 0 0;
+  padding: 0;
+  max-height: 320px;
+  overflow-y: auto;
+}
+.kpalett li {
+  display: flex;
+  align-items: baseline;
+  gap: var(--sp-2);
+  flex-wrap: wrap;
+  padding: var(--sp-2) var(--sp-3);
+  border-radius: var(--r-sm);
+  font-size: 14px;
+  cursor: pointer;
+}
+.kpalett li[data-vald="true"] {
+  background: var(--yta-is);
+}
+.kpalett .kpalett-grupp {
+  flex-basis: 100%;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-svag);
+  margin: var(--sp-1) 0 0;
+  cursor: default;
+}
+.kpalett .kpalett-detalj {
+  font-size: 12px;
+  color: var(--ink-svag);
+}
+.kpalett .kpalett-tom {
+  margin: var(--sp-3);
+  color: var(--ink-svag);
+  font-size: 13px;
+}
+.kpalett .kpalett-hjalp {
+  margin: var(--sp-2) var(--sp-3) 0;
+  font-size: 11px;
+  color: var(--ink-svag);
+}
+
+/* ------------------------------------------------------ statuspunkt */
+
+.statuspunkt {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  font-size: 13px;
+  white-space: nowrap;
+}
+.statuspunkt .punkt {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--linje-stark);
+}
+.statuspunkt-active .punkt { background: var(--gron); }
+.statuspunkt-paused .punkt { background: var(--varning); }
+.statuspunkt-paused { color: var(--ink-mjuk); }
+.statuspunkt-canceled { color: var(--ink-svag); }
+
+/* ---------------------------------------------------- tomt tillstånd */
+
+.tomt-lage {
+  border: 1px dashed var(--linje-stark);
+  border-radius: var(--r-md);
+  padding: var(--sp-5);
+  margin: 0;
+  font-size: 14px;
+  color: var(--ink-svag);
+}
+
+/* -------------------------------------------------------- nyckelkort */
+
+/* Engångsnyckeln: blå markeringskant (information om en engångs-
+   händelse), varningstexten i --varning — grönt förekommer inte här
+   (kanon §2: grönt är ENDAST status). */
+.nyckelkort {
+  border: 1px solid var(--linje);
+  border-left: 3px solid var(--bla);
+  border-radius: var(--r-md);
+  background: var(--kort);
+  padding: var(--sp-4);
+  margin-bottom: var(--sp-3);
+  box-shadow: var(--skugga-kort);
+}
+.nyckelkort .nyckel-varning {
+  font-size: 13px;
+  color: var(--varning);
+}
+.nyckelkort .nyckel-klartext {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  background: var(--yta-is);
+  border: 1px solid var(--linje);
+  border-radius: var(--r-sm);
+  padding: var(--sp-2) var(--sp-3);
+  margin-top: var(--sp-2);
+  word-break: break-all;
+  user-select: all;
+}
+.nyckelkort .nyckel-kopiera { margin-top: var(--sp-2); }
+.nyckelkort .nyckel-kopierad { font-size: 13px; color: var(--gron); margin-left: var(--sp-2); }
+
+/* --------------------------------------------------------- sparkline */
+
+.sparkline { display: inline-block; vertical-align: middle; }
+.sparkline polyline {
+  fill: none;
+  stroke: var(--bla); /* nyckeldata får accenten — aldrig dekor */
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* ------------------------------------------------------ varningschip */
+
+.chip.chip-varning {
+  background: transparent;
+  border: 1px solid var(--varning);
+  color: var(--varning);
+  white-space: nowrap;
+}
