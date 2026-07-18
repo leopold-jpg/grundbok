@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { CONTRACT_VERSION } from "./proposal-contract";
+import { ACCEPTED_CONTRACT_VERSIONS } from "./proposal-contract";
 
 // Runtime-validering av kontraktet (zod-speglingar av typerna i
 // proposal-contract.ts). Kärnan litar aldrig på att en agent skickar
@@ -8,6 +8,7 @@ import { CONTRACT_VERSION } from "./proposal-contract";
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const ISO_DATUM = /^\d{4}-\d{2}-\d{2}$/;
 const SHA256 = /^[0-9a-f]{64}$/;
+const SEMVER = /^\d+\.\d+\.\d+$/;
 
 export const MODULE_IDS = [
   "bokforing",
@@ -51,12 +52,18 @@ export const ProvenanceSchema = z.object({
 
 export const ProposalSchema = z
   .object({
-    contract_version: z.literal(CONTRACT_VERSION),
+    // v0.2-avsändare valideras oförändrat — bumpen till 0.3 är additiv.
+    contract_version: z.enum(ACCEPTED_CONTRACT_VERSIONS),
     id: z.string().regex(UUID),
     tenant_id: z.string().regex(/^[a-z][a-z0-9_]{1,62}$/),
     module: z.enum(MODULE_IDS),
     kind: z.enum(PROPOSAL_KINDS),
     batch_id: z.string().optional(),
+    // Mallstämpeln (v0.3, ADR-0004). Medvetet fri sträng, inte enum över
+    // katalogen: kontraktet äger inte src/mallar/, och historiska förslag
+    // kan bära mall-id:n som lämnat katalogen.
+    mall_id: z.string().min(1).optional(),
+    mall_version: z.string().regex(SEMVER, "mall_version: semver (x.y.z)").optional(),
     affarshandelsedatum: z.string().regex(ISO_DATUM),
     motpart: z.string().optional(),
     summary: z.string().min(1).max(300),
@@ -67,6 +74,15 @@ export const ProposalSchema = z
     hash: z.string().regex(SHA256),
   })
   .superRefine((p, ctx) => {
+    // Stämpeln sätts alltid i par — ett ensamt fält är ett agentfel, inte
+    // ett ostämplat förslag.
+    if ((p.mall_id === undefined) !== (p.mall_version === undefined)) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["mall_id"],
+        message: "mall_id och mall_version sätts alltid i par",
+      });
+    }
     if (p.kind === "advisory_answer") {
       if (p.lines.length > 0) {
         ctx.addIssue({

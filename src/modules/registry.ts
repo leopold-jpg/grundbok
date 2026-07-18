@@ -20,6 +20,9 @@ export type ModulInput = {
   proposalId: string;
   /** T.ex. "worker-lokal@0.2" eller "openclaw@x.y" — provenance.agent_runtime. */
   agentRuntime: string;
+  /** Mallstämpeln (WP11, ADR-0004): läses ur agentraden av runtime-lagret
+   *  och stämplas på förslaget. Utelämnad för mall-lösa agenter. */
+  mall?: { id: string; version: string };
 };
 
 export interface ModulRuntime {
@@ -43,6 +46,7 @@ const bokforing: ModulRuntime = {
       motorDetalj: tolkning.motor_detalj,
       id: input.proposalId,
       agentRuntime: input.agentRuntime,
+      mall: input.mall,
     });
   },
 };
