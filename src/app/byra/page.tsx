@@ -841,12 +841,12 @@ function IntagSektion({
 
             <div className="metarad">
               {Object.entries(forslag.forslag.skill_versions).map(([skill, version]) => (
-                <span key={skill} className="chip">
+                <Chip key={skill}>
                   {skill}@{version}
-                </span>
+                </Chip>
               ))}
-              <span className="chip tal">hash {forslag.hash.slice(0, 12)}…</span>
-              <span className="chip">konfidens {Math.round(forslag.confidence * 100)} %</span>
+              <Chip tal>hash {forslag.hash.slice(0, 12)}…</Chip>
+              <Chip>konfidens {Math.round(forslag.confidence * 100)} %</Chip>
             </div>
 
             {forslag.status === "pending" && forslag.missade_villkor.length > 0 && (
@@ -1017,19 +1017,17 @@ function ChattSektion({ klient, userId }: { klient: Klient | null; userId: strin
             {m.roll === "agent" && (
               <div className="bubbla-meta">
                 {m.saldo && (
-                  <span className="chip tal">
+                  <Chip tal>
                     saldo {m.saldo.konto}: {m.saldo.formaterat}
-                  </span>
+                  </Chip>
                 )}
                 {m.lagrum?.map((l, j) => (
-                  <span key={j} className="chip">
-                    {l.lagrum}
-                  </span>
+                  <Chip key={j}>{l.lagrum}</Chip>
                 ))}
                 {m.konfidens !== undefined && (
-                  <span className="chip">konfidens {Math.round(m.konfidens * 100)} %</span>
+                  <Chip>konfidens {Math.round(m.konfidens * 100)} %</Chip>
                 )}
-                {m.motor === "fallback" && <span className="chip">deterministisk fallback</span>}
+                {m.motor === "fallback" && <Chip>deterministisk fallback</Chip>}
               </div>
             )}
           </div>
@@ -1090,7 +1088,7 @@ function LoggSektion({ logg, visaKlient }: { logg: LoggRad[]; visaKlient: boolea
                   <td>
                     {l.policy_beslut ? (
                       <>
-                        <span className="chip">policybeslut</span>{" "}
+                        <Chip>policybeslut</Chip>{" "}
                         <span className="tyst">inom er policy</span>
                       </>
                     ) : l.outcome === "approved" ? (
@@ -1110,7 +1108,7 @@ function LoggSektion({ logg, visaKlient }: { logg: LoggRad[]; visaKlient: boolea
                   <td className="tal">{l.verifikationsnummer ?? "—"}</td>
                   <td>
                     {l.model}
-                    {l.agent_runtime && <span className="chip">{l.agent_runtime}</span>}
+                    {l.agent_runtime && <Chip>{l.agent_runtime}</Chip>}
                   </td>
                 </tr>
               ))}
@@ -1378,7 +1376,7 @@ function KlientSektion({
               <span className="beskr">{v.beskrivning}</span>
               <span className="tyst">{v.affarshandelsedatum.slice(0, 10)}</span>
               {v.rattar_verifikation && <span className="rattelse-tag">rättelsepost</span>}
-              {v.extern_ref && <span className="chip tal">{v.extern_ref}</span>}
+              {v.extern_ref && <Chip tal>{v.extern_ref}</Chip>}
               <span className="hoger">
                 {!v.rattar_verifikation && (
                   <button onClick={() => rattelse(v.id)}>Skapa rättelsepost</button>

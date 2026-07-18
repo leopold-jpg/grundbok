@@ -715,9 +715,7 @@ export default function OperatorSida() {
                   : "ingen autonomipolicy — allt attesteras"}
                 {" · scopes: "}
                 {detalj.agent.scopes.map((s) => (
-                  <span key={s} className="chip">
-                    {s}
-                  </span>
+                  <Chip key={s}>{s}</Chip>
                 ))}
               </p>
 
@@ -837,7 +835,7 @@ export default function OperatorSida() {
           </select>
           {provBolag && (
             <span className="tyst">
-              bransch ur kundconfig: <span className="chip">{provBolag.mall}</span>
+              bransch ur kundconfig: <Chip>{provBolag.mall}</Chip>
             </span>
           )}
         </div>

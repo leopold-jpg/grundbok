@@ -192,12 +192,6 @@ body:has(main.operator) {
   flex-wrap: wrap;
   margin-bottom: var(--sp-3);
 }
-.operator .chip-varning {
-  background: transparent;
-  border: 1px solid var(--warning);
-  color: var(--warning);
-  white-space: nowrap;
-}
 .operator .flotta-detalj {
   border: 1px solid var(--border);
   border-radius: var(--r-md);
