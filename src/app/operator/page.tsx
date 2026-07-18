@@ -222,6 +222,11 @@ export default function OperatorSida() {
   const [draftText, setDraftText] = useState("");
   const [draftSvar, setDraftSvar] = useState("");
   const [draftArbetar, setDraftArbetar] = useState(false);
+  // Generationsvakt (granskningsfynd): ett sent svar för en gammal
+  // beskrivning får aldrig skriva över operatörens val — räknaren bumpas
+  // när texten ändras och när provisioneringen kör, så in-flight-svar
+  // som hunnit bli irrelevanta släpps tyst.
+  const draftGenRef = useRef(0);
   const [provNyckel, setProvNyckel] = useState<{ rubrik: string; nyckel: string } | null>(null);
   const [arbetar, setArbetar] = useState(false);
 
@@ -392,6 +397,9 @@ export default function OperatorSida() {
       // EN gång.
       setProvNyckel({ rubrik: `Nyckel för ${provNamn.trim()}`, nyckel: r.nyckel });
       setProvNamn("");
+      // Ett draft-svar som landar EFTER provisioneringen får inte fylla
+      // formuläret igen och göra Enter-vägen skarp på nytt.
+      draftGenRef.current++;
       await Promise.all([laddaBolag(), laddaFlotta()]);
     } catch (e) {
       setFel(e instanceof Error ? e.message : String(e));
@@ -402,6 +410,7 @@ export default function OperatorSida() {
 
   async function foreslaDraft() {
     if (draftArbetar || !draftText.trim()) return;
+    const gen = ++draftGenRef.current;
     setDraftArbetar(true);
     setFel("");
     try {
@@ -409,21 +418,25 @@ export default function OperatorSida() {
         "/api/operator/agentdraft",
         { beskrivning: draftText.trim() },
       );
-      if (r.forslag) {
-        // Förmarkera rollen; namnet är ett förslag och skriver aldrig
-        // över något operatören redan hunnit skriva i steg 3.
+      // Stale svar (texten ändrad, ny förfrågan skickad eller en
+      // provisionering emellan) appliceras aldrig.
+      if (gen !== draftGenRef.current) return;
+      // Förmarkera bara en roll som faktiskt renderas som radiokort —
+      // utan laddad katalog vore valet osynligt och ogranskbart.
+      const iKatalogen = katalog?.mallar.find((m) => m.id === r.forslag?.mallId);
+      if (r.forslag && iKatalogen) {
         setProvMall(r.forslag.mallId);
-        setProvNamn((namn) => namn.trim() ? namn : r.forslag!.namn);
-        const mallNamn =
-          katalog?.mallar.find((m) => m.id === r.forslag!.mallId)?.displayName ??
-          r.forslag.mallId;
-        setDraftSvar(`förslag: ${mallNamn} — ändra fritt nedan`);
+        // Namnet är ett förslag och skriver aldrig över något operatören
+        // redan hunnit skriva i steg 3.
+        setProvNamn((namn) => (namn.trim() ? namn : r.forslag!.namn));
+        setDraftSvar(`förslag: ${iKatalogen.displayName} — ändra fritt nedan`);
       } else {
         setDraftSvar("ingen roll matchade beskrivningen — välj själv nedan");
       }
     } catch (e) {
       setFel(e instanceof Error ? e.message : String(e));
     } finally {
+      // Alltid av — stale betyder bara "applicera inte svaret".
       setDraftArbetar(false);
     }
   }
@@ -902,6 +915,8 @@ export default function OperatorSida() {
               onChange={(e) => {
                 setDraftText(e.target.value);
                 setDraftSvar("");
+                // Ändrad text gör ett in-flight-svar irrelevant.
+                draftGenRef.current++;
               }}
               onKeyDown={(e) => {
                 if (e.key === "Enter") {
@@ -931,7 +946,12 @@ export default function OperatorSida() {
                     name="prov-mall"
                     value={m.id}
                     checked={provMall === m.id}
-                    onChange={() => setProvMall(m.id)}
+                    onChange={() => {
+                      setProvMall(m.id);
+                      // Operatörens eget val vinner alltid över ett
+                      // draft-svar som fortfarande är i luften.
+                      draftGenRef.current++;
+                    }}
                   />
                   <span className="mall-titel">{m.displayName}</span>
                   <span className="mall-meta">

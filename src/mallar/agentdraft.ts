@@ -13,9 +13,12 @@ export type AgentDraftForslag = {
   namn: string;
 };
 
-/** Nyckelord per roll. Ordningen i MALL_IDS bryter aldrig lika — i stället
- *  väger specifika roller tyngre än bokforing-basrollen, så "bokför våra
- *  leverantörsfakturor" landar i reskontran, inte basrollen. */
+/** Nyckelord per roll, viktade: en specifik rolls kärnord (leverantör,
+ *  reskontra, lön…) väger tyngre än basrollens breda ord, så "bokför våra
+ *  leverantörsfakturor" landar i reskontran, inte basrollen. Vid exakt
+ *  lika poäng vinner först-deklarerad roll i MALL_IDS — medvetet: en
+ *  tvetydig beskrivning ("fakturor och kvitton") föreslår breda
+ *  bokforing-rollen, och testerna låser det. */
 const NYCKELORD: Record<MallId, { ord: RegExp; vikt: number }[]> = {
   bokforing: [
     { ord: /bokfor/, vikt: 1 },
@@ -24,8 +27,11 @@ const NYCKELORD: Record<MallId, { ord: RegExp; vikt: number }[]> = {
     { ord: /lopande/, vikt: 1 },
   ],
   lon: [
-    { ord: /\blon(er|e|)\b/, vikt: 3 },
-    { ord: /lonekorning/, vikt: 3 },
+    // Fristående ord (lön/löner/lönen/lönerna) OCH sammansättningar på
+    // löne- (lönebetalningar, lönehantering, löneadministration …) —
+    // granskningsfynd: enbart \b-ankringen missade sammansättningarna.
+    { ord: /\blon(er|erna|en)?\b/, vikt: 3 },
+    { ord: /lone[a-z]/, vikt: 3 },
     { ord: /payroll/, vikt: 3 },
     { ord: /anstallda?/, vikt: 2 },
     { ord: /semester/, vikt: 2 },
@@ -50,10 +56,13 @@ const NYCKELORD: Record<MallId, { ord: RegExp; vikt: number }[]> = {
 /** Småord + rollord som inte duger som namnled — resten av beskrivningen
  *  får ge namnets andra halva ("bokföring för min byggfirma" → byggfirma). */
 const STOPPORD = new Set([
-  "for", "min", "mitt", "mina", "var", "vart", "vara", "och", "eller",
-  "till", "med", "utan", "hos", "det", "den", "de", "en", "ett", "att",
-  "som", "pa", "av", "i", "vi", "jag", "har", "ska", "skall", "behover",
-  "vill", "hjalp", "skota", "skoter", "hantera", "hanterar", "at", "ab",
+  "for", "min", "mitt", "mina", "var", "vart", "vara", "era",
+  "deras", "och", "eller", "till", "med", "utan", "hos", "fran", "det",
+  "den", "de", "en", "ett", "att", "som", "pa", "av", "i", "vi", "jag",
+  "har", "ska", "skall", "behover", "vill", "hjalp", "skota", "skoter",
+  "hantera", "hanterar", "at", "ab", "varje", "alla", "hela", "nya",
+  "manad", "manaden", "manader", "vecka", "veckan", "dag", "dagen",
+  "ar", "aret",
 ]);
 
 /** Svensk lågnormalisering: gemener + åäö → a/a/o, övrigt oförändrat.
@@ -67,11 +76,15 @@ function normalisera(text: string): string {
 }
 
 /** Betydelsebärande namnled ur beskrivningen: första ordet som varken är
- *  stoppord eller träffade rollens nyckelord. */
-function namnled(ord: string[], mallId: MallId): string | null {
+ *  stoppord eller nyckelord för NÅGON roll — "bokföra kvitton och
+ *  leverantörsfakturor" ska ge -agent-fallbacken, inte "…-bokfora"
+ *  (granskningsfynd: att bara undanta vinnarrollens ord släppte igenom
+ *  de andra rollernas). Enbokstavsord är aldrig namnled; tvåbokstavsord
+ *  ("ab") filtreras via stopporden. */
+function namnled(ord: string[]): string | null {
   for (const o of ord) {
-    if (o.length < 3 || STOPPORD.has(o)) continue;
-    if (NYCKELORD[mallId].some((n) => n.ord.test(o))) continue;
+    if (o.length < 2 || STOPPORD.has(o)) continue;
+    if (MALL_IDS.some((m) => NYCKELORD[m].some((n) => n.ord.test(o)))) continue;
     return o.slice(0, 24);
   }
   return null;
@@ -93,13 +106,13 @@ export function foreslaAgentDraft(beskrivning: string): AgentDraftForslag | null
       (sum, n) => (n.ord.test(text) ? sum + n.vikt : sum),
       0,
     );
-    // Strikt större: vid lika poäng vinner först-deklarerad roll — men
-    // vikterna är satta så att en specifik roll alltid slår basrollen
-    // när dess egna ord förekommer.
+    // Strikt större: vid lika poäng vinner först-deklarerad roll — dvs.
+    // breda bokforing-basrollen vid tvetydig beskrivning (se NYCKELORD-
+    // kommentaren; testerna låser tie-breaken).
     if (poang > 0 && (!bast || poang > bast.poang)) bast = { mallId, poang };
   }
   if (!bast) return null;
 
-  const led = namnled(ord, bast.mallId);
+  const led = namnled(ord);
   return { mallId: bast.mallId, namn: led ? `${bast.mallId}-${led}` : `${bast.mallId}-agent` };
 }
