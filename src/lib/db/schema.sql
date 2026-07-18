@@ -218,6 +218,72 @@ CREATE TABLE IF NOT EXISTS leads (
   created_at timestamptz NOT NULL DEFAULT now()
 );
 
+-- ================================================= mallkatalog (WP12) ====
+-- ADR-0004: en agent är en instans av (mall, mallversion). Agentraden
+-- PEKAR på mallens major-version — konventionen är '1', inte '1.0.0':
+-- minor/patch följer med automatiskt vid deploy, ny major är ett
+-- medvetet migrationssteg. Den EXAKTA versionen stämplas i stället på
+-- varje Proposal (payloadens mall_version, kontrakt v0.3).
+--
+-- template_id läggs till utöver kickoff-skissen: mallens id är INTE ett
+-- ModuleId (mallen 'leverantorsreskontra' instansierar modulen
+-- 'bokforing'; ADR-0005: mallar är funktionsroller), så module-kolumnen
+-- ensam kan inte identifiera mallen. NULL = agent provisionerad utan
+-- mall (före mallkatalogen, eller rå modul-agent). Branschpaket lagras
+-- INTE på agentraden — de härleds ur tenants.mall (tenant-kontexten
+-- aktiverar, ADR-0005), så en branschändring hos tenanten slår igenom
+-- utan agentmigration.
+ALTER TABLE agents ADD COLUMN IF NOT EXISTS template_id text;
+ALTER TABLE agents ADD COLUMN IF NOT EXISTS template_version text NOT NULL DEFAULT '1';
+
+-- Telemetrin behöver veta VILKEN agent som skapade förslaget — kolumnen
+-- är en läsoptimering på samma sätt som module/kind (payload är sanningen
+-- för kontraktsfälten, men agentidentiteten är portens kunskap, inte
+-- agentens egen utsaga). NULL = internt UI-flöde utan agentrad.
+ALTER TABLE proposals ADD COLUMN IF NOT EXISTS agent_id uuid REFERENCES agents(id);
+
+-- Telemetri som VY, aldrig räknarkolumner (ADR-0004: härled alltid ur
+-- proposals — lagrade räknare ruttnar). DROP + CREATE i stället för
+-- CREATE OR REPLACE: OR REPLACE vägrar ändrad kolumnuppsättning, och
+-- filen körs om vid varje uppstart; rls.sql återställer grants efteråt.
+--
+-- Statusvärdena är proposals faktiska (pending/auto_approved/approved/
+-- rejected — kickoffens 'auto_booked' finns inte). "Korrigerad" är inte
+-- en status utan rättelsekedjan: förslagets verifikation har rättats av
+-- en senare verifikation (rattar_verifikation). rejected_7d räknas
+-- separat — båda är kvalitetssignaler för mallen, med olika tyngd.
+--
+-- security_invoker: en vy exekverar annars med ägarens rättigheter och
+-- skulle kringgå RLS. Med invoker gäller tenant_isolation på agents,
+-- proposals och verifications rakt igenom vyn — samma tenant-scopade
+-- läsning som agents. Service-vägen (operatören) ser hela flottan.
+DROP VIEW IF EXISTS agent_telemetry;
+CREATE VIEW agent_telemetry WITH (security_invoker = true) AS
+SELECT
+  a.id AS agent_id,
+  a.tenant_id,
+  a.module,
+  a.template_id,
+  a.template_version,
+  a.display_name,
+  a.status,
+  count(p.id) FILTER (WHERE p.created_at > now() - interval '7 days')
+    AS proposals_7d,
+  count(p.id) FILTER (WHERE p.status = 'auto_approved'
+    AND p.created_at > now() - interval '7 days')                    AS auto_7d,
+  count(p.id) FILTER (WHERE p.status = 'rejected'
+    AND p.created_at > now() - interval '7 days')                    AS rejected_7d,
+  count(p.id) FILTER (WHERE p.created_at > now() - interval '7 days'
+    AND EXISTS (
+      SELECT 1 FROM verifications v
+      JOIN verifications r ON r.rattar_verifikation = v.id
+      WHERE v.proposal_id = p.id
+    ))                                                               AS corrected_7d,
+  max(p.created_at) AS last_activity
+FROM agents a
+LEFT JOIN proposals p ON p.agent_id = a.id
+GROUP BY a.id;
+
 -- Operatörskonsolen (WP14): namngivna policymallar som väljs vid
 -- provisionering och KOPIERAS till tenantens autonomy_policies — mallen
 -- är operatörens data (service-vägens plan, inga app-grants), tenantens

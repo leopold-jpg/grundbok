@@ -1,11 +1,20 @@
 /**
- * Förslagskontraktet — grundbok core v0.2
+ * Förslagskontraktet — grundbok core v0.3
  * Enda skrivvägen in i kärnan. Alla specialistmoduler (interna eller
  * OpenClaw-agenter hos kund) producerar Proposal och skickar till
  * POST /api/proposals. Endast kärnans beslutsmotor rör huvudboken.
+ *
+ * Changelog:
+ *   0.3.0 (WP11, ADR-0004): mallstämpeln mall_id + mall_version — valfria
+ *          fält, v0.2-avsändare fortsätter att valideras oförändrat.
+ *   0.2.0 (WP1, ADR-0002): kontraktet införs.
  */
 
-export const CONTRACT_VERSION = "0.2.0" as const;
+export const CONTRACT_VERSION = "0.3.0" as const;
+
+/** Versioner porten accepterar — bakåtkompatibilitet är ett löfte
+ *  (ADR-0002: semver-disciplin), inte en bieffekt. */
+export const ACCEPTED_CONTRACT_VERSIONS = ["0.2.0", "0.3.0"] as const;
 
 export type ModuleId =
   | "bokforing"      // kvitto/faktura → kontering (finns, v1)
@@ -46,12 +55,20 @@ export interface Provenance {
 }
 
 export interface Proposal {
-  contract_version: typeof CONTRACT_VERSION;
+  contract_version: (typeof ACCEPTED_CONTRACT_VERSIONS)[number];
   id: string;                       // uuid, satt av agenten (idempotensnyckel)
   tenant_id: string;                // klientbolaget — RLS-nyckel
   module: ModuleId;
   kind: ProposalKind;
   batch_id?: string;                // grupperar t.ex. en lönekörning
+
+  /** Mallstämpeln (v0.3, ADR-0004): vilken agentmall + exakt version som
+   *  byggde förslaget. Sätts alltid i par; valfria för v0.2-avsändare.
+   *  Medvetet string, inte MallId — katalogen (src/mallar/) ägs inte av
+   *  kontraktet, och en historisk Proposal kan bära ett mall-id som
+   *  lämnat katalogen. */
+  mall_id?: string;
+  mall_version?: string;            // semver — exakt version, inte major
 
   affarshandelsedatum: string;      // ISO-datum — styr momssats
   motpart?: string;

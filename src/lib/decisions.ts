@@ -25,6 +25,10 @@ export type Principal = {
   module: ModuleId | "*"; // intern UI får "*"; agentnycklar är modulbundna
   scopes: Scope[];
   namn: string;
+  /** Agentradens id när anroparen är en agent (WP12): porten stämplar
+   *  proposals.agent_id ur principalen — telemetrin litar aldrig på
+   *  payloadens egen utsaga om vem som byggde förslaget. */
+  agent_id?: string;
 };
 
 export type PolicyRad = {
@@ -206,8 +210,8 @@ export async function handleProposal(
 
     await tx.query(
       `INSERT INTO proposals
-         (id, tenant_id, module, kind, batch_id, payload, hash, confidence, summary, status, flaggor)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+         (id, tenant_id, module, kind, batch_id, payload, hash, confidence, summary, status, flaggor, agent_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
       [
         p.id,
         p.tenant_id,
@@ -220,6 +224,7 @@ export async function handleProposal(
         p.summary,
         status,
         JSON.stringify(flaggor),
+        principal.agent_id ?? null,
       ],
     );
 

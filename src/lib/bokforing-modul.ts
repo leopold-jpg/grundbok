@@ -1,5 +1,11 @@
 import { randomUUID } from "node:crypto";
-import { hashProposal, sha256Hex, type Proposal, type LegalReference } from "@/contracts";
+import {
+  CONTRACT_VERSION,
+  hashProposal,
+  sha256Hex,
+  type Proposal,
+  type LegalReference,
+} from "@/contracts";
 import type { Forslag } from "./kontering";
 import type { Extraktion } from "./extract/schema";
 
@@ -36,6 +42,9 @@ export function byggBokforingsProposal(input: {
   id?: string;
   /** Sätts av runtime-lagret (t.ex. "worker-lokal@0.2") — skiljer körningar i beslutsloggen. */
   agentRuntime?: string;
+  /** Mallstämpeln (v0.3, ADR-0004): agentens mall + registrets exakta
+   *  version. Utelämnad för mall-lösa körningar (intag-UI, äldre agenter). */
+  mall?: { id: string; version: string };
 }): Proposal {
   const { forslag } = input;
 
@@ -51,11 +60,15 @@ export function byggBokforingsProposal(input: {
   ];
 
   const utanHash: Omit<Proposal, "hash"> = {
-    contract_version: "0.2.0",
+    contract_version: CONTRACT_VERSION,
     id: input.id ?? randomUUID(),
     tenant_id: input.tenantId,
     module: "bokforing",
     kind: "journal_entry",
+    // Conditional spread, inte `mall_id: undefined` — canonicalJson
+    // serialiserar en satt-men-undefined nyckel och hashen skulle glida
+    // isär mot en agent som utelämnar fälten.
+    ...(input.mall ? { mall_id: input.mall.id, mall_version: input.mall.version } : {}),
     affarshandelsedatum: forslag.affarshandelsedatum,
     motpart: input.extraktion.motpart,
     summary: input.extraktion.beskrivning.slice(0, 300),
