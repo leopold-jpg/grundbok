@@ -68,7 +68,7 @@ test("flottöversikten: andelar, mall + version ur registret, byrå och tenant",
   assert.equal(rad.template_id, "bokforing");
   assert.equal(rad.template_version, "1");
   // Major-pekaren löser mot registrets exakta version.
-  assert.equal(rad.mall_aktuell_version, "1.0.0");
+  assert.equal(rad.mall_aktuell_version, "1.1.0");
   // ADR-0005: tenant-kontexten aktiverar — kund_a är café-tenant, så
   // bokföringsrollen bär restaurangpaketet i flottvyn.
   assert.deepEqual(rad.branschpaket, ["restaurang"]);

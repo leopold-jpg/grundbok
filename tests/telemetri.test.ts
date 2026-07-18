@@ -177,7 +177,7 @@ test("workern: mallstämpel i payloaden + agent_id på raden via agentens mallpe
   assert.equal(rad.rows[0].agent_id, resto.agent_id);
   // Agentens major-pekare '1' → registrets exakta 1.0.0 på förslaget.
   assert.equal(rad.rows[0].payload.mall_id, "bokforing");
-  assert.equal(rad.rows[0].payload.mall_version, "1.0.0");
+  assert.equal(rad.rows[0].payload.mall_version, "1.1.0");
   assert.equal(rad.rows[0].payload.contract_version, "0.3.0");
 });
 
