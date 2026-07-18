@@ -1,13 +1,14 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { kontera } from "../src/lib/kontering";
-import type { Extraktion } from "../src/lib/extract/schema";
+import { OBSERVATIONS_DEFAULTS, type Extraktion } from "../src/lib/extract/schema";
 
 // Demofallens facit — verifierade mot officiella BAS 2025-tabellen och
 // Skatteverket (se skills/se/*/SKILL.md, worked examples). Exemplen i
 // SKILL.md och testerna här ska aldrig kunna glida isär.
 
 const kaffe = (datum: string, moms_ore: number | null): Extraktion => ({
+  ...OBSERVATIONS_DEFAULTS,
   motpart: "Kafferosteriet Exempel AB",
   beskrivning: "Kaffebönor, mörkrost 20 kg",
   datum,
@@ -50,6 +51,7 @@ test("facit (a) mars 2026: samma kvitto, 12 % → 2641 D 120 / 2440 K 1120", () 
 test("facit (b) bygg: 4425 D 10000 / 2440 K 10000 / 2614 K 2500 / 2647 D 2500", () => {
   const f = kontera(
     {
+      ...OBSERVATIONS_DEFAULTS,
       motpart: "Underentreprenad Exempel AB",
       beskrivning: "Markarbeten etapp 2",
       datum: "2026-07-01",

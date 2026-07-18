@@ -1,0 +1,18 @@
+{
+  "fall": 5,
+  "titel": "Delmatchning — missing_receipt med restbelopp, transaktionen konteras hel",
+  "tenant": "kund_a",
+  "forvantat": {
+    "kind": "journal_entry",
+    "eskalerad": false,
+    "lines": [
+      ["6991", 100000, 0],
+      ["2641", 25000, 0],
+      ["2440", 0, 125000]
+    ],
+    "flaggor_kravs": ["missing_receipt"],
+    "flaggor_forbjudna": [],
+    "restbelopp_ore": 40000,
+    "status": "pending"
+  }
+}

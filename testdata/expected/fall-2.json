@@ -1,0 +1,18 @@
+{
+  "fall": 2,
+  "titel": "ÄTA-avvikelse mot känt ordervärde (bygg) — needs_review, omvänd byggmoms",
+  "tenant": "kund_b",
+  "forvantat": {
+    "kind": "journal_entry",
+    "eskalerad": false,
+    "lines": [
+      ["4425", 8000000, 0],
+      ["2440", 0, 8000000],
+      ["2614", 0, 2000000],
+      ["2647", 2000000, 0]
+    ],
+    "flaggor_kravs": ["ata_avvikelse"],
+    "flaggor_forbjudna": ["momssats_avviker", "flag_wrong_tenant"],
+    "status": "pending"
+  }
+}

@@ -1,8 +1,9 @@
 import type { PGlite } from "@electric-sql/pglite";
 import type { ModuleId, Proposal } from "@/contracts";
 import { tolka } from "@/lib/extract";
-import { kontera } from "@/lib/kontering";
-import { byggBokforingsProposal } from "@/lib/bokforing-modul";
+import { kontera, type Flagga } from "@/lib/kontering";
+import { granskaUnderlag } from "@/lib/granskning";
+import { byggBokforingsProposal, byggEskaleringsProposal } from "@/lib/bokforing-modul";
 
 // Modulregistret (WP9): det rena interfacet mellan runtime och modul.
 // buildProposal är sidoeffektsfri mot kärnan — den bygger ett Proposal,
@@ -29,17 +30,54 @@ export type ModulInput = {
   systemPrompt?: string;
 };
 
+/** Modulens utfall (WP32): förslaget + modulens granskningsflaggor.
+ *  Flaggorna är runtime-lagrets kunskap och följer med till porten som
+ *  betrodd metadata — de ingår aldrig i den hashade payloaden. */
+export type ModulUtfall = { proposal: Proposal; flaggor: Flagga[] };
+
 export interface ModulRuntime {
   id: ModuleId;
-  buildProposal(input: ModulInput): Promise<Proposal>;
+  buildProposal(input: ModulInput): Promise<ModulUtfall>;
 }
 
 const bokforing: ModulRuntime = {
   id: "bokforing",
   async buildProposal(input) {
     const tolkning = await tolka(input.underlag, input.systemPrompt);
-    const forslag = kontera(tolkning.extraktion, input.tenantId);
-    return byggBokforingsProposal({
+
+    // Granskningsordningen (WP30/WP32) körs deterministiskt före
+    // konteringen: mottagarkontroll först, sedan privat, förskott,
+    // delmatchning, ÄTA, dubblett och anomali.
+    const granskning = await granskaUnderlag(input.db, input.tenantId, tolkning.extraktion);
+
+    if (granskning.eskalera) {
+      const proposal = byggEskaleringsProposal({
+        tenantId: input.tenantId,
+        documentId: input.underlagRef,
+        extraktion: tolkning.extraktion,
+        skal: granskning.eskaleringsSkal ?? "granskningen eskalerade underlaget",
+        flaggor: granskning.flaggor,
+        motor: tolkning.motor,
+        motorDetalj: tolkning.motor_detalj,
+        id: input.proposalId,
+        agentRuntime: input.agentRuntime,
+        mall: input.mall,
+        systemPrompt: input.systemPrompt,
+      });
+      return { proposal, flaggor: granskning.flaggor };
+    }
+
+    const forslag = kontera(
+      tolkning.extraktion,
+      input.tenantId,
+      undefined,
+      granskning.kostnadskontoOverride,
+    );
+    // Granskningens flaggor in i förslaget INNAN konfidensen räknas —
+    // varningsflaggor (dubblett, delmatchning, ÄTA) sänker konfidensen
+    // och trycker förslaget till granskningskön (bokforingsKonfidens).
+    forslag.flaggor.push(...granskning.flaggor);
+    const proposal = byggBokforingsProposal({
       systemPrompt: input.systemPrompt,
       tenantId: input.tenantId,
       // payload_ref är ett dokument i kärnan lokalt — dess uuid blir
@@ -53,6 +91,7 @@ const bokforing: ModulRuntime = {
       agentRuntime: input.agentRuntime,
       mall: input.mall,
     });
+    return { proposal, flaggor: forslag.flaggor };
   },
 };
 

@@ -96,7 +96,7 @@ export async function körJobb(db: PGlite, jobb: AgentJobb): Promise<JobbUtfall>
     systemPrompt = byggSystemPrompt(mall, t.rows[0]?.mall ?? "");
   }
 
-  const proposal = await runtime.buildProposal({
+  const { proposal, flaggor } = await runtime.buildProposal({
     db,
     tenantId: jobb.tenant_id,
     underlag: underlag.raw,
@@ -116,7 +116,10 @@ export async function körJobb(db: PGlite, jobb: AgentJobb): Promise<JobbUtfall>
     agent_id: agent.id,
   };
 
-  const resultat = await handleProposal(db, principal, proposal);
+  // Modulens granskningsflaggor (WP32) följer med som betrodd runtime-
+  // metadata — porten persisterar dem i proposals.flaggor tillsammans
+  // med sina egna (injection-screening).
+  const resultat = await handleProposal(db, principal, proposal, flaggor);
   switch (resultat.status) {
     case "duplicate":
       return { utfall: "duplicate", proposal_id: resultat.proposal_id };

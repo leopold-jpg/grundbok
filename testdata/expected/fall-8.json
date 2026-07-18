@@ -1,0 +1,18 @@
+{
+  "fall": 8,
+  "titel": "Dubblett — samma leverantör + belopp + period flaggas andra gången",
+  "tenant": "kund_a",
+  "forvantat": {
+    "kind": "journal_entry",
+    "eskalerad": false,
+    "lines": [
+      ["4010", 100000, 0],
+      ["2641", 6000, 0],
+      ["2440", 0, 106000]
+    ],
+    "flaggor_kravs": ["dubblett_misstankt"],
+    "flaggor_forbjudna": ["flag_wrong_tenant"],
+    "forsta_korningen_forbjuder": ["dubblett_misstankt"],
+    "status": "pending"
+  }
+}

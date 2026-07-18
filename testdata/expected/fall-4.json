@@ -1,0 +1,13 @@
+{
+  "fall": 4,
+  "titel": "Privat/verksamhetsfrämmande — flag_private_expense, ingen kostnadskontering",
+  "tenant": "kund_a",
+  "forvantat": {
+    "kind": "advisory_answer",
+    "eskalerad": true,
+    "lines": [],
+    "flaggor_kravs": ["flag_private_expense"],
+    "flaggor_forbjudna": ["flag_wrong_tenant"],
+    "status": "pending"
+  }
+}

@@ -9,7 +9,14 @@ export type KonteringsRad = {
   kredit_ore: number;
 };
 
-export type Flagga = { id: string; niva: "info" | "varning"; text: string };
+export type Flagga = {
+  id: string;
+  niva: "info" | "varning";
+  text: string;
+  /** Maskinläsbar flaggdata (WP32): t.ex. restbelopp för missing_receipt
+   *  (kompletteringskön läser härifrån) eller median för anomaly_amount. */
+  data?: Record<string, number | string>;
+};
 
 export type Forslag = {
   dokument: Extraktion;
@@ -32,6 +39,10 @@ export function kontera(
   extraktion: Extraktion,
   tenantId: string,
   affarshandelsedatum?: string,
+  /** Granskningens kontoöverstyrning (WP32): förskott konteras 1480
+   *  Förskott till leverantör i stället för kostnadskonto — beslutet
+   *  fattas deterministiskt i granskning.ts, aldrig av LLM:en. */
+  kostnadskontoOverride?: { konto: string; namn: string },
 ): Forslag {
   const rules = loadKonteringRules();
   const kund = loadKundConfig(tenantId);
@@ -45,7 +56,10 @@ export function kontera(
   // Flagga om kvittots angivna moms avviker från regelverkets sats för
   // kategorin + datumet. Regelverket styr förslaget (lagen bestämmer satsen,
   // inte kvittot) — men avvikelsen ersätts aldrig tyst: konsulten avgör.
+  // Undantag (WP32-fynd): vid omvänd betalningsskyldighet SKA säljaren
+  // fakturera utan moms — dokumentets 0 kr är korrekt, aldrig en avvikelse.
   if (
+    moms.typ !== "omvand" &&
     extraktion.moms_ore !== null &&
     Math.abs(extraktion.moms_ore - moms_ore) > 1
   ) {
@@ -66,9 +80,15 @@ export function kontera(
   };
   const kostnadsKey =
     moms.typ === "omvand" ? "byggtjanst_omvand" : extraktion.kategori;
-  const kostnad =
+  const kostnadDef =
     rules.kostnadskonton[kostnadsKey] ?? rules.kostnadskonton["ovrigt"];
-  const kostnadskonto = overrides.konto_overrides?.[kostnadsKey] ?? kostnad.konto;
+  // Prioritet: granskningens override (förskott→1480) > kundens
+  // konto-overrides > skillens standard.
+  const kostnad = kostnadskontoOverride ?? kostnadDef;
+  const kostnadskonto =
+    kostnadskontoOverride?.konto ??
+    overrides.konto_overrides?.[kostnadsKey] ??
+    kostnadDef.konto;
 
   const motkontoDef =
     extraktion.betalsatt === "direkt"

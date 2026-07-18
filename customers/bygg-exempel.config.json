@@ -10,6 +10,7 @@
     "se/periodisering": { "version": "^0.1", "config": { "periodiseringsgrans_sek": 5000 } }
   },
   "approval": { "auto_godkann": false, "beloppsgrans_flagga_sek": 50000 },
+  "ordrar": { "ORD-2026-77": 5000000 },
   "integrationer": {
     "bokforing": { "typ": "fortnox_mock", "secret_ref": "fortnox/kund_b" }
   }
