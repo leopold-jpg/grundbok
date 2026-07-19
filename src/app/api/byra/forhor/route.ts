@@ -1,7 +1,9 @@
-import { NextResponse } from "next/server";
+import { NextResponse, after } from "next/server";
 import { getDb } from "@/lib/db/client";
+import { flushLangfuse } from "@/lib/observability/langfuse";
 import { kravKonsult, kravTenantIByra } from "@/auth/session";
 import { forhorsUnderlag } from "@/ytor/forhor";
+import { forhorFraga } from "@/modules/forhor";
 
 export const runtime = "nodejs";
 
@@ -37,4 +39,51 @@ export async function GET(req: Request) {
     return NextResponse.json({ fel: "förslaget finns inte hos klienten" }, { status: 404 });
   }
   return NextResponse.json(underlag);
+}
+
+// POST /api/byra/forhor — förhörschatten lager 2 (WP41): konsulten
+// förhör agenten om ETT specifikt förslag. Kontexten byggs strikt ur
+// tenantens data (RLS); svaret bär källa per påstående och persisteras
+// dubbelt: advisory_answer-förslag genom porten + fråga/svar fäst vid
+// det förhörda förslaget i audit_log (WP33-mönstret).
+export async function POST(req: Request) {
+  // Serverless-flush: spans skickas efter att svaret gått iväg — aldrig
+  // i requestens kritiska väg. No-op utan LANGFUSE-nycklar.
+  after(() => flushLangfuse());
+  const db = await getDb();
+  const krav = await kravKonsult(db, req);
+  if ("http" in krav) return NextResponse.json({ fel: krav.fel }, { status: krav.http });
+
+  const { tenant_id, proposal_id, fraga } = (await req.json().catch(() => ({}))) as {
+    tenant_id?: string;
+    proposal_id?: string;
+    fraga?: string;
+  };
+  if (!tenant_id || !fraga?.trim()) {
+    return NextResponse.json({ fel: "tenant_id och fraga krävs" }, { status: 400 });
+  }
+  if (!proposal_id || !UUID_RE.test(proposal_id)) {
+    return NextResponse.json({ fel: "proposal_id krävs (uuid)" }, { status: 400 });
+  }
+  if (!(await kravTenantIByra(db, krav.session, tenant_id))) {
+    return NextResponse.json({ fel: "klientbolaget tillhör inte din byrå" }, { status: 403 });
+  }
+
+  try {
+    const svar = await forhorFraga(db, {
+      tenantId: tenant_id,
+      proposalId: proposal_id,
+      fraga: fraga.trim(),
+      stalldAv: krav.session.user.id,
+    });
+    if (!svar) {
+      return NextResponse.json({ fel: "förslaget finns inte hos klienten" }, { status: 404 });
+    }
+    return NextResponse.json(svar);
+  } catch (err) {
+    return NextResponse.json(
+      { fel: err instanceof Error ? err.message : String(err) },
+      { status: 422 },
+    );
+  }
 }

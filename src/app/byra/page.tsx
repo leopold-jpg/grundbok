@@ -243,6 +243,25 @@ type ForhorsUnderlag = {
   }[];
 };
 
+// Förhörssvaret (WP41) — speglar ForhorsChattSvar i src/modules/forhor.
+type ForhorsChattSvar = {
+  svar: string;
+  kallor: { typ: string; ref: string }[];
+  konfidens: number;
+  hanvisa_till_manniska: boolean;
+  svar_proposal_id: string;
+  motor: string;
+};
+
+type ForhorsChattInlagg = {
+  fraga: string;
+  svar?: string;
+  kallor?: { typ: string; ref: string }[];
+  konfidens?: number;
+  hanvisa?: boolean;
+  motor?: string;
+};
+
 const kr = (ore: number) =>
   (ore / 100).toLocaleString("sv-SE", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
@@ -306,9 +325,19 @@ const ANGRA_FONSTER_MS = 6000;
 // konfidens + policyutfall (omräknat mot gällande policy) och motpartens
 // 3 senaste verifikat/förslag hos tenanten. Deterministisk läsning —
 // ingen LLM-runda. V öppnar/stänger (tangenten hanteras i AttestSektion).
+// Lager 2 (WP41): frågefältet under panelen förhör agenten om DETTA
+// förslag — svaret bär källa per påstående och loggas på förslaget.
 function VarforPanel({ rad }: { rad: KoRad }) {
   const [underlag, setUnderlag] = useState<ForhorsUnderlag | null>(null);
   const [fel, setFel] = useState(false);
+  // Förhöret (WP41): tråden hör till ETT förslag — radbyte nollställer.
+  // Serversidan bär minnet (audit-loggen); klienttråden är arbetsyta.
+  const [chatt, setChatt] = useState<ForhorsChattInlagg[]>([]);
+  const [chattFraga, setChattFraga] = useState("");
+  const [svarar, setSvarar] = useState(false);
+  const [chattFel, setChattFel] = useState("");
+  const radIdRef = useRef(rad.id);
+  radIdRef.current = rad.id;
 
   // Hämtas per förslag: radbyte med öppen panel laddar nya radens
   // underlag; ett sent svar för en lämnad rad kastas (aktiv-vakten).
@@ -316,6 +345,9 @@ function VarforPanel({ rad }: { rad: KoRad }) {
     let aktiv = true;
     setUnderlag(null);
     setFel(false);
+    setChatt([]);
+    setChattFraga("");
+    setChattFel("");
     hamta<ForhorsUnderlag>(
       `/api/byra/forhor?klient=${encodeURIComponent(rad.tenant_id)}` +
         `&proposal=${encodeURIComponent(rad.id)}`,
@@ -328,6 +360,44 @@ function VarforPanel({ rad }: { rad: KoRad }) {
       aktiv = false;
     };
   }, [rad.id, rad.tenant_id]);
+
+  async function stallFraga() {
+    const q = chattFraga.trim();
+    if (!q || svarar) return;
+    const forId = rad.id;
+    setChattFel("");
+    setChatt((c) => [...c, { fraga: q }]);
+    setChattFraga("");
+    setSvarar(true);
+    try {
+      const r = await post<ForhorsChattSvar>("/api/byra/forhor", {
+        tenant_id: rad.tenant_id,
+        proposal_id: forId,
+        fraga: q,
+      });
+      if (radIdRef.current !== forId) return; // raden lämnad — tråden är ny
+      setChatt((c) =>
+        c.map((m, i) =>
+          i === c.length - 1 && m.fraga === q && m.svar === undefined
+            ? {
+                fraga: q,
+                svar: r.svar,
+                kallor: r.kallor,
+                konfidens: r.konfidens,
+                hanvisa: r.hanvisa_till_manniska,
+                motor: r.motor,
+              }
+            : m,
+        ),
+      );
+    } catch (e) {
+      if (radIdRef.current === forId) {
+        setChattFel(e instanceof Error ? e.message : String(e));
+      }
+    } finally {
+      if (radIdRef.current === forId) setSvarar(false);
+    }
+  }
 
   if (fel) {
     return (
@@ -457,6 +527,59 @@ function VarforPanel({ rad }: { rad: KoRad }) {
         {" · "}
         injection-screening: {u.proposal.provenance.injection_screened ? "ja" : "nej"}
       </p>
+
+      <div className="diff-rubrik">Förhör agenten</div>
+      {chatt.length > 0 && (
+        <div className="chatt-historik" style={{ marginBottom: "var(--sp-3)" }}>
+          {chatt.map((m, i) => (
+            <div key={i} style={{ display: "contents" }}>
+              <div className="bubbla konsult">{m.fraga}</div>
+              {m.svar !== undefined && (
+                <div className="bubbla agent">
+                  {m.svar}
+                  <div className="bubbla-meta">
+                    {m.kallor?.map((k, j) => (
+                      <Chip key={j}>
+                        {k.typ}: {k.ref}
+                      </Chip>
+                    ))}
+                    {m.hanvisa && <Chip varning>hänvisar till människa</Chip>}
+                    {m.konfidens !== undefined && (
+                      <Chip>konfidens {Math.round(m.konfidens * 100)} %</Chip>
+                    )}
+                    {m.motor === "fallback" && <Chip>deterministisk fallback</Chip>}
+                  </div>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+      {svarar && <p className="laddar">agenten svarar …</p>}
+      <div className="chatt-rad">
+        <input
+          type="text"
+          value={chattFraga}
+          onChange={(e) => setChattFraga(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && !svarar) {
+              e.preventDefault();
+              void stallFraga();
+            }
+          }}
+          placeholder="Fråga om detta förslag — t.ex. ”varför 4010 och inte 5460?” …"
+          aria-label="Fråga agenten om förslaget"
+          disabled={svarar}
+        />
+        <button onClick={() => void stallFraga()} disabled={svarar || !chattFraga.trim()}>
+          Förhör
+        </button>
+      </div>
+      <p className="tyst varfor-provenans">
+        Svaren bygger enbart på klientens eget underlag och loggas på förslaget.
+        Chatten kan förklara men aldrig ändra — beslut fattas med Attestera/Avvisa.
+      </p>
+      {chattFel && <p className="fel">{chattFel}</p>}
     </div>
   );
 }

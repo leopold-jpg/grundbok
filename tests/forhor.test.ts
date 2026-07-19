@@ -1,13 +1,20 @@
+// Deterministisk motor i test — flaggan läses vid anrop, inte vid
+// import, så toppen av filen räcker (samma mönster som radgivning.test).
+process.env.GRUNDBOK_FORCE_FALLBACK = "1";
+
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { createDb } from "../src/lib/db/client";
+import { withTenant } from "../src/lib/db/tenant";
 import { handleProposal, decideProposal, type Principal } from "../src/lib/decisions";
 import { forhorsUnderlag } from "../src/ytor/forhor";
+import { forhorFraga } from "../src/modules/forhor";
 import { exempelProposal } from "./helpers";
 
-// Förhörschatten lager 1 (WP40): Varför-panelens deterministiska
-// underlag. Ingen LLM — allt läses ur befintliga tabeller, RLS-scopat.
+// Förhörschatten (WP40/WP41): Varför-panelens deterministiska underlag
+// och förhörsflödet — kontext strikt ur tenantens data, källhänvisning
+// per påstående, dubbel persistens (advisory_answer + audit-kedjan).
 
 const db = await createDb();
 
@@ -151,4 +158,133 @@ test("forhorsUnderlag: motpartshistoriken läcker aldrig över tenantgränsen", 
   const u = await forhorsUnderlag(db, "kund_b", hosB.id);
   assert.ok(u);
   assert.equal(u!.historik.length, 0);
+});
+
+// ------------------------------------------------------- WP41: chatten
+
+test("forhorFraga: paketregelsfråga citerar regeln med regel-id som källa", async () => {
+  const p = exempelProposal({
+    id: randomUUID(),
+    tenant_id: "kund_b",
+    contract_version: "0.3.0",
+    mall_id: "bokforing",
+    mall_version: "1.1.0",
+    motpart: "Underentreprenad Test AB",
+  });
+  assert.equal((await handleProposal(db, principalB, p)).status, "pending");
+
+  const svar = await forhorFraga(db, {
+    tenantId: "kund_b",
+    proposalId: p.id,
+    fraga: "Vad säger omvänd byggmoms här?",
+    stalldAv: "konsult-test",
+  });
+  assert.ok(svar);
+  assert.equal(svar!.motor, "fallback");
+  assert.ok(svar!.svar.includes("omvand-byggmoms"));
+  assert.ok(svar!.kallor.some((k) => k.typ === "paketregel" && k.ref === "omvand-byggmoms"));
+  assert.equal(svar!.hanvisa_till_manniska, false);
+});
+
+test("forhorFraga: kontofråga besvaras ur agentens motivering med källa", async () => {
+  const p = exempelProposal({ id: randomUUID() });
+  assert.equal((await handleProposal(db, principalA, p)).status, "pending");
+
+  const svar = await forhorFraga(db, {
+    tenantId: "kund_a",
+    proposalId: p.id,
+    fraga: "Varför 4010 och inte 5460?",
+    stalldAv: "konsult-test",
+  });
+  assert.ok(svar);
+  assert.ok(svar!.svar.includes("4010"));
+  assert.ok(svar!.kallor.some((k) => k.typ === "motivering"));
+});
+
+test("forhorFraga: rådgivningsfråga hänvisas till människa — aldrig ett svar i sak", async () => {
+  const p = exempelProposal({ id: randomUUID() });
+  assert.equal((await handleProposal(db, principalA, p)).status, "pending");
+
+  const svar = await forhorFraga(db, {
+    tenantId: "kund_a",
+    proposalId: p.id,
+    fraga: "Ska jag byta bolagsform till aktiebolag nästa år?",
+    stalldAv: "konsult-test",
+  });
+  assert.ok(svar);
+  assert.equal(svar!.hanvisa_till_manniska, true);
+  assert.ok(/människa/i.test(svar!.svar));
+});
+
+test("forhorFraga: fråga utanför underlaget ger 'underlag saknas' — aldrig en gissning", async () => {
+  const p = exempelProposal({ id: randomUUID() });
+  assert.equal((await handleProposal(db, principalA, p)).status, "pending");
+
+  const svar = await forhorFraga(db, {
+    tenantId: "kund_a",
+    proposalId: p.id,
+    fraga: "Vad tycker du om vädret i Skåne?",
+    stalldAv: "konsult-test",
+  });
+  assert.ok(svar);
+  assert.ok(/underlag saknas/i.test(svar!.svar));
+  assert.equal(svar!.hanvisa_till_manniska, true);
+});
+
+test("forhorFraga: fråga + svar fästs vid förslaget i audit-kedjan och svaret går genom porten", async () => {
+  const p = exempelProposal({ id: randomUUID() });
+  assert.equal((await handleProposal(db, principalA, p)).status, "pending");
+
+  const fraga = "Varför konto 4010 för det här inköpet?";
+  const svar = await forhorFraga(db, {
+    tenantId: "kund_a",
+    proposalId: p.id,
+    fraga,
+    stalldAv: "konsult-test",
+  });
+  assert.ok(svar);
+
+  // Rex-kedjan: audit-händelsen bär fråga, svar, källor och pekar på det
+  // FÖRHÖRDA förslaget (WP33-mönstret).
+  const audit = await withTenant(db, "kund_a", (tx) =>
+    tx.query<{ payload: Record<string, unknown> }>(
+      `SELECT payload FROM audit_log WHERE event_type = 'forhor'
+       AND payload->>'proposalId' = $1`,
+      [p.id],
+    ),
+  );
+  assert.equal(audit.rows.length, 1);
+  assert.equal(audit.rows[0].payload.fraga, fraga);
+  assert.equal(audit.rows[0].payload.svar, svar!.svar);
+  assert.equal(audit.rows[0].payload.stalldAv, "konsult-test");
+  assert.equal(audit.rows[0].payload.svarProposalId, svar!.svar_proposal_id);
+
+  // Svaret är ett advisory_answer-förslag genom porten — ingen sidodörr.
+  const svarsRad = await withTenant(db, "kund_a", (tx) =>
+    tx.query<{ kind: string; payload: { provenance: { input_refs: string[] } } }>(
+      `SELECT kind, payload FROM proposals WHERE id = $1`,
+      [svar!.svar_proposal_id],
+    ),
+  );
+  assert.equal(svarsRad.rows[0].kind, "advisory_answer");
+  assert.ok(svarsRad.rows[0].payload.provenance.input_refs.includes(`proposal:${p.id}`));
+});
+
+test("forhorFraga: RLS — en annan tenants förslag kan aldrig förhöras", async () => {
+  const p = exempelProposal({ id: randomUUID() });
+  assert.equal((await handleProposal(db, principalA, p)).status, "pending");
+
+  const svar = await forhorFraga(db, {
+    tenantId: "kund_b",
+    proposalId: p.id,
+    fraga: "Varför ser jag det här?",
+    stalldAv: "konsult-test",
+  });
+  assert.equal(svar, null);
+
+  // Inget audit-spår hos fel tenant.
+  const audit = await withTenant(db, "kund_b", (tx) =>
+    tx.query(`SELECT 1 FROM audit_log WHERE event_type = 'forhor' AND payload->>'proposalId' = $1`, [p.id]),
+  );
+  assert.equal(audit.rows.length, 0);
 });
