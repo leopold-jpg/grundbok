@@ -142,6 +142,32 @@ Nya testfiler (20 nya tester totalt i passet):
   endast i detaljpanelen (AttestSektion/VarforPanel) + typer;
   `byra.css` endast nya `varfor-*`-klasser.
 
+## Adversariell granskning (före PR)
+
+Sex parallella granskare (logik, säkerhet/RLS, telemetri/maskering,
+kontrakt/port, React/UI, kravtäckning/revir) över hela diffen mot main;
+varje råfynd prövades av tre oberoende skeptiker med uppdraget att
+motbevisa. 11 råfynd → 2 bekräftade, båda åtgärdade:
+
+1. **Chattrådens inläggsmatchning** (medium): uppdatering/borttagning av
+   inlägg matchade på index + frågetext — skört vid radbyte mitt under
+   svar. Fixat: varje inlägg bär ett klientlokalt id; all uppdatering
+   matchar på id. (Egenfunnet i samma pass: `svarar`-låset släpptes
+   aldrig vid radbyte mitt under svar — nya radens fält förblev
+   inaktiverat. Fixat i radbytes-effekten.)
+2. **Kostnadsvaktens samtidighet** (low): check och audit ligger i
+   separata transaktioner — två parallella frågor vid 19/20 kan båda
+   passera. Medvetet accepterat och dokumenterat i koden: taket är
+   kostnadsskydd, inte säkerhetsgräns, och ett lås över LLM-anropet
+   vore värre än ett enstaka överskott.
+
+Avfärdade fynd (0–1 av 3 skeptiker): bl.a. GET utan try/catch (klienten
+hanterar null → vänligt felläge, samma mönster som övriga GET-routes),
+V-tangent med öppet avvisa-fält (target-vakten täcker fokus i fält,
+samma beteende som A/X/U), hänvisningssvarets konfidens 0.9 → syns i
+beslutsloggen (avsiktligt — även "det här kräver en människa" är ett
+dokumenterbart svar).
+
 ## Inget blockerat
 
 Alla fyra WP:n genomförda utan blockeringar. Öppna frågor ur

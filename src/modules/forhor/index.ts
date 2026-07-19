@@ -182,7 +182,11 @@ async function forhorFragaInner(
   const { tenantId, proposalId, fraga, stalldAv } = input;
 
   // Kostnadsvakten FÖRST — före all kontextbyggnad och LLM. Taket
-  // räknas ur audit-kedjan i nuläget (aldrig lagrad räknare).
+  // räknas ur audit-kedjan i nuläget (aldrig lagrad räknare). MEDVETET
+  // MJUKT under samtidighet (granskningsfynd): två parallella frågor
+  // vid 19/20 kan båda passera — check och audit ligger i separata
+  // transaktioner, och ett lås över LLM-anropet vore värre än ett
+  // enstaka överskott. Taket är kostnadsskydd, inte säkerhetsgräns.
   if ((await forhorsFragorIdag(db, tenantId)) >= FORHOR_TAK_PER_DAG) {
     throw new ForhorsTakError();
   }

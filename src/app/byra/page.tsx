@@ -257,6 +257,9 @@ type ForhorsChattSvar = {
 };
 
 type ForhorsChattInlagg = {
+  /** Klientlokalt id — uppdatering/borttagning matchar på id, aldrig
+   *  på index eller frågetext (granskningsfynd: skört vid radbyten). */
+  id: number;
   fraga: string;
   svar?: string;
   kallor?: { typ: string; ref: string }[];
@@ -346,6 +349,7 @@ function VarforPanel({ rad }: { rad: KoRad }) {
   const [laddSteg, setLaddSteg] = useState(0);
   const radIdRef = useRef(rad.id);
   radIdRef.current = rad.id;
+  const inlaggIdRef = useRef(0);
 
   // Tydlig laddindikator (WP42): tre stadier så väntan aldrig känns död.
   useEffect(() => {
@@ -372,6 +376,9 @@ function VarforPanel({ rad }: { rad: KoRad }) {
     setChattFel("");
     setAnvandaExtra(0);
     setTakNatt(false);
+    // Radbyte mitt under ett svar: pågående anrop hör till förra raden
+    // (radIdRef-vakten släpper aldrig in det) — lås inte nya radens fält.
+    setSvarar(false);
     hamta<ForhorsUnderlag>(
       `/api/byra/forhor?klient=${encodeURIComponent(rad.tenant_id)}` +
         `&proposal=${encodeURIComponent(rad.id)}`,
@@ -389,8 +396,9 @@ function VarforPanel({ rad }: { rad: KoRad }) {
     const q = chattFraga.trim();
     if (!q || svarar) return;
     const forId = rad.id;
+    const inlaggId = ++inlaggIdRef.current;
     setChattFel("");
-    setChatt((c) => [...c, { fraga: q }]);
+    setChatt((c) => [...c, { id: inlaggId, fraga: q }]);
     setChattFraga("");
     setSvarar(true);
     try {
@@ -412,7 +420,7 @@ function VarforPanel({ rad }: { rad: KoRad }) {
       if (r.status === 429) {
         setTakNatt(true);
         setChattFel(data.fel ?? "Dagens förhörsfrågor är använda — chatten öppnar igen i morgon.");
-        setChatt((c) => c.filter((m) => !(m.fraga === q && m.svar === undefined)));
+        setChatt((c) => c.filter((m) => m.id !== inlaggId));
         return;
       }
       if (!r.ok || data.svar === undefined) {
@@ -422,14 +430,15 @@ function VarforPanel({ rad }: { rad: KoRad }) {
           "Chatten vilar just nu — underlaget i panelen ovan gäller som vanligt. " +
             "Försök igen om en stund.",
         );
-        setChatt((c) => c.filter((m) => !(m.fraga === q && m.svar === undefined)));
+        setChatt((c) => c.filter((m) => m.id !== inlaggId));
         return;
       }
       setAnvandaExtra((n) => n + 1);
       setChatt((c) =>
-        c.map((m, i) =>
-          i === c.length - 1 && m.fraga === q && m.svar === undefined
+        c.map((m) =>
+          m.id === inlaggId
             ? {
+                id: inlaggId,
                 fraga: q,
                 svar: data.svar!,
                 kallor: data.kallor,
@@ -446,7 +455,7 @@ function VarforPanel({ rad }: { rad: KoRad }) {
           "Chatten vilar just nu — underlaget i panelen ovan gäller som vanligt. " +
             "Försök igen om en stund.",
         );
-        setChatt((c) => c.filter((m) => !(m.fraga === q && m.svar === undefined)));
+        setChatt((c) => c.filter((m) => m.id !== inlaggId));
       }
     } finally {
       if (radIdRef.current === forId) setSvarar(false);
@@ -587,8 +596,8 @@ function VarforPanel({ rad }: { rad: KoRad }) {
           <div className="diff-rubrik">Förhör agenten</div>
           {chatt.length > 0 && (
             <div className="chatt-historik" style={{ marginBottom: "var(--sp-3)" }}>
-              {chatt.map((m, i) => (
-                <div key={i} style={{ display: "contents" }}>
+              {chatt.map((m) => (
+                <div key={m.id} style={{ display: "contents" }}>
                   <div className="bubbla konsult">{m.fraga}</div>
                   {m.svar !== undefined && (
                     <div className="bubbla agent">
