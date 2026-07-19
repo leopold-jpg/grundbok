@@ -2,6 +2,11 @@ import { randomUUID } from "node:crypto";
 import type { PGlite } from "@electric-sql/pglite";
 import Anthropic from "@anthropic-ai/sdk";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
+import {
+  propagateAttributes,
+  startActiveObservation,
+  startObservation,
+} from "@langfuse/tracing";
 import { z } from "zod";
 import {
   CONTRACT_VERSION,
@@ -96,6 +101,45 @@ export async function svaraPaFraga(
   tenantId: string,
   fraga: string,
 ): Promise<RadgivningsSvar> {
+  // Langfuse-trace för hela rådgivningsflödet. Kravet: tenant_id och
+  // agent_id på varje trace — rådgivningen körs i requesttid utan
+  // agent-rad, så modulens principalnamn är dess agent-identitet.
+  // Utan LANGFUSE-nycklar är hela wrappern en no-op (noop-tracer).
+  return propagateAttributes(
+    {
+      traceName: "radgivning-chatt",
+      userId: tenantId,
+      metadata: { tenant_id: tenantId, agent_id: "modul:radgivning" },
+      tags: ["radgivning"],
+    },
+    () =>
+      startActiveObservation(
+        "radgivning-fraga",
+        async (span) => {
+          const svar = await svaraPaFragaInner(db, tenantId, fraga);
+          span.update({
+            input: { fraga, fraga_langd: fraga.length },
+            output: {
+              svar: svar.svar,
+              lagrum: svar.lagrum,
+              konfidens: svar.konfidens,
+              proposal_id: svar.proposal_id,
+              status: svar.status,
+              motor: svar.motor,
+            },
+          });
+          return svar;
+        },
+        { asType: "chain" },
+      ),
+  );
+}
+
+async function svaraPaFragaInner(
+  db: PGlite,
+  tenantId: string,
+  fraga: string,
+): Promise<RadgivningsSvar> {
   // Modulens principal — samma scopes som ett agent_keys-manifest skulle
   // ge (WP4): skriva förslag + läsa saldon. Aldrig documents:read.
   const principal: Principal = {
@@ -109,7 +153,18 @@ export async function svaraPaFraga(
   // (a) Frågan är untrusted input och screenas FÖRE LLM-anropet. Fynd
   // stoppar inte flödet — frågan behandlas som data (inramad i <fraga>)
   // och fynden följer med förslaget som flaggor (se injektionsNoter nedan).
-  const fynd = kontrolleraInjection(fraga);
+  const screening = startObservation(
+    "injection-screening",
+    { input: { fraga_langd: fraga.length } },
+    { asType: "guardrail" },
+  );
+  let fynd: ReturnType<typeof kontrolleraInjection>;
+  try {
+    fynd = kontrolleraInjection(fraga);
+    screening.update({ output: { antal_fynd: fynd.length } });
+  } finally {
+    screening.end();
+  }
 
   // (b) Saldostöd — scope-gated: uppslag görs bara om principalen bär
   // ledger:read. kontosaldo går genom withTenant, så RLS garanterar att
@@ -118,12 +173,49 @@ export async function svaraPaFraga(
   const kontoMatch = SALDO_RE.test(fraga) ? fraga.match(KONTO_I_FRAGA_RE) : null;
   if (kontoMatch && principal.scopes.includes("ledger:read")) {
     const konto = kontoMatch[1];
-    const ore = await kontosaldo(db, tenantId, konto);
-    saldo = { konto, ore, formaterat: formateraOre(ore) };
+    const saldoSpan = startObservation(
+      "kontosaldo",
+      { input: { konto } },
+      { asType: "tool" },
+    );
+    try {
+      const ore = await kontosaldo(db, tenantId, konto);
+      saldo = { konto, ore, formaterat: formateraOre(ore) };
+      // ore är ett belopp — maskeras av processorn ("ore" står inte i allowlisten).
+      saldoSpan.update({ output: { konto, ore } });
+    } catch (err) {
+      saldoSpan.update({
+        level: "ERROR",
+        statusMessage: err instanceof Error ? err.name : "okänt fel",
+      });
+      throw err;
+    } finally {
+      saldoSpan.end();
+    }
   }
 
   // (c) Deterministisk retrieval mot korpusen (topp-4 chunks).
-  const traffar = sokKorpus(fraga);
+  const retrieval = startObservation(
+    "korpus-retrieval",
+    { input: { fraga }, metadata: { korpus_version: CORPUS_VERSION } },
+    { asType: "retriever" },
+  );
+  let traffar: Traff[];
+  try {
+    traffar = sokKorpus(fraga);
+    retrieval.update({
+      output: {
+        antal_traffar: traffar.length,
+        traffar: traffar.map((t) => ({
+          skill: t.chunk.skill,
+          version: t.chunk.version,
+          rubrik: t.chunk.rubrik,
+        })),
+      },
+    });
+  } finally {
+    retrieval.end();
+  }
 
   const anvandAnthropic =
     Boolean(process.env.ANTHROPIC_API_KEY) &&
@@ -189,7 +281,29 @@ export async function svaraPaFraga(
   // (e) Genom porten — ingen sidodörr. Seedad radgivning-policy
   // auto-godkänner advisory_answer vid konfidens ≥ 0.5; under det hamnar
   // svaret i konsultens godkännandekö precis som allt annat.
-  const resultat = await handleProposal(db, principal, proposal);
+  const port = startObservation(
+    "beslutsport",
+    { input: { proposal_id: proposal.id, kind: proposal.kind, konfidens: proposal.confidence } },
+    { asType: "span" },
+  );
+  let resultat: Awaited<ReturnType<typeof handleProposal>>;
+  try {
+    resultat = await handleProposal(db, principal, proposal);
+    port.update({
+      output: { status: resultat.status, proposal_id: "proposal_id" in resultat ? resultat.proposal_id : proposal.id },
+      ...(resultat.status === "avvisad_vid_porten"
+        ? { level: "ERROR" as const, statusMessage: "avvisad_vid_porten" }
+        : {}),
+    });
+  } catch (err) {
+    port.update({
+      level: "ERROR",
+      statusMessage: err instanceof Error ? err.name : "okänt fel",
+    });
+    throw err;
+  } finally {
+    port.end();
+  }
   if (resultat.status === "avvisad_vid_porten") {
     // Kan bara inträffa vid bugg i modulen (vi bygger och hashar själva).
     throw new Error(
@@ -272,24 +386,72 @@ async function svaraMedAnthropic(
     ? `\n\n<kontosaldo konto="${saldo.konto}">Saldo (debet − kredit) just nu: ${saldo.formaterat}</kontosaldo>`
     : "";
 
-  const response = await client.messages.parse({
-    model: MODEL,
-    max_tokens: 2048,
-    system: SYSTEM,
-    messages: [
-      {
-        role: "user",
-        content: `${utdrag}${saldoBlock}\n\n<fraga>\n${fraga}\n</fraga>`,
+  // Langfuse-generation — input/output maskeras centralt av processorn;
+  // metadata bär endast versionsstämplar (prompt_hash binder prompt+korpus,
+  // samma stämpel som provenance). statusMessage: endast felklass.
+  const generation = startObservation(
+    "radgivning-generation",
+    {
+      model: MODEL,
+      modelParameters: { max_tokens: 2048 },
+      input: {
+        system: SYSTEM,
+        messages: [{ role: "user", utdrag, saldo: saldoBlock, fraga }],
       },
-    ],
-    output_config: { format: zodOutputFormat(SvarSchema) },
-  });
+      metadata: {
+        prompt_hash: sha256Hex(SYSTEM + CORPUS_VERSION),
+        korpus_version: CORPUS_VERSION,
+        module_version: MODULE_VERSION,
+      },
+    },
+    { asType: "generation" },
+  );
 
-  if (response.stop_reason === "refusal") {
-    throw new Error("Modellen avböjde frågan (stop_reason: refusal)");
+  let felMarkerat = false;
+  try {
+    const response = await client.messages.parse({
+      model: MODEL,
+      max_tokens: 2048,
+      system: SYSTEM,
+      messages: [
+        {
+          role: "user",
+          content: `${utdrag}${saldoBlock}\n\n<fraga>\n${fraga}\n</fraga>`,
+        },
+      ],
+      output_config: { format: zodOutputFormat(SvarSchema) },
+    });
+
+    generation.update({
+      usageDetails: {
+        input: response.usage.input_tokens,
+        output: response.usage.output_tokens,
+        cache_read_input_tokens: response.usage.cache_read_input_tokens ?? 0,
+        cache_creation_input_tokens: response.usage.cache_creation_input_tokens ?? 0,
+      },
+    });
+
+    if (response.stop_reason === "refusal") {
+      generation.update({ level: "ERROR", statusMessage: "refusal" });
+      felMarkerat = true;
+      throw new Error("Modellen avböjde frågan (stop_reason: refusal)");
+    }
+    if (!response.parsed_output) {
+      generation.update({ level: "ERROR", statusMessage: "schemavalidering föll" });
+      felMarkerat = true;
+      throw new Error("Svaret kunde inte valideras mot schemat");
+    }
+    generation.update({ output: response.parsed_output });
+    return response.parsed_output;
+  } catch (err) {
+    if (!felMarkerat) {
+      generation.update({
+        level: "ERROR",
+        statusMessage: err instanceof Error ? err.name : "okänt fel",
+      });
+    }
+    throw err;
+  } finally {
+    generation.end();
   }
-  if (!response.parsed_output) {
-    throw new Error("Svaret kunde inte valideras mot schemat");
-  }
-  return response.parsed_output;
 }

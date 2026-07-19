@@ -16,6 +16,9 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.110.0",
     "@electric-sql/pglite": "^0.3.14",
+    "@langfuse/otel": "^5.9.1",
+    "@langfuse/tracing": "^5.9.1",
+    "@opentelemetry/sdk-trace-node": "^2.9.0",
     "framer-motion": "^12.42.2",
     "next": "^16.1.0",
     "react": "^19.2.3",

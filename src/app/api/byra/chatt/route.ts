@@ -1,5 +1,6 @@
-import { NextResponse } from "next/server";
+import { NextResponse, after } from "next/server";
 import { getDb } from "@/lib/db/client";
+import { flushLangfuse } from "@/lib/observability/langfuse";
 import { svaraPaFraga } from "@/modules/radgivning";
 import { kravKonsult, kravTenantIByra } from "@/auth/session";
 
@@ -9,6 +10,9 @@ export const runtime = "nodejs";
 // går via ledger:read scopat till vald klient; svaret bär lagrum och
 // konfidens. Historiken bor hos klienten (sessionStorage per konsult).
 export async function POST(req: Request) {
+  // Serverless-flush: spans skickas efter att svaret gått iväg — aldrig
+  // i requestens kritiska väg. No-op utan LANGFUSE-nycklar.
+  after(() => flushLangfuse());
   const db = await getDb();
   const krav = await kravKonsult(db, req);
   if ("http" in krav) return NextResponse.json({ fel: krav.fel }, { status: krav.http });
