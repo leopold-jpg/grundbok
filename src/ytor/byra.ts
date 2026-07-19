@@ -107,7 +107,8 @@ export type KlientKompletteringar = {
   tenant_namn: string;
   manad: ManadsStatus;
   rader: ByraKomplettering[];
-  /** Färdigt mejlutkast för de öppna raderna — mailto: i natt. */
+  /** Färdigt mejlutkast för de öppna raderna — förhandsvisning; själva
+   *  sändningen gör servern via mejladaptern (WP23). */
   utkast: { subject: string; body: string } | null;
 };
 

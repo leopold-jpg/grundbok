@@ -362,6 +362,44 @@ CREATE TABLE IF NOT EXISTS underlag (
 CREATE UNIQUE INDEX IF NOT EXISTS underlag_tenant_hash_idx
   ON underlag (tenant_id, content_hash);
 
+-- WP23: mejladaptern. Adress per klient (kvitto+<tenant>@inbound.<domän>)
+-- → samma intake-flöde, källa 'mejl'. Endast registrerade avsändare
+-- släpps in; övriga hamnar i karantänlistan i byråns klientvy.
+-- Alla tre tabellerna är kunddatabärande: tenant_id + RLS.
+CREATE TABLE IF NOT EXISTS klient_avsandare (
+  id             uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id      text NOT NULL REFERENCES tenants(id),
+  email          text NOT NULL,
+  registrerad_av text NOT NULL,
+  created_at     timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (tenant_id, email)
+);
+
+-- Karantänen lagrar avsändare/ämne/antal — ALDRIG innehållet: ett brev
+-- från en overifierad avsändare får inte in sin payload i systemet.
+-- Kunden registrerar adressen och skickar om.
+CREATE TABLE IF NOT EXISTS mejl_karantan (
+  id            uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id     text NOT NULL REFERENCES tenants(id),
+  fran          text NOT NULL,
+  amne          text,
+  antal_bilagor integer NOT NULL DEFAULT 0,
+  mottaget      timestamptz NOT NULL DEFAULT now()
+);
+
+-- Utgående mejl (Påminn m.fl.): spårraden för vad som skickats, oavsett
+-- transport (postmark i drift, logg-adaptern lokalt). Innehållet är
+-- kunddata → tenant-scopat med RLS som allt annat.
+CREATE TABLE IF NOT EXISTS utgaende_mejl (
+  id        uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id text NOT NULL REFERENCES tenants(id),
+  till      jsonb NOT NULL,
+  amne      text NOT NULL,
+  brodtext  text NOT NULL,
+  adapter   text NOT NULL,
+  skickat   timestamptz NOT NULL DEFAULT now()
+);
+
 -- Operatörskonsolen (WP14): namngivna policymallar som väljs vid
 -- provisionering och KOPIERAS till tenantens autonomy_policies — mallen
 -- är operatörens data (service-vägens plan, inga app-grants), tenantens

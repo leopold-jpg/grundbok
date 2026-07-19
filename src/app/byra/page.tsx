@@ -668,10 +668,9 @@ function AttestSektion({
 // --------------------------------------------------- väntar på kunden
 
 /** Underlagsjakten (WP33): kompletteringskön per klient — saknade kvitton
- *  och frågor till kunden, med ålder, belopp, påminnelse (färdigt
- *  mejlutkast via mailto — mejladaptern kommer i intag-passet) och
- *  svarsregistrering. Månadsgrönt v0: grön chip när både attestkön och
- *  kompletteringskön är tomma. */
+ *  och frågor till kunden, med ålder, belopp, påminnelse (mejlas via
+ *  mejladaptern, WP23) och svarsregistrering. Månadsgrönt v0: grön chip
+ *  när både attestkön och kompletteringskön är tomma. */
 function VantaSektion({
   data,
   onForandring,
@@ -683,29 +682,32 @@ function VantaSektion({
   const [svarFor, setSvarFor] = useState<string | null>(null);
   const [svarText, setSvarText] = useState("");
   const [paminner, setPaminner] = useState<string | null>(null);
+  const [paminnelseBesked, setPaminnelseBesked] = useState("");
 
   const manad = new Date().toLocaleString("sv-SE", { month: "long" });
 
   const alderDagar = (iso: string) =>
     Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 86_400_000));
 
-  /** Påminn per klient: EN POST markerar alla öppna rader påminda
-   *  (atomärt server-side), sedan öppnas det färdiga utkastet i
-   *  konsultens mejlklient (mailto:). Öppnas mejlklienten inte (t.ex.
-   *  ingen konfigurerad) syns utkastet ändå via mailto-länken igen —
-   *  status i kön visar när senaste påminnelsen registrerades. */
+  /** Påminn per klient (WP23, ersätter mailto): EN POST — servern mejlar
+   *  det färdiga utkastet via mejladaptern till klientbolagets
+   *  klientanvändare och markerar först därefter alla öppna rader
+   *  påminda. Saknas klientanvändare svarar servern med tydligt fel och
+   *  ingenting markeras. */
   async function paminn(klient: KlientKompletteringar) {
     if (!klient.utkast) return;
     setFel("");
+    setPaminnelseBesked("");
     setPaminner(klient.tenant_id);
     try {
-      await post("/api/byra/kompletteringar", {
-        handling: "paminn",
-        tenant_id: klient.tenant_id,
-      });
-      window.location.href =
-        `mailto:?subject=${encodeURIComponent(klient.utkast.subject)}` +
-        `&body=${encodeURIComponent(klient.utkast.body)}`;
+      const svar = await post<{ antal: number; till: string[] }>(
+        "/api/byra/kompletteringar",
+        { handling: "paminn", tenant_id: klient.tenant_id },
+      );
+      setPaminnelseBesked(
+        `Påminnelse mejlad till ${svar.till.join(", ")} — ${svar.antal} ` +
+          `${svar.antal === 1 ? "rad" : "rader"} markerade som påminda.`,
+      );
       await onForandring();
     } catch (e) {
       setFel(e instanceof Error ? e.message : String(e));
@@ -739,10 +741,16 @@ function VantaSektion({
       <div className="steg-rubrik">
         <h2 className="steg-titel">Väntar på kunden</h2>
         <span className="steg-not">
-          saknade kvitton och frågor — påminnelsen är ett färdigt mejlutkast, svaret
-          fästs vid förslaget i beslutsunderlaget
+          saknade kvitton och frågor — påminnelsen mejlas färdigskriven till kunden,
+          svaret fästs vid förslaget i beslutsunderlaget
         </span>
       </div>
+
+      {paminnelseBesked && (
+        <div className="bokford" role="status" style={{ marginBottom: "var(--sp-3)" }}>
+          {paminnelseBesked}
+        </div>
+      )}
 
       {tomt ? (
         <TomtLage>
@@ -768,7 +776,7 @@ function VantaSektion({
                     onClick={() => void paminn(klient)}
                     disabled={paminner === klient.tenant_id}
                   >
-                    {paminner === klient.tenant_id ? "Påminner …" : "Påminn (mejlutkast)"}
+                    {paminner === klient.tenant_id ? "Mejlar …" : "Påminn (mejlas)"}
                   </button>
                 )}
               </span>

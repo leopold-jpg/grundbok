@@ -5,7 +5,7 @@ import { kompletteringarForByra } from "@/ytor/byra";
 import {
   skapaFraga,
   markeraPamind,
-  paminnAllaOppna,
+  paminnMedMejl,
   registreraSvar,
 } from "@/lib/kompletteringar";
 
@@ -67,14 +67,15 @@ export async function POST(req: Request) {
         return NextResponse.json({ ok: true, komplettering_id: r.id });
       }
       case "paminn": {
-        // Utan komplettering_id: ALLA öppna rader för klienten i en
-        // transaktion (Påminn-knappens flöde — atomärt, en audit-rad).
+        // Utan komplettering_id: Påminn-knappen (WP23) — det färdiga
+        // utkastet MEJLAS via adaptern till klientanvändarna, och först
+        // efter lyckad sändning markeras alla öppna rader påminda.
         if (!body.komplettering_id) {
-          const antal = await paminnAllaOppna(db, {
+          const utfall = await paminnMedMejl(db, {
             tenantId: body.tenant_id,
             paminddAv: konsult,
           });
-          return NextResponse.json({ ok: true, antal });
+          return NextResponse.json({ ok: true, ...utfall });
         }
         await markeraPamind(db, {
           tenantId: body.tenant_id,
