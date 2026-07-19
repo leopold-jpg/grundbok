@@ -1,4 +1,6 @@
-import { maskeraLangfuseAttribut } from "./mask";
+import type { ReadableSpan, SpanExporter } from "@opentelemetry/sdk-trace-base";
+import type { LangfuseSpanProcessor } from "@langfuse/otel";
+import { MASKERAT, maskeraLangfuseAttribut, maskeraMetadataAttribut } from "./mask";
 
 // Langfuse-init (observability). Tre hårda regler:
 //
@@ -34,6 +36,75 @@ export function langfuseAktiv(): boolean {
   );
 }
 
+const METADATA_PREFIX = [
+  "langfuse.observation.metadata.",
+  "langfuse.trace.metadata.",
+];
+
+/**
+ * Skrubbar de kanaler som LangfuseSpanProcessors mask-krok ALDRIG rör
+ * (adversariella granskningens fynd 1 och 3):
+ *
+ * - Spanstatus: SDK:n sätter err.message som status.message vid throw i
+ *   startActiveObservation — okontrollerad text (zod-fel, API-fel) som kan
+ *   citera payload. Helmaskas; felklassen syns via level/exception.type.
+ * - Exception-events: exception.message/stacktrace maskas, exception.type
+ *   (felklassen) behålls.
+ * - Flattad metadata (langfuse.*.metadata.<nyckel>): allowlist-grind per
+ *   nyckel — anropsplatserna kan inte längre läcka via metadata-kanalen.
+ */
+function skrubbaOmaskadeKanaler(span: ReadableSpan): void {
+  try {
+    const s = span as {
+      status?: { message?: string };
+      events?: { name?: string; attributes?: Record<string, unknown> }[];
+      attributes: Record<string, unknown>;
+    };
+    if (s.status?.message) s.status.message = MASKERAT;
+    for (const ev of s.events ?? []) {
+      if (ev.name === "exception" && ev.attributes) {
+        if ("exception.message" in ev.attributes) ev.attributes["exception.message"] = MASKERAT;
+        if ("exception.stacktrace" in ev.attributes) ev.attributes["exception.stacktrace"] = MASKERAT;
+      }
+    }
+    for (const [attrNyckel, varde] of Object.entries(s.attributes)) {
+      const prefix = METADATA_PREFIX.find((p) => attrNyckel.startsWith(p));
+      if (prefix) {
+        s.attributes[attrNyckel] = maskeraMetadataAttribut(
+          attrNyckel.slice(prefix.length),
+          varde,
+        ) as (typeof s.attributes)[string];
+      }
+    }
+  } catch {
+    // Skrubbningen får aldrig fälla exporten.
+  }
+}
+
+/**
+ * Bygger LangfuseSpanProcessor med BÅDA maskeringslagren: mask-kroken för
+ * input/output och skrubbningen av status/exception/metadata-kanalerna.
+ * Exporterad så att låstesterna kör exakt samma processor som produktionen
+ * (med in-memory-exporter i stället för nätet).
+ */
+export async function skapaLangfuseProcessor(
+  exporter?: SpanExporter,
+): Promise<LangfuseSpanProcessor> {
+  const { LangfuseSpanProcessor } = await import("@langfuse/otel");
+  const processor = new LangfuseSpanProcessor({
+    ...(exporter ? { exporter } : {}),
+    mask: ({ data }) => maskeraLangfuseAttribut(data),
+    // Payloaden är maskerad — det finns aldrig media att ladda upp.
+    mediaUploadEnabled: false,
+  });
+  const inreOnEnd = processor.onEnd.bind(processor);
+  processor.onEnd = (span) => {
+    skrubbaOmaskadeKanaler(span);
+    inreOnEnd(span);
+  };
+  return processor;
+}
+
 /**
  * Registrerar OTel-providern med LangfuseSpanProcessor. Anropas från
  * Next-instrumentationen (src/instrumentation.ts) och worker-scriptet.
@@ -47,15 +118,10 @@ export async function initLangfuse(): Promise<void> {
   if (!langfuseAktiv()) return;
 
   try {
-    const [{ LangfuseSpanProcessor }, { NodeTracerProvider }] = await Promise.all([
-      import("@langfuse/otel"),
+    const [processor, { NodeTracerProvider }] = await Promise.all([
+      skapaLangfuseProcessor(),
       import("@opentelemetry/sdk-trace-node"),
     ]);
-    const processor = new LangfuseSpanProcessor({
-      mask: ({ data }) => maskeraLangfuseAttribut(data),
-      // Payloaden är maskerad — det finns aldrig media att ladda upp.
-      mediaUploadEnabled: false,
-    });
     new NodeTracerProvider({ spanProcessors: [processor] }).register();
     t.processor = processor;
   } catch (err) {

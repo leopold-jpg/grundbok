@@ -40,7 +40,11 @@ const SAKRA_NYCKLAR = new Set<string>([
   "module_version",
   "korpus_version",
   "contract_version",
-  // Beslutsmetadata (enum-låsta/fasta värden — kan inte bära fritext)
+  // Beslutsmetadata (enum-låsta/fasta värden — kan inte bära fritext).
+  // OBS: "lagrum" och "ruleset" är MEDVETET inte med — i rådgivningen är
+  // de LLM-genererad fritext (SvarSchema) och kan induceras att eka
+  // frågans innehåll. Källhänvisningen syns i stället via retrieval-
+  // spannets deterministiska korpusmetadata (skill/version/rubrik).
   "status",
   "utfall",
   "kind",
@@ -48,8 +52,6 @@ const SAKRA_NYCKLAR = new Set<string>([
   "betalsatt",
   "konto",
   "niva",
-  "lagrum", // lagrumsreferens ("BFL 5 kap 7 §") — aldrig kunddata
-  "ruleset",
   // Korpusmetadata (versionerad intern kunskapsbas, ej kunddata)
   "skill",
   "version",
@@ -97,6 +99,19 @@ function maskeraVarde(varde: unknown, nyckelSaker: boolean): unknown {
  *  till en råtextsträng) maskeras alltid — de saknar nyckel att lita på. */
 export function maskera(data: unknown): unknown {
   return maskeraVarde(data, false);
+}
+
+/**
+ * Maskering för den FLATTADE metadata-kanalen. SDK:n skriver metadata som
+ * egna attribut (langfuse.observation.metadata.<nyckel>) som processorns
+ * mask-krok aldrig rör — detta är den centrala grinden för dem: värdet
+ * släpps igenom endast om nyckeln står i allowlisten (booleans passerar
+ * alltid). Anropsplatsernas disciplin ("bara identifierare i metadata")
+ * blir därmed verkställd, inte bara en kommentar.
+ */
+export function maskeraMetadataAttribut(nyckel: string, varde: unknown): unknown {
+  if (varde === null || varde === undefined || typeof varde === "boolean") return varde;
+  return SAKRA_NYCKLAR.has(nyckel) ? varde : MASKERAT;
 }
 
 /**

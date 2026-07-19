@@ -158,8 +158,13 @@ async function svaraPaFragaInner(
     { input: { fraga_langd: fraga.length } },
     { asType: "guardrail" },
   );
-  const fynd = kontrolleraInjection(fraga);
-  screening.update({ output: { antal_fynd: fynd.length } }).end();
+  let fynd: ReturnType<typeof kontrolleraInjection>;
+  try {
+    fynd = kontrolleraInjection(fraga);
+    screening.update({ output: { antal_fynd: fynd.length } });
+  } finally {
+    screening.end();
+  }
 
   // (b) Saldostöd — scope-gated: uppslag görs bara om principalen bär
   // ledger:read. kontosaldo går genom withTenant, så RLS garanterar att
@@ -173,10 +178,20 @@ async function svaraPaFragaInner(
       { input: { konto } },
       { asType: "tool" },
     );
-    const ore = await kontosaldo(db, tenantId, konto);
-    saldo = { konto, ore, formaterat: formateraOre(ore) };
-    // ore är ett belopp — maskeras av processorn ("ore" står inte i allowlisten).
-    saldoSpan.update({ output: { konto, ore } }).end();
+    try {
+      const ore = await kontosaldo(db, tenantId, konto);
+      saldo = { konto, ore, formaterat: formateraOre(ore) };
+      // ore är ett belopp — maskeras av processorn ("ore" står inte i allowlisten).
+      saldoSpan.update({ output: { konto, ore } });
+    } catch (err) {
+      saldoSpan.update({
+        level: "ERROR",
+        statusMessage: err instanceof Error ? err.name : "okänt fel",
+      });
+      throw err;
+    } finally {
+      saldoSpan.end();
+    }
   }
 
   // (c) Deterministisk retrieval mot korpusen (topp-4 chunks).
@@ -185,9 +200,10 @@ async function svaraPaFragaInner(
     { input: { fraga }, metadata: { korpus_version: CORPUS_VERSION } },
     { asType: "retriever" },
   );
-  const traffar = sokKorpus(fraga);
-  retrieval
-    .update({
+  let traffar: Traff[];
+  try {
+    traffar = sokKorpus(fraga);
+    retrieval.update({
       output: {
         antal_traffar: traffar.length,
         traffar: traffar.map((t) => ({
@@ -196,8 +212,10 @@ async function svaraPaFragaInner(
           rubrik: t.chunk.rubrik,
         })),
       },
-    })
-    .end();
+    });
+  } finally {
+    retrieval.end();
+  }
 
   const anvandAnthropic =
     Boolean(process.env.ANTHROPIC_API_KEY) &&
@@ -268,15 +286,24 @@ async function svaraPaFragaInner(
     { input: { proposal_id: proposal.id, kind: proposal.kind, konfidens: proposal.confidence } },
     { asType: "span" },
   );
-  const resultat = await handleProposal(db, principal, proposal);
-  port
-    .update({
+  let resultat: Awaited<ReturnType<typeof handleProposal>>;
+  try {
+    resultat = await handleProposal(db, principal, proposal);
+    port.update({
       output: { status: resultat.status, proposal_id: "proposal_id" in resultat ? resultat.proposal_id : proposal.id },
       ...(resultat.status === "avvisad_vid_porten"
         ? { level: "ERROR" as const, statusMessage: "avvisad_vid_porten" }
         : {}),
-    })
-    .end();
+    });
+  } catch (err) {
+    port.update({
+      level: "ERROR",
+      statusMessage: err instanceof Error ? err.name : "okänt fel",
+    });
+    throw err;
+  } finally {
+    port.end();
+  }
   if (resultat.status === "avvisad_vid_porten") {
     // Kan bara inträffa vid bugg i modulen (vi bygger och hashar själva).
     throw new Error(

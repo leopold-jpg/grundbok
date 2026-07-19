@@ -48,12 +48,16 @@ export async function körJobb(db: PGlite, jobb: AgentJobb): Promise<JobbUtfall>
   // så jobbet blir en agentnod i Langfuses Agent Graph. tenant_id och
   // agent_id på varje trace (kravet); mall-stämpeln kompletteras inne i
   // körJobbInner när majorn är löst. No-op utan LANGFUSE-nycklar.
+  //
+  // jobb.module är en ovaliderad kösträng och trace-namn/taggar maskeras
+  // ALDRIG av processorn — bara registervaliderade modulnamn släpps in.
+  const modulNamn = jobb.module in MODUL_REGISTRY ? jobb.module : "okand-modul";
   return propagateAttributes(
     {
-      traceName: `agent-jobb:${jobb.module}`,
+      traceName: `agent-jobb:${modulNamn}`,
       userId: jobb.tenant_id,
       metadata: { tenant_id: jobb.tenant_id, agent_id: jobb.agent_id },
-      tags: ["worker", jobb.module],
+      tags: ["worker", modulNamn],
     },
     () =>
       startActiveObservation(
