@@ -52,6 +52,10 @@ GRANT SELECT, INSERT ON underlag TO grundbok_app;
 GRANT SELECT, INSERT, DELETE ON klient_avsandare TO grundbok_app;
 GRANT SELECT, INSERT ON mejl_karantan TO grundbok_app;
 GRANT SELECT, INSERT ON utgaende_mejl TO grundbok_app;
+-- kundfragor (WP22): eskalerade ärenden — byråns svar uppdaterar raden,
+-- raderas aldrig (fråga→svar-kedjan består).
+GRANT SELECT, INSERT ON kundfragor TO grundbok_app;
+GRANT UPDATE (status, svar, besvarad_av, besvarad) ON kundfragor TO grundbok_app;
 
 -- RLS på varje kunddatabärande tabell: rad synlig/skrivbar ⇔ rätt tenant_id.
 -- current_setting(..., true) returnerar NULL om osatt → policyn nekar allt.
@@ -62,7 +66,7 @@ BEGIN
     'documents', 'verifications', 'verification_rows', 'audit_log',
     'proposals', 'decisions', 'autonomy_policies', 'agents',
     'kompletteringar', 'underlag',
-    'klient_avsandare', 'mejl_karantan', 'utgaende_mejl'
+    'klient_avsandare', 'mejl_karantan', 'utgaende_mejl', 'kundfragor'
   ] LOOP
     EXECUTE format('ALTER TABLE %I ENABLE ROW LEVEL SECURITY', t);
     EXECUTE format('ALTER TABLE %I FORCE ROW LEVEL SECURITY', t);

@@ -19,6 +19,7 @@ export async function GET(req: Request) {
   );
 
   return NextResponse.json({
+    anvandare_id: krav.session.user.id,
     namn: krav.session.user.name,
     bolag: krav.session.klient!.tenant_namn,
     visa_resultat: Boolean(r.rows[0]?.visa_resultat),

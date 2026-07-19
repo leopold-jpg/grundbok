@@ -400,6 +400,23 @@ CREATE TABLE IF NOT EXISTS utgaende_mejl (
   skickat   timestamptz NOT NULL DEFAULT now()
 );
 
+-- WP22: kundassistentens eskaleringar. Rådgivningsfrågor besvaras
+-- ALDRIG i appen — de blir ärenden i byråns kö med underlaget länkat.
+-- Kunddatabärande: tenant_id + RLS. Arbetsdata: byråns svar uppdaterar
+-- raden (aldrig delete — fråga→svar-kedjan ska bestå).
+CREATE TABLE IF NOT EXISTS kundfragor (
+  id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id   text NOT NULL REFERENCES tenants(id),
+  fraga       text NOT NULL,
+  underlag_id uuid REFERENCES underlag(id),
+  stalld_av   text NOT NULL,
+  status      text NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'besvarad')),
+  svar        text,
+  besvarad_av text,
+  skapad      timestamptz NOT NULL DEFAULT now(),
+  besvarad    timestamptz
+);
+
 -- Operatörskonsolen (WP14): namngivna policymallar som väljs vid
 -- provisionering och KOPIERAS till tenantens autonomy_policies — mallen
 -- är operatörens data (service-vägens plan, inga app-grants), tenantens
