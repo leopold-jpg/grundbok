@@ -1,3 +1,4 @@
+import { startActiveObservation } from "@langfuse/tracing";
 import { tolkaMedFallback } from "./fallback";
 import { ExtraktionSchema, type Extraktion } from "./schema";
 
@@ -17,6 +18,27 @@ export async function tolka(
   /** Rollkontext (WP31): agentmallens systemprompt + aktiva branschpakets
    *  regler. Når endast den riktiga LLM-vägen — fallbacken är
    *  deterministisk och promptokänslig per definition. */
+  systemTillagg?: string,
+): Promise<TolkningsResultat> {
+  // Langfuse-span runt hela tolkningen (LLM eller fallback) — utan
+  // registrerad provider (inga nycklar) är detta en ren no-op via OTel:s
+  // noop-tracer. Input/output maskeras centralt i span-processorn.
+  return startActiveObservation("tolkning", async (span) => {
+    const resultat = await tolkaInner(text, systemTillagg);
+    span.update({
+      input: { underlag: text, underlag_langd: text.length },
+      output: {
+        motor: resultat.motor,
+        motor_detalj: resultat.motor_detalj,
+        extraktion: resultat.extraktion,
+      },
+    });
+    return resultat;
+  });
+}
+
+async function tolkaInner(
+  text: string,
   systemTillagg?: string,
 ): Promise<TolkningsResultat> {
   const harNyckel = Boolean(process.env.ANTHROPIC_API_KEY);

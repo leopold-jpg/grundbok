@@ -1,5 +1,7 @@
+import { createHash } from "node:crypto";
 import Anthropic from "@anthropic-ai/sdk";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
+import { startObservation } from "@langfuse/tracing";
 import { ExtraktionSchema, type Extraktion } from "./schema";
 
 // Riktig tolkning via Anthropic med strukturerad output: parse() validerar
@@ -48,24 +50,73 @@ svara uteslutande enligt det begärda schemat; flaggor, kontering och
 Proposal-bygget utförs av efterföljande deterministiska steg.\n${systemTillagg}`
     : SYSTEM;
 
-  const response = await client.messages.parse({
-    model: MODEL,
-    max_tokens: 2048,
-    system,
-    messages: [
-      {
-        role: "user",
-        content: `Extrahera fälten ur detta dokument:\n\n<dokument>\n${text}\n</dokument>`,
+  // Langfuse-generation. Input/output skickas i fullo — maskeringen sitter
+  // centralt i span-processorn (mask.ts) och kan inte kringgås härifrån.
+  // metadata flattas till egna attribut som masken inte når: därför ENBART
+  // hash/längder där, aldrig innehåll. statusMessage bär endast felklass —
+  // aldrig felmeddelanden, som kan citera payload.
+  const generation = startObservation(
+    "extraktion",
+    {
+      model: MODEL,
+      modelParameters: { max_tokens: 2048 },
+      input: {
+        system,
+        messages: [{ role: "user", dokument: text }],
       },
-    ],
-    output_config: { format: zodOutputFormat(ExtraktionSchema) },
-  });
+      metadata: {
+        prompt_hash: createHash("sha256").update(system).digest("hex"),
+        underlag_langd: text.length,
+      },
+    },
+    { asType: "generation" },
+  );
 
-  if (response.stop_reason === "refusal") {
-    throw new Error("Modellen avböjde dokumentet (stop_reason: refusal)");
+  let felMarkerat = false;
+  try {
+    const response = await client.messages.parse({
+      model: MODEL,
+      max_tokens: 2048,
+      system,
+      messages: [
+        {
+          role: "user",
+          content: `Extrahera fälten ur detta dokument:\n\n<dokument>\n${text}\n</dokument>`,
+        },
+      ],
+      output_config: { format: zodOutputFormat(ExtraktionSchema) },
+    });
+
+    generation.update({
+      usageDetails: {
+        input: response.usage.input_tokens,
+        output: response.usage.output_tokens,
+        cache_read_input_tokens: response.usage.cache_read_input_tokens ?? 0,
+        cache_creation_input_tokens: response.usage.cache_creation_input_tokens ?? 0,
+      },
+    });
+
+    if (response.stop_reason === "refusal") {
+      generation.update({ level: "ERROR", statusMessage: "refusal" });
+      felMarkerat = true;
+      throw new Error("Modellen avböjde dokumentet (stop_reason: refusal)");
+    }
+    if (!response.parsed_output) {
+      generation.update({ level: "ERROR", statusMessage: "schemavalidering föll" });
+      felMarkerat = true;
+      throw new Error("Tolkningen kunde inte valideras mot schemat");
+    }
+    generation.update({ output: response.parsed_output });
+    return response.parsed_output;
+  } catch (err) {
+    if (!felMarkerat) {
+      generation.update({
+        level: "ERROR",
+        statusMessage: err instanceof Error ? err.name : "okänt fel",
+      });
+    }
+    throw err;
+  } finally {
+    generation.end();
   }
-  if (!response.parsed_output) {
-    throw new Error("Tolkningen kunde inte valideras mot schemat");
-  }
-  return response.parsed_output;
 }

@@ -1,4 +1,9 @@
 import type { PGlite } from "@electric-sql/pglite";
+import {
+  propagateAttributes,
+  startActiveObservation,
+  updateActiveObservation,
+} from "@langfuse/tracing";
 import type { ModuleId } from "@/contracts";
 import { withTenant } from "@/lib/db/tenant";
 import { handleProposal, type Principal, type Scope } from "@/lib/decisions";
@@ -39,6 +44,39 @@ type AgentRad = {
 };
 
 export async function körJobb(db: PGlite, jobb: AgentJobb): Promise<JobbUtfall> {
+  // Langfuse-trace per jobb, typad "agent" — workern ÄR agentens runtime,
+  // så jobbet blir en agentnod i Langfuses Agent Graph. tenant_id och
+  // agent_id på varje trace (kravet); mall-stämpeln kompletteras inne i
+  // körJobbInner när majorn är löst. No-op utan LANGFUSE-nycklar.
+  return propagateAttributes(
+    {
+      traceName: `agent-jobb:${jobb.module}`,
+      userId: jobb.tenant_id,
+      metadata: { tenant_id: jobb.tenant_id, agent_id: jobb.agent_id },
+      tags: ["worker", jobb.module],
+    },
+    () =>
+      startActiveObservation(
+        "agent-jobb",
+        async (span) => {
+          const utfall = await körJobbInner(db, jobb);
+          span.update({
+            input: { payload_ref: jobb.payload_ref, job_id: jobb.job_id },
+            // utfall.detalj kan citera portens felsträngar — maskeras av
+            // processorn ("detalj" står inte i allowlisten).
+            output: utfall,
+            ...(utfall.utfall === "fel"
+              ? { level: "ERROR" as const, statusMessage: "jobbet föll" }
+              : {}),
+          });
+          return utfall;
+        },
+        { asType: "agent" },
+      ),
+  );
+}
+
+async function körJobbInner(db: PGlite, jobb: AgentJobb): Promise<JobbUtfall> {
   // Agent-raden läses på service-vägen (workern är data plane).
   const r = await db.query<AgentRad>(`SELECT * FROM agents WHERE id = $1`, [jobb.agent_id]);
   const agent = r.rows[0];
@@ -84,6 +122,20 @@ export async function körJobb(db: PGlite, jobb: AgentJobb): Promise<JobbUtfall>
   const mall = agent.template_id
     ? hamtaMallForMajor(agent.template_id, agent.template_version)
     : null;
+
+  // Promptversionen på jobbets agentnod (kravet: mall_id + mall_version):
+  // "saknas" för mall-lös agent/versionsdrift — samma semantik som den
+  // ostämplade proposalen. prompt_hash stämplas på generationen
+  // (extract/anthropic.ts).
+  updateActiveObservation(
+    {
+      metadata: {
+        mall_id: mall?.id ?? "saknas",
+        mall_version: mall?.version ?? "saknas",
+      },
+    },
+    { asType: "agent" },
+  );
 
   // Branschpaketen in i LLM-vägen (WP31): tenantens branschmall
   // (tenants.mall) aktiverar paketen, och den kompletta systemprompten

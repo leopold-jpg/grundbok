@@ -1,4 +1,5 @@
 import { getDb } from "@/lib/db/client";
+import { initLangfuse, flushLangfuse } from "@/lib/observability/langfuse";
 import { PgliteKo, type KoMeddelande } from "@/lib/queue";
 import { körJobb } from "./run-agent";
 
@@ -92,11 +93,16 @@ async function enPollrunda(): Promise<number> {
 async function main() {
   const once = process.argv.includes("--once");
   console.log(`grundbok-worker: pollar agent_jobs (${once ? "en runda" : "loop, Ctrl-C avslutar"})`);
+  // Langfuse-tracing för jobbtraces (no-op utan nycklar). Init + flush bor
+  // i main(): tester importerar körBatch utan sidoeffekter.
+  await initLangfuse();
   let kör = true;
   process.on("SIGINT", () => { kör = false; });
 
   do {
     const antal = await enPollrunda();
+    // Flush per pollrunda — scriptform utan flush tappar spans vid exit.
+    await flushLangfuse();
     if (!once && antal === 0) await new Promise((r) => setTimeout(r, 2000));
   } while (kör && !once);
 

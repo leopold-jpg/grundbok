@@ -1,5 +1,7 @@
-import { NextResponse } from "next/server";
+import { NextResponse, after } from "next/server";
+import { propagateAttributes, startActiveObservation } from "@langfuse/tracing";
 import { getDb } from "@/lib/db/client";
+import { flushLangfuse } from "@/lib/observability/langfuse";
 import { withTenant } from "@/lib/db/tenant";
 import { tolka } from "@/lib/extract";
 import { kontrolleraInjection } from "@/lib/policy";
@@ -12,6 +14,9 @@ export const runtime = "nodejs";
 // och kundapps-foto blir ytterligare källor in i SAMMA flöde — en kanal
 // är bara en källa.
 export async function POST(req: Request) {
+  // Serverless-flush: spans skickas efter att svaret gått iväg — aldrig
+  // i requestens kritiska väg. No-op utan LANGFUSE-nycklar.
+  after(() => flushLangfuse());
   const db = await getDb();
   const krav = await kravKonsult(db, req);
   if ("http" in krav) return NextResponse.json({ fel: krav.fel }, { status: krav.http });
@@ -38,7 +43,26 @@ export async function POST(req: Request) {
     return r.rows[0].id;
   });
 
-  const resultat = await tolka(text);
+  // Trace-rot för manuellt intag: tenant_id + agent_id på varje trace
+  // (kravet). Intag saknar agent-rad — konsultens manuella kanal är
+  // identiteten. tolka() nästlar sin span + ev. generation här under.
+  const resultat = await propagateAttributes(
+    {
+      traceName: "intag-tolkning",
+      userId: tenant_id,
+      metadata: { tenant_id, agent_id: "konsult:manuell-intag", document_id: documentId },
+      tags: ["intag"],
+    },
+    () =>
+      startActiveObservation("intag-tolkning", async (span) => {
+        const r = await tolka(text);
+        span.update({
+          input: { document_id: documentId, underlag_langd: text.length },
+          output: { motor: r.motor, antal_fynd: injektionsfynd.length },
+        });
+        return r;
+      }),
+  );
 
   return NextResponse.json({ document_id: documentId, ...resultat, injektionsfynd });
 }
