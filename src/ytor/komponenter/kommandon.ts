@@ -61,10 +61,10 @@ export function byggKommandon(ctx: KonsultKontext | OperatorKontext): Kommando[]
   // Operatören: drift — aldrig förslags-innehåll i kommandona heller
   // (agent-/bolagsnamn är driftmetadata, motparter finns inte här).
   return [
-    { id: "atgard:provisionera", rubrik: "Provisionera agent", detalj: "klient → mall → namn → nyckel", grupp: "atgard" },
-    { id: "vy:oversikt", rubrik: "Gå till översikten", grupp: "navigera", nyckelord: "flottan agenter start" },
-    { id: "vy:halsa", rubrik: "Gå till hälsan", grupp: "navigera", nyckelord: "kö worker drift" },
-    { id: "vy:mallar", rubrik: "Gå till policymallar", grupp: "navigera", nyckelord: "autonomi förval" },
+    { id: "atgard:provisionera", rubrik: "Provisionera agent", detalj: "klient → roll → namn → nyckel", grupp: "atgard" },
+    { id: "vy:oversikt", rubrik: "Gå till flottan", grupp: "navigera", nyckelord: "översikten agenter start" },
+    { id: "vy:halsa", rubrik: "Gå till hälsan", grupp: "navigera", nyckelord: "kö worker drift flottan" },
+    { id: "vy:mallar", rubrik: "Gå till autonomiförvalen", grupp: "navigera", nyckelord: "policymallar autonomi förval" },
     ...ctx.bolag.map((b) => ({
       id: `bolag:${b.tenant_id}`,
       rubrik: `Visa ${b.tenant_namn}`,

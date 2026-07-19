@@ -14,8 +14,9 @@ import "../../ytor/komponenter/komponenter.css";
 import "./operator.css";
 
 // Operatörskonsolen (WP14, agentfabriken i WP27) — grundarens vy.
-// Startvyn är översikten byrå → klientbolag → agenter: statuspunkt,
-// modul-chip, mallversion, förslag/vecka som sparkline, felindikator.
+// Tre flikar (poleringspasset): Provisionera är det vanligaste jobbet
+// och därmed första flik och startläge; Flotta bär översikten byrå →
+// klientbolag → agenter plus hälsan; Autonomiförval bär policyförvalen.
 // Provisionering är ETT flöde i tre steg (klient → funktionsroll →
 // namn → nyckel EN gång); agentdetaljen bär livslinje, policy-läge,
 // nyckelrotation och tenantens driftläge. Regeln som allt lyder under:
@@ -140,15 +141,46 @@ const pct = (x: number | null) => (x === null ? "—" : `${Math.round(x * 100)} 
 /** Filtervärde för mall-lösa agenter — kolliderar aldrig med ett mall-id. */
 const UTAN_MALL = "__utan_mall__";
 
-/** Mall + version: registrets exakta version när pekaren löser, annars
- *  major-pekaren (versionsdriften får sin varningschip). Aktiva bransch-
- *  paket (ADR-0005) hängs på som +paket — härledda ur tenanten. */
-const mallEtikett = (r: FlottRad) =>
-  r.template_id
-    ? `${r.template_id} ${r.mall_aktuell_version ?? `v${r.template_version}`}${r.branschpaket
-        .map((p) => ` +${p}`)
-        .join("")}`
-    : `${r.module} (utan mall)`;
+/** Testagenter känns igen på namnet (*-dev eller e2e-*): de chippas
+ *  grått och döljs som förval i flottan — driften ska visa kunder,
+ *  inte utvecklingsbrus. */
+const arDevAgent = (namn: string) => namn.endsWith("-dev") || namn.startsWith("e2e-");
+
+/** Rollkolumnen efter ADR-0005: funktionsroll + aktiva branschpaket som
+ *  chips ("bokforing +restaurang") — aldrig versionssträngar (versions-
+ *  drift bär sin egen varningschip i felkolumnen). Mall-lösa modul-
+ *  agenter från före mallkatalogen visas som "roll (äldre)". */
+function RollEtikett({
+  r,
+}: {
+  r: Pick<FlottRad, "template_id" | "module" | "branschpaket">;
+}) {
+  if (!r.template_id) {
+    return (
+      <span className="roll-etikett">
+        {r.module} <span className="tyst">(äldre)</span>
+      </span>
+    );
+  }
+  return (
+    <span className="roll-etikett">
+      {r.template_id}
+      {r.branschpaket.map((p) => (
+        <Chip key={p}>+{p}</Chip>
+      ))}
+    </span>
+  );
+}
+
+/** Flikarna (poleringspasset): Provisionera först — det vanligaste
+ *  jobbet är startläget; Flotta samlar översikt + hälsa. */
+type OperatorFlik = "provisionera" | "flotta" | "forval";
+
+const FLIKAR: { id: OperatorFlik; namn: string }[] = [
+  { id: "provisionera", namn: "Provisionera" },
+  { id: "flotta", namn: "Flotta" },
+  { id: "forval", namn: "Autonomiförval" },
+];
 
 const tid = (iso: string) =>
   new Date(iso).toLocaleString("sv-SE", { dateStyle: "short", timeStyle: "short" });
@@ -206,10 +238,18 @@ export default function OperatorSida() {
   const [halsa, setHalsa] = useState<Halsa | null>(null);
   const [fel, setFel] = useState("");
 
-  // Översikten: filtrering på mall + status, radval → detalj.
+  // Flikläget: Provisionera är startfliken (det vanligaste jobbet).
+  const [flik, setFlik] = useState<OperatorFlik>("provisionera");
+  // Kommandopalettens hopp över flikgränser: målsektionen finns i DOM
+  // först EFTER flikbytet, så scroll/fokus körs i en effekt efter render.
+  const [hopp, setHopp] = useState<string | null>(null);
+
+  // Översikten: filtrering på roll + status, radval → detalj.
+  // Dev-agenter (*-dev/e2e-*) är bortfiltrerade som förval.
   const [flotta, setFlotta] = useState<FlottRad[]>([]);
   const [filtMall, setFiltMall] = useState("");
   const [filtStatus, setFiltStatus] = useState("");
+  const [visaDev, setVisaDev] = useState(false);
   const [valdAgent, setValdAgent] = useState<string | null>(null);
   const [detalj, setDetalj] = useState<AgentDetalj | null>(null);
   const [katalog, setKatalog] = useState<Agentkatalog | null>(null);
@@ -361,20 +401,36 @@ export default function OperatorSida() {
     const typ = k.id.slice(0, skilj);
     const varde = k.id.slice(skilj + 1);
     if (typ === "vy") {
-      const mal =
-        varde === "halsa" ? halsaRef.current : varde === "mallar" ? mallarRef.current : oversiktRef.current;
-      mal?.scrollIntoView({ block: "start" });
+      setFlik(varde === "mallar" ? "forval" : "flotta");
+      if (varde === "halsa" || varde === "oversikt") setHopp(varde);
     } else if (typ === "atgard" && varde === "provisionera") {
-      provRef.current?.scrollIntoView({ block: "start" });
-      provKlientRef.current?.focus();
+      setFlik("provisionera");
+      setHopp("prov");
     } else if (typ === "bolag") {
+      setFlik("flotta");
       setMarkeratBolag(varde);
-      document.getElementById(`bolag-${varde}`)?.scrollIntoView({ block: "center" });
+      setHopp(`bolag:${varde}`);
     } else if (typ === "agent") {
+      setFlik("flotta");
       setValdAgent(varde);
-      detaljRef.current?.scrollIntoView({ block: "start" });
+      setHopp("detalj");
     }
   }, []);
+
+  // Hoppet utförs när målfliken har renderats — refs och element finns
+  // inte förrän då. Ett hopp per kommando; effekten släcker sig själv.
+  useEffect(() => {
+    if (!hopp) return;
+    if (hopp === "oversikt") oversiktRef.current?.scrollIntoView({ block: "start" });
+    else if (hopp === "halsa") halsaRef.current?.scrollIntoView({ block: "start" });
+    else if (hopp === "prov") provKlientRef.current?.focus();
+    else if (hopp === "detalj") detaljRef.current?.scrollIntoView({ block: "start" });
+    else if (hopp.startsWith("bolag:"))
+      document
+        .getElementById(`bolag-${hopp.slice("bolag:".length)}`)
+        ?.scrollIntoView({ block: "center" });
+    setHopp(null);
+  }, [hopp]);
 
   async function loggaUt() {
     await fetch("/api/auth/logout", { method: "POST" });
@@ -487,7 +543,7 @@ export default function OperatorSida() {
     const beloppKr = Number(f.belopp_kr.replace(/\s/g, "").replace(",", "."));
     const minConf = Number(f.konfidens.replace(",", "."));
     if (!Number.isFinite(beloppKr) || beloppKr < 0 || !Number.isFinite(minConf) || minConf < 0 || minConf > 1) {
-      setFel("mall: belopp ≥ 0 kr och konfidens mellan 0 och 1 krävs");
+      setFel("förval: belopp ≥ 0 kr och konfidens mellan 0 och 1 krävs");
       return;
     }
 
@@ -523,6 +579,7 @@ export default function OperatorSida() {
 
   const mallVal = [...new Set(flotta.map((r) => r.template_id ?? UTAN_MALL))].sort();
   const visadFlotta = flotta
+    .filter((r) => visaDev || !arDevAgent(r.display_name))
     .filter((r) => !filtMall || (r.template_id ?? UTAN_MALL) === filtMall)
     .filter((r) => !filtStatus || r.status === filtStatus);
   const flottaPerTenant = new Map<string, FlottRad[]>();
@@ -586,8 +643,24 @@ export default function OperatorSida() {
         onStang={() => setPalettOppen(false)}
       />
 
-      {/* Översikten (WP27) — startvyn: byrå → klientbolag → agenter. */}
-      <section className="steg" ref={oversiktRef}>
+      {/* Flikarna (poleringspasset): sektionerna förblir monterade och
+          döljs med hidden — filter, formulär och radval överlever
+          flikbyten, och kommandopalettens hopp har alltid sina mål. */}
+      <nav className="flikar">
+        {FLIKAR.map((f) => (
+          <button
+            key={f.id}
+            className="flik"
+            data-aktiv={flik === f.id}
+            onClick={() => setFlik(f.id)}
+          >
+            {f.namn}
+          </button>
+        ))}
+      </nav>
+
+      {/* Översikten (WP27) — flottan: byrå → klientbolag → agenter. */}
+      <section className="steg" ref={oversiktRef} hidden={flik !== "flotta"}>
         <div className="steg-rubrik">
           <h2 className="steg-titel">Översikt</h2>
           <span className="steg-not">
@@ -599,12 +672,12 @@ export default function OperatorSida() {
           <select
             value={filtMall}
             onChange={(e) => setFiltMall(e.target.value)}
-            aria-label="filtrera på mall"
+            aria-label="filtrera på roll"
           >
-            <option value="">alla mallar</option>
+            <option value="">alla roller</option>
             {mallVal.map((m) => (
               <option key={m} value={m}>
-                {m === UTAN_MALL ? "(utan mall)" : m}
+                {m === UTAN_MALL ? "(äldre)" : m}
               </option>
             ))}
           </select>
@@ -618,6 +691,15 @@ export default function OperatorSida() {
             <option value="paused">pausade</option>
             <option value="canceled">avslutade</option>
           </select>
+          <span className="check-val">
+            <input
+              id="visa-dev"
+              type="checkbox"
+              checked={visaDev}
+              onChange={(e) => setVisaDev(e.target.checked)}
+            />
+            <label htmlFor="visa-dev">visa dev-agenter</label>
+          </span>
         </div>
 
         {bolag.length === 0 ? (
@@ -632,7 +714,7 @@ export default function OperatorSida() {
                   <th>Agent</th>
                   <th>Status</th>
                   <th>Modul</th>
-                  <th>Mall</th>
+                  <th>Roll</th>
                   <th className="tal">Förslag/vecka</th>
                   <th className="tal">Senast aktiv</th>
                   <th>Fel</th>
@@ -690,6 +772,7 @@ export default function OperatorSida() {
                             >
                               {r.display_name}
                             </button>
+                            {arDevAgent(r.display_name) && <Chip>dev</Chip>}
                           </td>
                           <td>
                             <StatusPunkt status={r.status} />
@@ -697,16 +780,28 @@ export default function OperatorSida() {
                           <td>
                             <Chip>{r.module}</Chip>
                           </td>
-                          <td>{mallEtikett(r)}</td>
-                          <td className="tal">
-                            <Sparkline
-                              varden={r.forslag_dagar}
-                              etikett={`${r.forslag_7d} förslag senaste 7 dygnen`}
-                            />{" "}
-                            {r.forslag_7d}
+                          <td>
+                            <RollEtikett r={r} />
                           </td>
                           <td className="tal">
-                            {r.senaste_aktivitet ? tid(r.senaste_aktivitet) : "—"}
+                            {r.forslag_7d === 0 ? (
+                              <span className="tyst">inga förslag än</span>
+                            ) : (
+                              <>
+                                <Sparkline
+                                  varden={r.forslag_dagar}
+                                  etikett={`${r.forslag_7d} förslag senaste 7 dygnen`}
+                                />{" "}
+                                {r.forslag_7d}
+                              </>
+                            )}
+                          </td>
+                          <td className="tal">
+                            {r.senaste_aktivitet ? (
+                              tid(r.senaste_aktivitet)
+                            ) : (
+                              <span className="tyst">inga förslag än</span>
+                            )}
                           </td>
                           <td>
                             {r.varningar.length === 0 ? (
@@ -737,9 +832,10 @@ export default function OperatorSida() {
             <div className="flotta-detalj">
               <div className="detalj-rubrik">
                 <strong>{detalj.agent.display_name}</strong>
+                {arDevAgent(detalj.agent.display_name) && <Chip>dev</Chip>}
                 <StatusPunkt status={detalj.agent.status} />
                 <span className="tyst">
-                  {detalj.agent.tenant_namn} · {mallEtikett(detalj.agent)} ·
+                  {detalj.agent.tenant_namn} · <RollEtikett r={detalj.agent} /> ·
                   provisionerad av {detalj.agent.provisioned_by}
                 </span>
               </div>
@@ -866,7 +962,7 @@ export default function OperatorSida() {
       </section>
 
       {/* Provisioneringen som flöde (WP27): tre steg, tangentbordsvänligt. */}
-      <section className="steg" ref={provRef}>
+      <section className="steg" ref={provRef} hidden={flik !== "provisionera"}>
         <div className="steg-rubrik">
           <h2 className="steg-titel">Provisionera agent</h2>
           <span className="steg-not">
@@ -1003,8 +1099,9 @@ export default function OperatorSida() {
         </div>
       </section>
 
-      {/* Hälsovyn (WP27): kön och workern — drift, aldrig innehåll. */}
-      <section className="steg" ref={halsaRef}>
+      {/* Hälsovyn (WP27): kön och workern — drift, aldrig innehåll.
+          Bor i Flotta-fliken tillsammans med översikten. */}
+      <section className="steg" ref={halsaRef} hidden={flik !== "flotta"}>
         <div className="steg-rubrik">
           <h2 className="steg-titel">Hälsa</h2>
           <span className="steg-not">kön och workern — drift, aldrig innehåll</span>
@@ -1067,12 +1164,13 @@ export default function OperatorSida() {
         )}
       </section>
 
-      {/* Policymallar */}
-      <section className="steg" ref={mallarRef}>
+      {/* Autonomiförval (policy_mallar i DB — UI-språket följer ADR-0005:
+          förval hör till funktionsroller + paket, inte fria mallnamn). */}
+      <section className="steg" ref={mallarRef} hidden={flik !== "forval"}>
         <div className="steg-rubrik">
-          <h2 className="steg-titel">Policymallar</h2>
+          <h2 className="steg-titel">Autonomiförval</h2>
           <span className="steg-not">
-            autonomiförval — funktionsrollernas förval seedar vid provisionering;
+            förval per funktionsroll — seedar policyn vid provisionering;
             byrån justerar sedan i sin arbetsyta
           </span>
         </div>
@@ -1089,7 +1187,7 @@ export default function OperatorSida() {
                   type="text"
                   value={f.namn}
                   onChange={(e) => uppdateraMall(id, { namn: e.target.value })}
-                  placeholder="Ny mall, t.ex. Detaljhandel — standard"
+                  placeholder="Nytt förval, t.ex. Bokföring — försiktig"
                 />
               )}
               <span className="check-val">
@@ -1137,7 +1235,7 @@ export default function OperatorSida() {
                 i konfidens
               </span>
               <button onClick={() => sparaMall(id)} disabled={!f.namn.trim()}>
-                {id ? "Spara" : "Skapa mall"}
+                {id ? "Spara" : "Skapa förval"}
               </button>
               {mallSparat[id] && <span className="sparat">{mallSparat[id]}</span>}
             </div>
