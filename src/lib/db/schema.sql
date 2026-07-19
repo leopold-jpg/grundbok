@@ -306,6 +306,41 @@ CREATE TABLE IF NOT EXISTS kompletteringar (
   senast_paminnd timestamptz
 );
 
+-- ============================================================ S3 ====
+-- Intag + kundkanal (KICKOFF-INTAG, WP20–WP25). Kundappens klient-
+-- användare, intake-porten och mejladaptern. Databastillägg enligt
+-- WP11-undantaget — kärnans befintliga tabeller och flöden ändras inte.
+
+-- WP20: klientrollen. En klientanvändare är en users-rad med ett
+-- membership role='klient' som pekar på EN tenant (klientbolaget).
+-- byra_id är tenantens byrå — men sessionen ger ALDRIG klienten
+-- byrå-kontext (src/auth/pglite-auth.ts): klienten når aldrig /byra.
+ALTER TABLE memberships ADD COLUMN IF NOT EXISTS tenant_id text REFERENCES tenants(id);
+
+-- WP22: resultatflaggan — kundappen visar ENDAST obestridliga siffror i
+-- v1; resultat/saldon är en per-klient-flagga byrån slår på senare.
+-- Flaggan byggs nu, default av.
+ALTER TABLE tenants ADD COLUMN IF NOT EXISTS visa_resultat boolean NOT NULL DEFAULT false;
+ALTER TABLE memberships DROP CONSTRAINT IF EXISTS memberships_role_check;
+ALTER TABLE memberships ADD CONSTRAINT memberships_role_check
+  CHECK (role IN ('konsult', 'klient') AND (role <> 'klient' OR tenant_id IS NOT NULL));
+
+-- Inbjudningar (WP20): konsulten bjuder in klientanvändaren från
+-- klientvyn. Engångstoken lagras enbart som sha256-hash (samma princip
+-- som agentnycklar och sessioner); used_at gör den död efter inlösen.
+-- Service-vägens plan (som users/sessions): uppslaget sker innan någon
+-- session finns.
+CREATE TABLE IF NOT EXISTS klient_inbjudningar (
+  id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id   text NOT NULL REFERENCES tenants(id),
+  email       text NOT NULL,
+  token_hash  text NOT NULL UNIQUE,
+  skapad_av   text NOT NULL,
+  created_at  timestamptz NOT NULL DEFAULT now(),
+  expires_at  timestamptz NOT NULL,
+  used_at     timestamptz
+);
+
 -- Operatörskonsolen (WP14): namngivna policymallar som väljs vid
 -- provisionering och KOPIERAS till tenantens autonomy_policies — mallen
 -- är operatörens data (service-vägens plan, inga app-grants), tenantens

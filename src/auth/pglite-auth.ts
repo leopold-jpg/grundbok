@@ -58,6 +58,8 @@ export class PgliteAuth implements AuthAdapter {
       byra_id: string | null;
       byra_namn: string | null;
       role: string | null;
+      tenant_id: string | null;
+      tenant_namn: string | null;
     }>(
       // LIMIT 1 utan ORDER BY gav icke-deterministisk byrå för användare
       // med flera memberships (Bugbot PR #2): äldsta membershipet vinner,
@@ -65,11 +67,13 @@ export class PgliteAuth implements AuthAdapter {
       // TODO S3: byråväxlare vid login — konsulten VÄLJER byrå i stället
       // för att alltid landa i den äldsta.
       `SELECT u.id, u.email, u.name, u.is_operator,
-              m.byra_id, b.namn AS byra_namn, m.role
+              m.byra_id, b.namn AS byra_namn, m.role,
+              m.tenant_id, t.namn AS tenant_namn
        FROM sessions s
        JOIN users u ON u.id = s.user_id
        LEFT JOIN memberships m ON m.user_id = u.id
        LEFT JOIN byraer b ON b.id = m.byra_id
+       LEFT JOIN tenants t ON t.id = m.tenant_id
        WHERE s.token_hash = $1 AND s.expires_at > now()
        ORDER BY m.created_at ASC NULLS LAST, b.namn ASC NULLS LAST
        LIMIT 1`,
@@ -77,6 +81,9 @@ export class PgliteAuth implements AuthAdapter {
     );
     const rad = r.rows[0];
     if (!rad) return null;
+    // WP20: klientrollen får ALDRIG byrå-kontext — kravKonsult faller
+    // därmed på 403 för klienter oavsett vilken byrå tenanten tillhör.
+    const arKlient = rad.role === "klient" && rad.tenant_id && rad.tenant_namn;
     return {
       user: {
         id: rad.id,
@@ -85,9 +92,12 @@ export class PgliteAuth implements AuthAdapter {
         is_operator: rad.is_operator,
       },
       byra:
-        rad.byra_id && rad.byra_namn
+        !arKlient && rad.byra_id && rad.byra_namn
           ? { id: rad.byra_id, namn: rad.byra_namn, role: "konsult" }
           : null,
+      klient: arKlient
+        ? { tenant_id: rad.tenant_id!, tenant_namn: rad.tenant_namn! }
+        : null,
     };
   }
 }

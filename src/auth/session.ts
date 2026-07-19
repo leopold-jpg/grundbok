@@ -36,6 +36,19 @@ export async function kravKonsult(
   return { session };
 }
 
+/** Kundappen (/app, WP20): kräver klient-membership. Tenanten kommer
+ *  ALLTID ur sessionen — aldrig ur requesten: en klient kan per
+ *  konstruktion inte fråga om något annat bolag. */
+export async function kravKlient(
+  db: PGlite,
+  req: Request,
+): Promise<{ session: Sessionsinfo; tenantId: string } | Kravfel> {
+  const session = await sessionFranRequest(db, req);
+  if (!session) return { http: 401, fel: "inloggning krävs" };
+  if (!session.klient) return { http: 403, fel: "klientroll krävs" };
+  return { session, tenantId: session.klient.tenant_id };
+}
+
 /** Operatörsyta (/operator): kräver operator-flaggan. */
 export async function kravOperator(
   db: PGlite,

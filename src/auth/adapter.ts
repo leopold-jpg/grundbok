@@ -15,10 +15,19 @@ export type ByraKontext = {
   role: "konsult";
 };
 
+/** Klientanvändarens värld (WP20): EN tenant — aldrig byrå-kontext,
+ *  aldrig andra bolag. */
+export type KlientKontext = {
+  tenant_id: string;
+  tenant_namn: string;
+};
+
 export type Sessionsinfo = {
   user: InloggadUser;
-  /** Konsultens byrå (null för rena operatörer). */
+  /** Konsultens byrå (null för rena operatörer och klienter). */
   byra: ByraKontext | null;
+  /** Klientanvändarens bolag (null för konsulter och operatörer). */
+  klient: KlientKontext | null;
 };
 
 export interface AuthAdapter {

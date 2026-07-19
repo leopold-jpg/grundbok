@@ -12,5 +12,6 @@ export async function GET(req: Request) {
     user: { id: session.user.id, name: session.user.name, email: session.user.email },
     operator: session.user.is_operator,
     byra: session.byra,
+    klient: session.klient,
   });
 }
