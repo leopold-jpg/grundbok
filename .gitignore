@@ -11,3 +11,4 @@ node_modules/
 .claude/
 tsconfig.tsbuildinfo
 testdata/underlag/
+.mcp.json
