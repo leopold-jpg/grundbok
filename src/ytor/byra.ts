@@ -9,6 +9,7 @@ import {
   type Komplettering,
   type ManadsStatus,
 } from "@/lib/kompletteringar";
+import { listaKundfragor, type KundfragaRad } from "@/modules/kundassistent";
 
 // Byråns arbetsyta (WP13) — ytlogik ovanpå kärnans läshjälpare. Allt är
 // scopat genom sessionens byrå: klientlistan kommer ALLTID ur
@@ -136,6 +137,36 @@ export async function kompletteringarForByra(
     });
   }
   return resultat;
+}
+
+// ------------------------------------------------ kundfrågorna (WP24)
+
+export type ByraKundfraga = KundfragaRad & {
+  tenant_id: string;
+  tenant_namn: string;
+};
+
+/** Fliken "Frågor": kundassistentens eskalerade ärenden per klient —
+ *  samma scopning som kö/logg/kompletteringar: klienterna kommer ALLTID
+ *  ur sessionen. */
+export async function kundfragorForByra(
+  db: PGlite,
+  session: Sessionsinfo,
+  val: string,
+): Promise<ByraKundfraga[]> {
+  const klienter = await valdaKlienter(db, session, val);
+  const rader: ByraKundfraga[] = [];
+  for (const k of klienter) {
+    const fragor = await listaKundfragor(db, k.id);
+    rader.push(...fragor.map((f) => ({ ...f, tenant_id: k.id, tenant_namn: k.namn })));
+  }
+  rader.sort((a, b) => {
+    if ((a.status === "besvarad") !== (b.status === "besvarad")) {
+      return a.status === "besvarad" ? 1 : -1;
+    }
+    return b.skapad.localeCompare(a.skapad);
+  });
+  return rader;
 }
 
 // Attest-inputen valideras FÖRE decideProposal (Bugbot PR #2): ett

@@ -167,6 +167,34 @@ type ChattInlagg = {
   motor?: string;
 };
 
+type Kundfraga = {
+  id: string;
+  tenant_id: string;
+  tenant_namn: string;
+  fraga: string;
+  underlag_id: string | null;
+  underlag_summary: string | null;
+  status: "open" | "besvarad";
+  svar: string | null;
+  skapad: string;
+  besvarad: string | null;
+};
+
+type KanalData = {
+  app_aktiverad: boolean;
+  anvandare: { id: string; email: string; namn: string; created_at: string }[];
+  inbjudningar: { id: string; email: string; skapad: string; utgar: string; anvand: boolean }[];
+  mejladress: string;
+  avsandare: { id: string; email: string; created_at: string }[];
+  karantan: {
+    id: string;
+    fran: string;
+    amne: string | null;
+    antal_bilagor: number;
+    mottaget: string;
+  }[];
+};
+
 const kr = (ore: number) =>
   (ore / 100).toLocaleString("sv-SE", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
@@ -209,6 +237,7 @@ async function post<T>(url: string, body: unknown): Promise<T> {
 
 const FLIKAR = [
   { id: "attest", namn: "Att attestera" },
+  { id: "fragor", namn: "Frågor" },
   { id: "vanta", namn: "Väntar på kunden" },
   { id: "intag", namn: "Underlag in" },
   { id: "chatt", namn: "Chatt" },
@@ -880,6 +909,125 @@ function VantaSektion({
   );
 }
 
+// ----------------------------------------------------------------- frågor
+
+/** Fliken "Frågor" (WP24): kundassistentens eskalerade ärenden — det
+ *  kunden frågade i appen och som ALDRIG besvaras där (rådgivning är
+ *  byråns roll och relation). Underlaget står länkat; konsultens svar
+ *  syns i kundens app vid nästa poll. */
+function FragorSektion({
+  fragor,
+  visaKlient,
+  onForandring,
+}: {
+  fragor: Kundfraga[];
+  visaKlient: boolean;
+  onForandring: () => Promise<void>;
+}) {
+  const [svarFor, setSvarFor] = useState<string | null>(null);
+  const [svarText, setSvarText] = useState("");
+  const [fel, setFel] = useState("");
+
+  async function besvara(f: Kundfraga) {
+    if (!svarText.trim()) return;
+    setFel("");
+    try {
+      await post("/api/byra/fragor", {
+        tenant_id: f.tenant_id,
+        fraga_id: f.id,
+        svar: svarText,
+      });
+      setSvarFor(null);
+      setSvarText("");
+      await onForandring();
+    } catch (e) {
+      setFel(e instanceof Error ? e.message : String(e));
+    }
+  }
+
+  return (
+    <section className="steg">
+      <div className="steg-rubrik">
+        <h2 className="steg-titel">Frågor från kunden</h2>
+        <span className="steg-not">
+          kundassistenten svarar aldrig med råd — rådfrågorna hamnar här, med
+          underlaget länkat, och ditt svar syns i kundens app
+        </span>
+      </div>
+
+      {fragor.length === 0 ? (
+        <TomtLage>
+          Inga kundfrågor just nu — när kunden ställer en rådgivningsfråga i appen
+          lägger den sig här.
+        </TomtLage>
+      ) : (
+        <table className="rader">
+          <thead>
+            <tr>
+              {visaKlient && <th>Klient</th>}
+              <th>Fråga</th>
+              <th className="tal">Ställd</th>
+              <th>Svar</th>
+            </tr>
+          </thead>
+          <tbody>
+            {fragor.map((f) => (
+              <tr key={f.id}>
+                {visaKlient && <td>{f.tenant_namn}</td>}
+                <td>
+                  {f.fraga}
+                  {f.underlag_summary && (
+                    <div className="tyst">Gäller underlaget: {f.underlag_summary}</div>
+                  )}
+                </td>
+                <td className="tal">{tid(f.skapad)}</td>
+                <td>
+                  {f.status === "besvarad" ? (
+                    <span>{f.svar}</span>
+                  ) : svarFor === f.id ? (
+                    <span className="avvisa-rad" style={{ margin: 0 }}>
+                      <input
+                        type="text"
+                        value={svarText}
+                        onChange={(e) => setSvarText(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" && svarText.trim()) {
+                            e.preventDefault();
+                            void besvara(f);
+                          } else if (e.key === "Escape") {
+                            setSvarFor(null);
+                          }
+                        }}
+                        placeholder="Ditt svar till kunden …"
+                        aria-label="Svar till kunden"
+                        autoFocus
+                      />
+                      <button onClick={() => void besvara(f)} disabled={!svarText.trim()}>
+                        Svara
+                      </button>
+                    </span>
+                  ) : (
+                    <button
+                      onClick={() => {
+                        setSvarFor(f.id);
+                        setSvarText("");
+                      }}
+                    >
+                      Besvara
+                    </button>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+
+      {fel && <p className="fel">{fel}</p>}
+    </section>
+  );
+}
+
 // ----------------------------------------------------------------- intag
 
 function IntagSektion({
@@ -1458,6 +1606,190 @@ function LoggSektion({ logg, visaKlient }: { logg: LoggRad[]; visaKlient: boolea
 
 // ---------------------------------------------------------------- klient
 
+/** Klientens kanaler (WP24): bjud in klientanvändare (WP20), se appens
+ *  status, mejladressen in, registrerade avsändare och karantänen.
+ *  Avsändarna hanterar kunden själv i appen — byrån läser. */
+function KanalSektion({ klient }: { klient: Klient }) {
+  const [kanal, setKanal] = useState<KanalData | null>(null);
+  const [email, setEmail] = useState("");
+  const [lank, setLank] = useState("");
+  const [bjuder, setBjuder] = useState(false);
+  const [fel, setFel] = useState("");
+
+  const ladda = useCallback(async () => {
+    const data = await hamta<KanalData>(`/api/byra/klient/kanal?klient=${klient.id}`);
+    if (data) setKanal(data);
+  }, [klient.id]);
+
+  useEffect(() => {
+    setLank("");
+    setEmail("");
+    setFel("");
+    ladda();
+  }, [ladda]);
+
+  async function bjudIn() {
+    if (!email.trim()) return;
+    setFel("");
+    setBjuder(true);
+    try {
+      const svar = await post<{ lank: string; utgar: string }>("/api/byra/klient/inbjudan", {
+        tenant_id: klient.id,
+        email,
+      });
+      setLank(`${window.location.origin}${svar.lank}`);
+      setEmail("");
+      await ladda();
+    } catch (e) {
+      setFel(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBjuder(false);
+    }
+  }
+
+  return (
+    <section className="steg">
+      <div className="steg-rubrik">
+        <h2 className="steg-titel">Kundkanaler — {klient.namn}</h2>
+        <span className="steg-not">
+          appen och mejladressen är kundens vägar in — allt landar i samma flöde
+        </span>
+        {kanal &&
+          (kanal.app_aktiverad ? (
+            <Chip>app aktiverad</Chip>
+          ) : (
+            <Chip varning>app ej aktiverad</Chip>
+          ))}
+      </div>
+
+      {!kanal ? (
+        <p className="laddar">laddar …</p>
+      ) : (
+        <>
+          <h3 className="policy-namn">Klientanvändare</h3>
+          {kanal.anvandare.length === 0 && kanal.inbjudningar.every((i) => i.anvand) && (
+            <p className="tyst" style={{ margin: "var(--sp-2) 0" }}>
+              Ingen klientanvändare ännu — bjud in nedan så kan kunden fota kvitton i
+              appen och ta emot påminnelser.
+            </p>
+          )}
+          {kanal.anvandare.length > 0 && (
+            <table className="rader">
+              <thead>
+                <tr>
+                  <th>Namn</th>
+                  <th>E-post</th>
+                  <th className="tal">Sedan</th>
+                </tr>
+              </thead>
+              <tbody>
+                {kanal.anvandare.map((a) => (
+                  <tr key={a.id}>
+                    <td>{a.namn}</td>
+                    <td>{a.email}</td>
+                    <td className="tal">{tid(a.created_at)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+          {kanal.inbjudningar.filter((i) => !i.anvand).length > 0 && (
+            <p className="tyst" style={{ margin: "var(--sp-2) 0" }}>
+              Väntande inbjudningar:{" "}
+              {kanal.inbjudningar
+                .filter((i) => !i.anvand)
+                .map((i) => `${i.email} (t.o.m. ${tid(i.utgar)})`)
+                .join(", ")}
+            </p>
+          )}
+          <div className="avvisa-rad" style={{ marginTop: "var(--sp-2)" }}>
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="kundens e-postadress"
+              aria-label="E-post för klientinbjudan"
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && email.trim()) {
+                  e.preventDefault();
+                  void bjudIn();
+                }
+              }}
+            />
+            <button onClick={() => void bjudIn()} disabled={bjuder || !email.trim()}>
+              {bjuder ? "Skapar …" : "Bjud in till appen"}
+            </button>
+          </div>
+          {lank && (
+            <div className="bokford" style={{ marginTop: "var(--sp-2)" }}>
+              Inbjudningslänk skapad — kopiera och skicka till kunden (visas bara nu):
+              <input
+                type="text"
+                readOnly
+                value={lank}
+                aria-label="Inbjudningslänk"
+                style={{ width: "100%", marginTop: "var(--sp-1)", fontSize: 14 }}
+                onFocus={(e) => e.target.select()}
+              />
+            </div>
+          )}
+
+          <h3 className="policy-namn" style={{ marginTop: "var(--sp-4)" }}>
+            Mejl in
+          </h3>
+          <p style={{ margin: "0 0 var(--sp-2)" }}>
+            <Chip tal>{kanal.mejladress}</Chip>
+          </p>
+          {kanal.avsandare.length === 0 ? (
+            <p className="tyst">
+              Inga registrerade avsändare — kunden lägger till sina adresser i appen
+              under Skicka in.
+            </p>
+          ) : (
+            <p className="tyst">
+              Registrerade avsändare: {kanal.avsandare.map((a) => a.email).join(", ")}
+            </p>
+          )}
+
+          {kanal.karantan.length > 0 && (
+            <>
+              <h3 className="policy-namn" style={{ marginTop: "var(--sp-4)" }}>
+                Karantän
+              </h3>
+              <p className="tyst" style={{ margin: "0 0 var(--sp-2)" }}>
+                Mejl från oregistrerade avsändare — innehållet släpps aldrig in; be
+                kunden registrera adressen i appen och skicka om.
+              </p>
+              <table className="rader">
+                <thead>
+                  <tr>
+                    <th>Avsändare</th>
+                    <th>Ämne</th>
+                    <th className="tal">Bilagor</th>
+                    <th className="tal">Mottaget</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {kanal.karantan.map((k) => (
+                    <tr key={k.id}>
+                      <td>{k.fran}</td>
+                      <td>{k.amne ?? "—"}</td>
+                      <td className="tal">{k.antal_bilagor}</td>
+                      <td className="tal">{tid(k.mottaget)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </>
+          )}
+        </>
+      )}
+
+      {fel && <p className="fel">{fel}</p>}
+    </section>
+  );
+}
+
 function KlientSektion({
   klient,
   onForandring,
@@ -1582,6 +1914,9 @@ function KlientSektion({
 
   return (
     <>
+      {/* Kundkanaler (WP24): inbjudan, appen, mejlet, karantänen. */}
+      <KanalSektion klient={klient} />
+
       {/* Policy — trösklar i attest-språk */}
       <section className="steg">
         <div className="steg-rubrik">
@@ -1750,6 +2085,7 @@ export default function ByraSida() {
   const [ko, setKo] = useState<KoRad[]>([]);
   const [logg, setLogg] = useState<LoggRad[]>([]);
   const [komp, setKomp] = useState<KlientKompletteringar[]>([]);
+  const [fragor, setFragor] = useState<Kundfraga[]>([]);
   const [palettOppen, setPalettOppen] = useState(false);
   const [fokusRad, setFokusRad] = useState<string | null>(null);
 
@@ -1769,6 +2105,7 @@ export default function ByraSida() {
   const koSeq = useRef(0);
   const loggSeq = useRef(0);
   const kompSeq = useRef(0);
+  const fragorSeq = useRef(0);
 
   const laddaKo = useCallback(async (v: string) => {
     const seq = ++koSeq.current;
@@ -1788,16 +2125,23 @@ export default function ByraSida() {
     if (rader && seq === kompSeq.current) setKomp(rader);
   }, []);
 
+  const laddaFragor = useCallback(async (v: string) => {
+    const seq = ++fragorSeq.current;
+    const rader = await hamta<Kundfraga[]>(`/api/byra/fragor?klient=${v}`);
+    if (rader && seq === fragorSeq.current) setFragor(rader);
+  }, []);
+
   useEffect(() => {
     if (!session) return;
     laddaKo(val);
     laddaLogg(val);
     laddaKomp(val);
-  }, [session, val, laddaKo, laddaLogg, laddaKomp]);
+    laddaFragor(val);
+  }, [session, val, laddaKo, laddaLogg, laddaKomp, laddaFragor]);
 
   const uppdatera = useCallback(async () => {
-    await Promise.all([laddaKo(val), laddaLogg(val), laddaKomp(val)]);
-  }, [val, laddaKo, laddaLogg, laddaKomp]);
+    await Promise.all([laddaKo(val), laddaLogg(val), laddaKomp(val), laddaFragor(val)]);
+  }, [val, laddaKo, laddaLogg, laddaKomp, laddaFragor]);
 
   // Cmd+K öppnar paletten (WP26). Kommandokatalogen byggs av den delade
   // byggaren — konsultrollen ger ALDRIG operatörskommandon (WP29-regeln).
@@ -1855,6 +2199,7 @@ export default function ByraSida() {
     (s, k) => s + k.rader.filter((r) => r.status !== "klar").length,
     0,
   );
+  const oppnaFragor = fragor.filter((f) => f.status === "open").length;
 
   return (
     <main className={`byra ${plexMono.variable}`}>
@@ -1908,6 +2253,9 @@ export default function ByraSida() {
           >
             {f.namn}
             {f.id === "attest" && ko.length > 0 && <span className="antal">{ko.length}</span>}
+            {f.id === "fragor" && oppnaFragor > 0 && (
+              <span className="antal">{oppnaFragor}</span>
+            )}
             {f.id === "vanta" && oppnaKomp > 0 && <span className="antal">{oppnaKomp}</span>}
           </button>
         ))}
@@ -1921,6 +2269,9 @@ export default function ByraSida() {
           fokusRad={fokusRad}
           onFokusKlar={fokusKlar}
         />
+      )}
+      {flik === "fragor" && (
+        <FragorSektion fragor={fragor} visaKlient={val === "alla"} onForandring={uppdatera} />
       )}
       {flik === "vanta" && <VantaSektion data={komp} onForandring={uppdatera} />}
       {flik === "intag" && <IntagSektion klient={valdKlient} onNyttForslag={uppdatera} />}

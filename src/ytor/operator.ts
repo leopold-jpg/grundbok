@@ -588,6 +588,9 @@ export type Halsa = {
   aldsta_vantande: string | null;
   /** Kö-djup och omförsök per modul — drift, aldrig innehåll (WP27). */
   per_modul: { module: string; ko_djup: number; omforsok_24h: number }[];
+  /** Intagskanalen (WP24): underlag per vecka och källa senaste 8
+   *  veckorna — aggregat över alla tenants, ALDRIG innehåll. */
+  intag_per_vecka: { vecka: string; kalla: string; antal: number }[];
 };
 
 export async function halsa(db: PGlite): Promise<Halsa> {
@@ -616,6 +619,16 @@ export async function halsa(db: PGlite): Promise<Halsa> {
      GROUP BY message->>'module'
      ORDER BY message->>'module'`,
   );
+  // Intagsaggregatet (WP24) läses på service-vägen som övrig drift —
+  // veckor och källor, aldrig en rad kundinnehåll.
+  const intag = await db.query<{ vecka: Date | string; kalla: string; antal: string }>(
+    `SELECT date_trunc('week', skapad)::date AS vecka, kalla, count(*) AS antal
+     FROM underlag
+     WHERE skapad > now() - interval '8 weeks'
+     GROUP BY 1, 2
+     ORDER BY 1 DESC, 2`,
+  );
+
   return {
     ko_djup: djup,
     senaste_korning: tillIsoTid(r.rows[0]?.senaste),
@@ -628,5 +641,12 @@ export async function halsa(db: PGlite): Promise<Halsa> {
         omforsok_24h: Number(m.omforsok),
       }))
       .filter((m) => m.ko_djup > 0 || m.omforsok_24h > 0),
+    intag_per_vecka: intag.rows.map((i) => ({
+      vecka: (i.vecka instanceof Date ? i.vecka : new Date(i.vecka))
+        .toISOString()
+        .slice(0, 10),
+      kalla: i.kalla,
+      antal: Number(i.antal),
+    })),
   };
 }
