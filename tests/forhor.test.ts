@@ -9,7 +9,14 @@ import { createDb } from "../src/lib/db/client";
 import { withTenant } from "../src/lib/db/tenant";
 import { handleProposal, decideProposal, type Principal } from "../src/lib/decisions";
 import { forhorsUnderlag } from "../src/ytor/forhor";
-import { forhorFraga } from "../src/modules/forhor";
+import {
+  forhorFraga,
+  forhorChattAktiv,
+  forhorsFragorIdag,
+  ForhorsTakError,
+  FORHOR_TAK_PER_DAG,
+} from "../src/modules/forhor";
+import { auditera } from "../src/lib/ledger";
 import { exempelProposal } from "./helpers";
 
 // Förhörschatten (WP40/WP41): Varför-panelens deterministiska underlag
@@ -268,6 +275,58 @@ test("forhorFraga: fråga + svar fästs vid förslaget i audit-kedjan och svaret
   );
   assert.equal(svarsRad.rows[0].kind, "advisory_answer");
   assert.ok(svarsRad.rows[0].payload.provenance.input_refs.includes(`proposal:${p.id}`));
+});
+
+// ------------------------------------------------ WP42: polish + gränser
+
+test("forhorChattAktiv: på som förval, av med 0/false/av/off", () => {
+  const innan = process.env.FORHOR_CHAT_ENABLED;
+  try {
+    delete process.env.FORHOR_CHAT_ENABLED;
+    assert.equal(forhorChattAktiv(), true);
+    process.env.FORHOR_CHAT_ENABLED = "1";
+    assert.equal(forhorChattAktiv(), true);
+    for (const av of ["0", "false", "av", "off", "nej", " AV "]) {
+      process.env.FORHOR_CHAT_ENABLED = av;
+      assert.equal(forhorChattAktiv(), false, `"${av}" ska stänga av`);
+    }
+  } finally {
+    if (innan === undefined) delete process.env.FORHOR_CHAT_ENABLED;
+    else process.env.FORHOR_CHAT_ENABLED = innan;
+  }
+});
+
+test("kostnadsvakt: fråga 21 stoppas med vänligt tak — räknat ur audit-kedjan", async () => {
+  // Egen isolerad db: taket räknas ur nuläget och får inte kontamineras
+  // av andra testers förhör (samma mönster som kompletteringar.test.ts).
+  const db2 = await createDb();
+  const p = exempelProposal({ id: randomUUID() });
+  assert.equal((await handleProposal(db2, principalA, p)).status, "pending");
+
+  // Fyll dygnskvoten via samma kanal som räknaren läser (audit-kedjan).
+  await withTenant(db2, "kund_a", async (tx) => {
+    for (let i = 0; i < FORHOR_TAK_PER_DAG; i++) {
+      await auditera(tx, "kund_a", "forhor", { proposalId: p.id, fraga: `fråga ${i}` });
+    }
+  });
+  assert.equal(await forhorsFragorIdag(db2, "kund_a"), FORHOR_TAK_PER_DAG);
+
+  await assert.rejects(
+    forhorFraga(db2, {
+      tenantId: "kund_a",
+      proposalId: p.id,
+      fraga: "Varför konto 4010?",
+      stalldAv: "konsult-test",
+    }),
+    (err: unknown) => {
+      assert.ok(err instanceof ForhorsTakError);
+      assert.match((err as Error).message, /öppnar igen i morgon/);
+      return true;
+    },
+  );
+
+  // Taket är per tenant: kund_b är opåverkad.
+  assert.equal(await forhorsFragorIdag(db2, "kund_b"), 0);
 });
 
 test("forhorFraga: RLS — en annan tenants förslag kan aldrig förhöras", async () => {

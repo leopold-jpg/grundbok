@@ -41,6 +41,45 @@ import { forhorsUnderlag, type ForhorsUnderlag } from "@/ytor/forhor";
 
 export const MODULE_VERSION = "0.1.0";
 
+/** Kostnadsvakt (WP42): max frågor per tenant och dygn. Hårdkodad
+ *  konstant i natt — konfigurerbar (policy/ADR) senare. Räknas alltid
+ *  ur audit-kedjan i nuläget, aldrig ur en lagrad räknare (ADR-0004-
+ *  principen: härledd telemetri kan inte drifta). */
+export const FORHOR_TAK_PER_DAG = 20;
+
+/** Feature-flagga (WP42): FORHOR_CHAT_ENABLED styr lager 2. Av → endast
+ *  Varför-panelen (lager 1) syns; demon kan köras i valfritt läge.
+ *  Läses vid anrop (aldrig vid modulladdning — testbarhet). */
+export function forhorChattAktiv(): boolean {
+  const v = (process.env.FORHOR_CHAT_ENABLED ?? "").trim().toLowerCase();
+  return !["0", "false", "av", "off", "nej"].includes(v);
+}
+
+/** Antal förhörsfrågor tenanten ställt senaste dygnet — härlett ur
+ *  audit-kedjan (RLS-scopat). */
+export async function forhorsFragorIdag(db: PGlite, tenantId: string): Promise<number> {
+  return withTenant(db, tenantId, async (tx) => {
+    const r = await tx.query<{ n: string }>(
+      `SELECT count(*) AS n FROM audit_log
+       WHERE event_type = 'forhor' AND created_at > now() - interval '1 day'`,
+    );
+    return Number(r.rows[0]?.n ?? 0);
+  });
+}
+
+/** Kastat när dagstaket är nått — routen svarar 429 med det vänliga
+ *  meddelandet; Varför-panelen (lager 1) påverkas aldrig. */
+export class ForhorsTakError extends Error {
+  constructor() {
+    super(
+      `Dagens ${FORHOR_TAK_PER_DAG} förhörsfrågor är använda för den här klienten — ` +
+        "taket håller kostnaderna nere. Chatten öppnar igen i morgon; " +
+        "Varför-panelens underlag gäller som vanligt.",
+    );
+    this.name = "ForhorsTakError";
+  }
+}
+
 // Systemprompten ingår i provenance.prompt_hash — ändras prompten
 // ändras stämpeln (samma disciplin som rådgivningen).
 const SYSTEM = `Du är handläggaren bakom ett specifikt konteringsförslag i systemet
@@ -141,6 +180,12 @@ async function forhorFragaInner(
   input: { tenantId: string; proposalId: string; fraga: string; stalldAv: string },
 ): Promise<ForhorsChattSvar | null> {
   const { tenantId, proposalId, fraga, stalldAv } = input;
+
+  // Kostnadsvakten FÖRST — före all kontextbyggnad och LLM. Taket
+  // räknas ur audit-kedjan i nuläget (aldrig lagrad räknare).
+  if ((await forhorsFragorIdag(db, tenantId)) >= FORHOR_TAK_PER_DAG) {
+    throw new ForhorsTakError();
+  }
 
   const principal: Principal = {
     typ: "intern",

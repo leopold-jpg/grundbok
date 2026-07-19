@@ -3,7 +3,13 @@ import { getDb } from "@/lib/db/client";
 import { flushLangfuse } from "@/lib/observability/langfuse";
 import { kravKonsult, kravTenantIByra } from "@/auth/session";
 import { forhorsUnderlag } from "@/ytor/forhor";
-import { forhorFraga } from "@/modules/forhor";
+import {
+  forhorFraga,
+  forhorChattAktiv,
+  forhorsFragorIdag,
+  ForhorsTakError,
+  FORHOR_TAK_PER_DAG,
+} from "@/modules/forhor";
 
 export const runtime = "nodejs";
 
@@ -38,7 +44,16 @@ export async function GET(req: Request) {
     // "fel tenant" är avsiktligt samma svar.
     return NextResponse.json({ fel: "förslaget finns inte hos klienten" }, { status: 404 });
   }
-  return NextResponse.json(underlag);
+
+  // WP42: chattläget följer med lager 1-svaret så panelen kan rendera
+  // rätt läge direkt — flagga av → endast lager 1, tak nått → vänligt
+  // meddelande i stället för frågefältet.
+  const chat = {
+    enabled: forhorChattAktiv(),
+    tak: FORHOR_TAK_PER_DAG,
+    anvanda_idag: await forhorsFragorIdag(db, klient),
+  };
+  return NextResponse.json({ ...underlag, chat });
 }
 
 // POST /api/byra/forhor — förhörschatten lager 2 (WP41): konsulten
@@ -68,6 +83,13 @@ export async function POST(req: Request) {
   if (!(await kravTenantIByra(db, krav.session, tenant_id))) {
     return NextResponse.json({ fel: "klientbolaget tillhör inte din byrå" }, { status: 403 });
   }
+  // WP42: flaggan av → endast lager 1. Vänligt nej, aldrig en död yta.
+  if (!forhorChattAktiv()) {
+    return NextResponse.json(
+      { fel: "Förhörschatten är avstängd — Varför-panelens underlag gäller som vanligt." },
+      { status: 403 },
+    );
+  }
 
   try {
     const svar = await forhorFraga(db, {
@@ -81,6 +103,10 @@ export async function POST(req: Request) {
     }
     return NextResponse.json(svar);
   } catch (err) {
+    // Kostnadsvakten (WP42): 429 med det vänliga meddelandet.
+    if (err instanceof ForhorsTakError) {
+      return NextResponse.json({ fel: err.message }, { status: 429 });
+    }
     return NextResponse.json(
       { fel: err instanceof Error ? err.message : String(err) },
       { status: 422 },

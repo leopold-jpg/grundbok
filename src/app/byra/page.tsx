@@ -241,6 +241,9 @@ type ForhorsUnderlag = {
     utfall: string;
     verifikationsnummer: number | null;
   }[];
+  /** Chattläget (WP42): flagga + kostnadsvakt — panelen renderar rätt
+   *  läge direkt. enabled false → endast lager 1 syns. */
+  chat: { enabled: boolean; tak: number; anvanda_idag: number };
 };
 
 // Förhörssvaret (WP41) — speglar ForhorsChattSvar i src/modules/forhor.
@@ -336,8 +339,27 @@ function VarforPanel({ rad }: { rad: KoRad }) {
   const [chattFraga, setChattFraga] = useState("");
   const [svarar, setSvarar] = useState(false);
   const [chattFel, setChattFel] = useState("");
+  // WP42: lokalt räknade frågor denna session (utöver serverns dygnsräkning)
+  // + laddstadiet för den tydliga indikatorn (~8s-känslan).
+  const [anvandaExtra, setAnvandaExtra] = useState(0);
+  const [takNatt, setTakNatt] = useState(false);
+  const [laddSteg, setLaddSteg] = useState(0);
   const radIdRef = useRef(rad.id);
   radIdRef.current = rad.id;
+
+  // Tydlig laddindikator (WP42): tre stadier så väntan aldrig känns död.
+  useEffect(() => {
+    if (!svarar) {
+      setLaddSteg(0);
+      return;
+    }
+    const t1 = setTimeout(() => setLaddSteg(1), 2500);
+    const t2 = setTimeout(() => setLaddSteg(2), 7000);
+    return () => {
+      clearTimeout(t1);
+      clearTimeout(t2);
+    };
+  }, [svarar]);
 
   // Hämtas per förslag: radbyte med öppen panel laddar nya radens
   // underlag; ett sent svar för en lämnad rad kastas (aktiv-vakten).
@@ -348,6 +370,8 @@ function VarforPanel({ rad }: { rad: KoRad }) {
     setChatt([]);
     setChattFraga("");
     setChattFel("");
+    setAnvandaExtra(0);
+    setTakNatt(false);
     hamta<ForhorsUnderlag>(
       `/api/byra/forhor?klient=${encodeURIComponent(rad.tenant_id)}` +
         `&proposal=${encodeURIComponent(rad.id)}`,
@@ -370,29 +394,59 @@ function VarforPanel({ rad }: { rad: KoRad }) {
     setChattFraga("");
     setSvarar(true);
     try {
-      const r = await post<ForhorsChattSvar>("/api/byra/forhor", {
-        tenant_id: rad.tenant_id,
-        proposal_id: forId,
-        fraga: q,
+      // Direkt fetch (inte post()): statuskoden skiljer kostnadstaket
+      // (429, vänligt meddelande) från felläget (chatten vilar).
+      const r = await fetch("/api/byra/forhor", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ tenant_id: rad.tenant_id, proposal_id: forId, fraga: q }),
       });
+      if (r.status === 401) {
+        window.location.href = "/login?next=/byra";
+        return;
+      }
+      const data = (await r.json().catch(() => ({}))) as Partial<ForhorsChattSvar> & {
+        fel?: string;
+      };
       if (radIdRef.current !== forId) return; // raden lämnad — tråden är ny
+      if (r.status === 429) {
+        setTakNatt(true);
+        setChattFel(data.fel ?? "Dagens förhörsfrågor är använda — chatten öppnar igen i morgon.");
+        setChatt((c) => c.filter((m) => !(m.fraga === q && m.svar === undefined)));
+        return;
+      }
+      if (!r.ok || data.svar === undefined) {
+        // Felläget (WP42): chatten vilar, lager 1-underlaget ovan gäller —
+        // aldrig en tom ruta. Frågan tas tillbaka så den kan ställas om.
+        setChattFel(
+          "Chatten vilar just nu — underlaget i panelen ovan gäller som vanligt. " +
+            "Försök igen om en stund.",
+        );
+        setChatt((c) => c.filter((m) => !(m.fraga === q && m.svar === undefined)));
+        return;
+      }
+      setAnvandaExtra((n) => n + 1);
       setChatt((c) =>
         c.map((m, i) =>
           i === c.length - 1 && m.fraga === q && m.svar === undefined
             ? {
                 fraga: q,
-                svar: r.svar,
-                kallor: r.kallor,
-                konfidens: r.konfidens,
-                hanvisa: r.hanvisa_till_manniska,
-                motor: r.motor,
+                svar: data.svar!,
+                kallor: data.kallor,
+                konfidens: data.konfidens,
+                hanvisa: data.hanvisa_till_manniska,
+                motor: data.motor,
               }
             : m,
         ),
       );
-    } catch (e) {
+    } catch {
       if (radIdRef.current === forId) {
-        setChattFel(e instanceof Error ? e.message : String(e));
+        setChattFel(
+          "Chatten vilar just nu — underlaget i panelen ovan gäller som vanligt. " +
+            "Försök igen om en stund.",
+        );
+        setChatt((c) => c.filter((m) => !(m.fraga === q && m.svar === undefined)));
       }
     } finally {
       if (radIdRef.current === forId) setSvarar(false);
@@ -528,58 +582,85 @@ function VarforPanel({ rad }: { rad: KoRad }) {
         injection-screening: {u.proposal.provenance.injection_screened ? "ja" : "nej"}
       </p>
 
-      <div className="diff-rubrik">Förhör agenten</div>
-      {chatt.length > 0 && (
-        <div className="chatt-historik" style={{ marginBottom: "var(--sp-3)" }}>
-          {chatt.map((m, i) => (
-            <div key={i} style={{ display: "contents" }}>
-              <div className="bubbla konsult">{m.fraga}</div>
-              {m.svar !== undefined && (
-                <div className="bubbla agent">
-                  {m.svar}
-                  <div className="bubbla-meta">
-                    {m.kallor?.map((k, j) => (
-                      <Chip key={j}>
-                        {k.typ}: {k.ref}
-                      </Chip>
-                    ))}
-                    {m.hanvisa && <Chip varning>hänvisar till människa</Chip>}
-                    {m.konfidens !== undefined && (
-                      <Chip>konfidens {Math.round(m.konfidens * 100)} %</Chip>
-                    )}
-                    {m.motor === "fallback" && <Chip>deterministisk fallback</Chip>}
-                  </div>
+      {u.chat.enabled && (
+        <>
+          <div className="diff-rubrik">Förhör agenten</div>
+          {chatt.length > 0 && (
+            <div className="chatt-historik" style={{ marginBottom: "var(--sp-3)" }}>
+              {chatt.map((m, i) => (
+                <div key={i} style={{ display: "contents" }}>
+                  <div className="bubbla konsult">{m.fraga}</div>
+                  {m.svar !== undefined && (
+                    <div className="bubbla agent">
+                      {m.svar}
+                      <div className="bubbla-meta">
+                        {m.kallor?.map((k, j) => (
+                          <Chip key={j}>
+                            {k.typ}: {k.ref}
+                          </Chip>
+                        ))}
+                        {m.hanvisa && <Chip varning>hänvisar till människa</Chip>}
+                        {m.konfidens !== undefined && (
+                          <Chip>konfidens {Math.round(m.konfidens * 100)} %</Chip>
+                        )}
+                        {m.motor === "fallback" && <Chip>deterministisk fallback</Chip>}
+                      </div>
+                    </div>
+                  )}
                 </div>
-              )}
+              ))}
             </div>
-          ))}
-        </div>
-      )}
-      {svarar && <p className="laddar">agenten svarar …</p>}
-      <div className="chatt-rad">
-        <input
-          type="text"
-          value={chattFraga}
-          onChange={(e) => setChattFraga(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && !svarar) {
-              e.preventDefault();
-              void stallFraga();
+          )}
+          {svarar && (
+            <p className="laddar" role="status">
+              {laddSteg === 0 && "agenten läser underlaget …"}
+              {laddSteg === 1 && "formulerar svar med källhänvisningar …"}
+              {laddSteg === 2 && "tar längre än vanligt — svaret kommer strax …"}
+            </p>
+          )}
+          {(() => {
+            const kvar = Math.max(0, u.chat.tak - u.chat.anvanda_idag - anvandaExtra);
+            if (takNatt || kvar === 0) {
+              return (
+                <p className="tyst varfor-text">
+                  {chattFel ||
+                    `Dagens ${u.chat.tak} förhörsfrågor är använda för den här klienten — ` +
+                      "chatten öppnar igen i morgon. Underlaget ovan gäller som vanligt."}
+                </p>
+              );
             }
-          }}
-          placeholder="Fråga om detta förslag — t.ex. ”varför 4010 och inte 5460?” …"
-          aria-label="Fråga agenten om förslaget"
-          disabled={svarar}
-        />
-        <button onClick={() => void stallFraga()} disabled={svarar || !chattFraga.trim()}>
-          Förhör
-        </button>
-      </div>
-      <p className="tyst varfor-provenans">
-        Svaren bygger enbart på klientens eget underlag och loggas på förslaget.
-        Chatten kan förklara men aldrig ändra — beslut fattas med Attestera/Avvisa.
-      </p>
-      {chattFel && <p className="fel">{chattFel}</p>}
+            return (
+              <>
+                <div className="chatt-rad">
+                  <input
+                    type="text"
+                    value={chattFraga}
+                    onChange={(e) => setChattFraga(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && !svarar) {
+                        e.preventDefault();
+                        void stallFraga();
+                      }
+                    }}
+                    placeholder="Fråga om detta förslag — t.ex. ”varför 4010 och inte 5460?” …"
+                    aria-label="Fråga agenten om förslaget"
+                    disabled={svarar}
+                  />
+                  <button onClick={() => void stallFraga()} disabled={svarar || !chattFraga.trim()}>
+                    Förhör
+                  </button>
+                </div>
+                <p className="tyst varfor-provenans">
+                  Svaren bygger enbart på klientens eget underlag och loggas på förslaget.
+                  Chatten kan förklara men aldrig ändra — beslut fattas med Attestera/Avvisa.
+                  {kvar <= 5 && ` ${kvar} ${kvar === 1 ? "fråga" : "frågor"} kvar i dag.`}
+                </p>
+                {chattFel && <p className="fel">{chattFel}</p>}
+              </>
+            );
+          })()}
+        </>
+      )}
     </div>
   );
 }
