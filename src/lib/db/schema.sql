@@ -341,6 +341,27 @@ CREATE TABLE IF NOT EXISTS klient_inbjudningar (
   used_at     timestamptz
 );
 
+-- WP21: intake-porten. Ett underlag är kvittensraden för allt som
+-- kommer in via kanalerna (app/mejl/api — källfältet rymmer 'telegram'
+-- för en ev. framtida brygga, medvetet utan mer design än så).
+-- INGEN egen statemaskin: mottaget → tolkat → bokfort härleds ur
+-- proposal/decision (src/lib/intake.ts), aldrig ur en lagrad status.
+-- content_hash ger idempotens: samma fil två gånger = EN rad, aldrig
+-- dubbla förslag. Kunddatabärande: tenant_id + RLS som övriga.
+CREATE TABLE IF NOT EXISTS underlag (
+  id           uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id    text NOT NULL REFERENCES tenants(id),
+  document_id  uuid NOT NULL REFERENCES documents(id),
+  kalla        text NOT NULL CHECK (kalla IN ('app', 'mejl', 'api', 'telegram')),
+  content_hash text NOT NULL,
+  filnamn      text,
+  mime_typ     text,
+  inlamnad_av  text NOT NULL,
+  skapad       timestamptz NOT NULL DEFAULT now()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS underlag_tenant_hash_idx
+  ON underlag (tenant_id, content_hash);
+
 -- Operatörskonsolen (WP14): namngivna policymallar som väljs vid
 -- provisionering och KOPIERAS till tenantens autonomy_policies — mallen
 -- är operatörens data (service-vägens plan, inga app-grants), tenantens

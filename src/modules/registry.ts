@@ -1,6 +1,6 @@
 import type { PGlite } from "@electric-sql/pglite";
 import type { ModuleId, Proposal } from "@/contracts";
-import { tolka } from "@/lib/extract";
+import { tolka, arBinartUnderlag } from "@/lib/extract";
 import { kontera, type Flagga } from "@/lib/kontering";
 import { granskaUnderlag } from "@/lib/granskning";
 import { byggBokforingsProposal, byggEskaleringsProposal } from "@/lib/bokforing-modul";
@@ -47,6 +47,31 @@ const bokforing: ModulRuntime = {
   id: "bokforing",
   async buildProposal(input) {
     const tolkning = await tolka(input.underlag, input.systemPrompt);
+
+    // Binärt underlag som fallbacken inte kunde läsa (WP21): eskalera i
+    // stället för att kontera på ett tomsvar — kameran/PDF:en kräver
+    // modelltolkning eller konsultens ögon.
+    if (arBinartUnderlag(input.underlag) && tolkning.motor === "fallback") {
+      const flagga: Flagga = {
+        id: "binart_utan_modell",
+        niva: "varning",
+        text: "Fotograferat/uppladdat underlag kunde inte tolkas utan modell — hanteras manuellt av konsulten.",
+      };
+      const proposal = byggEskaleringsProposal({
+        tenantId: input.tenantId,
+        documentId: input.underlagRef,
+        extraktion: tolkning.extraktion,
+        skal: "binärt underlag utan modelltolkning",
+        flaggor: [flagga],
+        motor: tolkning.motor,
+        motorDetalj: tolkning.motor_detalj,
+        id: input.proposalId,
+        agentRuntime: input.agentRuntime,
+        mall: input.mall,
+        systemPrompt: input.systemPrompt,
+      });
+      return { proposal, flaggor: [flagga] };
+    }
 
     // Granskningsordningen (WP30/WP32) körs deterministiskt före
     // konteringen: mottagarkontroll först, sedan privat, förskott,
