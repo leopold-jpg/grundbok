@@ -27,12 +27,15 @@ import { skapaAgentNyckel } from "../src/lib/agent-auth";
 import { körJobb } from "../src/workers/run-agent";
 import type { AgentJobb } from "../src/lib/queue";
 import type { Flagga } from "../src/lib/kontering";
+import { evaluateAutonomy } from "../src/lib/decisions";
+import { mallRegistret } from "../src/mallar/registry";
 import {
   FALL_1_FEL_MOTTAGARE,
   FALL_2_ATA_AVVIKELSE,
   FALL_3_FORSKOTT,
   FALL_4_PRIVAT,
   FALL_5_DELMATCHNING,
+  FALL_6_EU_TJANST,
   FALL_7_EL_ANOMALI,
   FALL_8_DUBBLETT,
 } from "./golden-underlag";
@@ -54,6 +57,7 @@ type Forvantan = {
     anomaly_niva?: string;
     audit_event?: string;
     forsta_korningen_forbjuder?: string[];
+    auto_monster?: boolean;
   };
 };
 
@@ -216,20 +220,30 @@ test("golden fall 5: delmatchning → missing_receipt med restbelopp", async () 
 
 // ================================================================ fall 6
 
-test("golden fall 6: BLOCKERAT — dokumenterat, aldrig gissat", () => {
+test("golden fall 6: EU-tjänsteinköp reverse charge → 2614/2645, auto-mönster", async () => {
+  // Blockeringen HÄVD: TESTUNDERLAG-GOLDEN.md ligger i docs/ och fall 6
+  // implementeras enligt det ("utgående + ingående moms på förvärv,
+  // 2614/2645"). OBS 2645 (beräknad ingående moms på förvärv från
+  // utlandet), inte 2647 — den gäller omvänd i Sverige (bygg).
   const f = lasForvantan(6);
-  assert.equal(f.blockerad, true);
-  assert.ok(f.skal && f.skal.includes("TESTUNDERLAG-GOLDEN.md"));
-  // Vakten: landar TESTUNDERLAG-GOLDEN.md i repot ska blockeringen hävas
-  // och fallet implementeras — då ska detta test uppdateras medvetet.
-  const golden = ["docs", "."].some((dir) => {
-    try {
-      return readdirSync(join(process.cwd(), dir)).includes("TESTUNDERLAG-GOLDEN.md");
-    } catch {
-      return false;
-    }
-  });
-  assert.equal(golden, false, "TESTUNDERLAG-GOLDEN.md finns nu — implementera fall 6 och häv blockeringen");
+  assert.equal(f.blockerad, undefined);
+  const kord = await körFall(f.tenant!, FALL_6_EU_TJANST, "golden-fall-6");
+  assertMotForvantan(kord, f);
+
+  // Rent mönster: inga varningsflaggor — dokumentets 0 kr moms är
+  // KORREKT vid omvänd skattskyldighet, aldrig en avvikelse.
+  assert.ok(!kord.flaggor.some((fl) => fl.niva === "varning"));
+
+  // "Detta är ett mönster som SKA auto-bokas": under bokföringsmallens
+  // förvalspolicy passerar förslaget med LLM-klassens konfidens och känd
+  // motpart — mockens 0.7 är motorbegränsningen, inte mönstrets.
+  assert.equal(f.forvantat!.auto_monster, true);
+  const utfall = evaluateAutonomy(
+    { ...kord.payload, confidence: 0.9 },
+    { tenant_id: f.tenant!, module: "bokforing", ...mallRegistret.bokforing.defaultPolicy },
+    true,
+  );
+  assert.equal(utfall.auto, true, `auto föll på: ${utfall.missade.join("; ")}`);
 });
 
 // ================================================================ fall 7

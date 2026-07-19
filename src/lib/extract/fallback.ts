@@ -108,6 +108,13 @@ export function tolkaMedFallback(text: string): Extraktion {
     /varav\s+utan\s+(?:kvitto|underlag)/,
     /(?:kvitto|underlag)\s+saknas\s+för/,
   ]);
+  // Omvänd skattskyldighet för utländskt tjänsteinköp (fall 6):
+  // 'reverse charge' eller 'omvänd skattskyldighet' + EU-VAT-nr.
+  // Svensk omvänd byggmoms skriver 'omvänd betalningsskyldighet'
+  // (lagens term) och träffas inte här.
+  const omvandEu =
+    /reverse\s?charge|omvänd\s+skattskyldighet/i.test(text) &&
+    /VAT|EU\s?\d{7,}/i.test(text);
 
   return {
     motpart: motpart.slice(0, 120),
@@ -126,5 +133,6 @@ export function tolkaMedFallback(text: string): Extraktion {
     privat_indikation: privatRad ? privatRad.slice(0, 200) : null,
     order_ref: orderRef,
     rest_utan_underlag_ore: restUtanUnderlag,
+    omvand_eu: omvandEu,
   };
 }

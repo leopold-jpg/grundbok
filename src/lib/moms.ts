@@ -24,6 +24,10 @@ export function bestamMoms(
   kategori: string,
   affarshandelsedatum: string,
   tenantId: string,
+  /** Fall 6: dokumentet anger omvänd skattskyldighet för utländskt
+   *  tjänsteinköp (reverse charge, EU-VAT-nr) — observationen kommer ur
+   *  extraktionen; beslutet (2614/2645-formen) fattas här. */
+  opts?: { omvandEu?: boolean },
 ): MomsBeslut {
   const rules = loadMomsRules();
   const kund = loadKundConfig(tenantId);
@@ -46,6 +50,26 @@ export function bestamMoms(
         omvand_ingaende: rules.konton.omvand.ingaende,
       },
       deklarationsrutor: bygg.deklarationsrutor,
+    };
+  }
+
+  // Omvänd skattskyldighet för tjänsteinköp från utlandet (fall 6,
+  // ML 16 kap. 9 §): utgående moms 2614 + BERÄKNAD ingående moms på
+  // förvärv från utlandet 2645 (inte 2647 — den gäller omvänd i
+  // Sverige). Byggvägen ovan har företräde när båda skulle träffa.
+  if (opts?.omvandEu) {
+    const eu = rules.omvand_betalningsskyldighet.eu_tjanst;
+    return {
+      typ: "omvand",
+      sats: eu.sats,
+      lagrum: eu.lagrum,
+      kategori: "eu_tjanst",
+      kategoriLabel: "Tjänsteinköp från utlandet, omvänd skattskyldighet",
+      konton: {
+        omvand_utgaende: rules.konton.omvand.utgaende_25,
+        omvand_ingaende: rules.konton.omvand.ingaende_utland,
+      },
+      deklarationsrutor: eu.deklarationsrutor,
     };
   }
 
