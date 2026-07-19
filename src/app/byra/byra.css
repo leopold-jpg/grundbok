@@ -136,6 +136,33 @@
 
 .byra .kortkommandon { margin: var(--sp-2) 0 0; }
 
+/* Varför-panelen (WP40): förhörets lager 1 — utfällbart, hårfin kant,
+   ingen extra skugga (inline-yta enligt grammatiken). */
+.byra .varfor { margin-top: var(--sp-3); }
+.byra .varfor-panel {
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--bg-elev);
+  padding: var(--sp-3) var(--sp-4) var(--sp-4);
+  margin-top: var(--sp-2);
+}
+.byra .varfor-panel .diff-rubrik:first-child { margin-top: 0; }
+.byra .varfor-text { margin: 0; font-size: 13px; }
+.byra .varfor-paket { margin: 0 0 var(--sp-2); }
+.byra .varfor-paket-namn { font-size: 13px; font-weight: 500; }
+.byra .varfor-regler {
+  margin: var(--sp-1) 0 0;
+  padding-left: var(--sp-5);
+  font-size: 13px;
+  color: var(--fg-muted);
+}
+.byra .varfor-regel-id {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--fg);
+}
+.byra .varfor-provenans { margin: var(--sp-3) 0 0; font-size: 12px; }
+
 .byra .lagrum-lista {
   margin: var(--sp-2) 0 0;
   padding-left: var(--sp-5);

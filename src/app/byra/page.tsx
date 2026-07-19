@@ -195,6 +195,54 @@ type KanalData = {
   }[];
 };
 
+// Varför-panelens underlag (WP40) — speglar ForhorsUnderlag i
+// src/ytor/forhor.ts (serverns typ är sanningen).
+type ForhorsUnderlag = {
+  proposal: {
+    id: string;
+    summary: string;
+    module: string;
+    kind: string;
+    status: string;
+    confidence: number;
+    motpart: string | null;
+    affarshandelsedatum: string;
+    created_at: string;
+    flaggor: Flagga[];
+    legal: Lagrum[];
+    provenance: {
+      model: string;
+      mall: string | null;
+      agent_runtime: string | null;
+      injection_screened: boolean;
+    };
+  };
+  policyutfall: {
+    missade_villkor: string[];
+    policy: {
+      max_belopp_ore: number;
+      min_confidence: number;
+      kanda_motparter_endast: boolean;
+      tillatna_kinds: string[];
+    } | null;
+  };
+  paket: {
+    id: string;
+    displayName: string;
+    version: string;
+    regler: { id: string; beskrivning: string; lagrum?: string }[];
+  }[];
+  historik: {
+    typ: "verifikation" | "forslag";
+    datum: string;
+    beskrivning: string;
+    belopp_ore: number;
+    konto: string | null;
+    utfall: string;
+    verifikationsnummer: number | null;
+  }[];
+};
+
 const kr = (ore: number) =>
   (ore / 100).toLocaleString("sv-SE", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
@@ -252,10 +300,172 @@ type FlikId = (typeof FLIKAR)[number]["id"];
  *  fönstret löper ut eller när vyn lämnas — U innan dess återställer. */
 const ANGRA_FONSTER_MS = 6000;
 
+// Varför-panelen (WP40): förhörets lager 1 — utfällbar sektion i
+// detaljpanelen som visar det som redan finns om förslaget: agentens
+// motivering + flaggor, aktiva branschpaketsregler (regel-id + namn),
+// konfidens + policyutfall (omräknat mot gällande policy) och motpartens
+// 3 senaste verifikat/förslag hos tenanten. Deterministisk läsning —
+// ingen LLM-runda. V öppnar/stänger (tangenten hanteras i AttestSektion).
+function VarforPanel({ rad }: { rad: KoRad }) {
+  const [underlag, setUnderlag] = useState<ForhorsUnderlag | null>(null);
+  const [fel, setFel] = useState(false);
+
+  // Hämtas per förslag: radbyte med öppen panel laddar nya radens
+  // underlag; ett sent svar för en lämnad rad kastas (aktiv-vakten).
+  useEffect(() => {
+    let aktiv = true;
+    setUnderlag(null);
+    setFel(false);
+    hamta<ForhorsUnderlag>(
+      `/api/byra/forhor?klient=${encodeURIComponent(rad.tenant_id)}` +
+        `&proposal=${encodeURIComponent(rad.id)}`,
+    ).then((u) => {
+      if (!aktiv) return;
+      if (u) setUnderlag(u);
+      else setFel(true);
+    });
+    return () => {
+      aktiv = false;
+    };
+  }, [rad.id, rad.tenant_id]);
+
+  if (fel) {
+    return (
+      <div className="varfor-panel" role="region" aria-label="Varför-panelen">
+        <p className="fel">
+          Underlaget kunde inte hämtas just nu — förslaget och flaggorna ovan
+          gäller fortfarande.
+        </p>
+      </div>
+    );
+  }
+  if (!underlag) {
+    return (
+      <div className="varfor-panel" role="region" aria-label="Varför-panelen">
+        <p className="laddar">hämtar underlaget …</p>
+      </div>
+    );
+  }
+
+  const u = underlag;
+  const policy = u.policyutfall.policy;
+  return (
+    <div className="varfor-panel" role="region" aria-label="Varför-panelen">
+      <div className="diff-rubrik">Agentens motivering</div>
+      <p className="varfor-text">{u.proposal.summary}</p>
+      {u.proposal.flaggor.length > 0 && (
+        <ul className="varfor-regler">
+          {u.proposal.flaggor.map((f) => (
+            <li key={f.id}>
+              <code className="varfor-regel-id">{f.id}</code> {f.text}
+            </li>
+          ))}
+        </ul>
+      )}
+      {u.proposal.legal.length > 0 && (
+        <ul className="lagrum-lista">
+          {u.proposal.legal.map((l, i) => (
+            <li key={i}>
+              {l.lagrum} <span className="tyst">· {l.ruleset}</span>
+              {l.note ? ` — ${l.note}` : ""}
+            </li>
+          ))}
+        </ul>
+      )}
+
+      <div className="diff-rubrik">Aktiva branschpaketsregler</div>
+      {u.paket.length === 0 ? (
+        <p className="tyst varfor-text">
+          Inga branschpaket aktiva — klientens bransch aktiverar inget paket.
+        </p>
+      ) : (
+        u.paket.map((p) => (
+          <div key={p.id} className="varfor-paket">
+            <span className="varfor-paket-namn">
+              {p.displayName} <span className="tyst">({p.id}@{p.version})</span>
+            </span>
+            <ul className="varfor-regler">
+              {p.regler.map((r) => (
+                <li key={r.id}>
+                  <code className="varfor-regel-id">{r.id}</code> {r.beskrivning}
+                  {r.lagrum && <span className="tyst"> — {r.lagrum}</span>}
+                </li>
+              ))}
+            </ul>
+          </div>
+        ))
+      )}
+
+      <div className="diff-rubrik">Konfidens och policyutfall</div>
+      <div className="metarad" style={{ marginTop: 0 }}>
+        <Chip>konfidens {Math.round(u.proposal.confidence * 100)} %</Chip>
+        {policy && <Chip tal>er gräns {kr(policy.max_belopp_ore)} kr</Chip>}
+        {policy && <Chip>minst {Math.round(policy.min_confidence * 100)} % konfidens</Chip>}
+        {policy?.kanda_motparter_endast && <Chip>endast kända motparter</Chip>}
+      </div>
+      {u.policyutfall.missade_villkor.length === 0 ? (
+        <p className="diff-ok">Inom er policy — beslutet är ändå ert.</p>
+      ) : (
+        <ul className="diff-lista">
+          {u.policyutfall.missade_villkor.map((v, i) => (
+            <li key={i}>{v}</li>
+          ))}
+        </ul>
+      )}
+
+      <div className="diff-rubrik">Samma motpart senast</div>
+      {u.proposal.motpart === null ? (
+        <p className="tyst varfor-text">Förslaget saknar motpart — ingen historik att visa.</p>
+      ) : u.historik.length === 0 ? (
+        <p className="tyst varfor-text">
+          Inga tidigare verifikat eller förslag från {u.proposal.motpart}.
+        </p>
+      ) : (
+        <table className="rader">
+          <thead>
+            <tr>
+              <th>Datum</th>
+              <th>Underlag</th>
+              <th className="tal">Konto</th>
+              <th className="tal">Belopp</th>
+              <th>Utfall</th>
+            </tr>
+          </thead>
+          <tbody>
+            {u.historik.map((h, i) => (
+              <tr key={i}>
+                <td className="tal">{h.datum}</td>
+                <td>
+                  {h.beskrivning}
+                  {h.verifikationsnummer !== null && (
+                    <span className="tyst"> · V{h.verifikationsnummer}</span>
+                  )}
+                </td>
+                <td className="tal">{h.konto ?? "—"}</td>
+                <td className="tal">{h.belopp_ore > 0 ? `${kr(h.belopp_ore)} kr` : "—"}</td>
+                <td>{h.utfall}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+
+      <p className="varfor-provenans tyst">
+        modell {u.proposal.provenance.model}
+        {u.proposal.provenance.mall && <> · mall {u.proposal.provenance.mall}</>}
+        {u.proposal.provenance.agent_runtime && <> · {u.proposal.provenance.agent_runtime}</>}
+        {" · "}
+        injection-screening: {u.proposal.provenance.injection_screened ? "ja" : "nej"}
+      </p>
+    </div>
+  );
+}
+
 // WP26: radlista + detaljpanel i sidled (aldrig modal — kön förblir
 // synlig och nästa förslag är redan laddat i klienten). Tangentbordet
 // bär flödet: ↑↓ väljer, Enter fokuserar detaljen, A attesterar,
-// X öppnar motiveringsfältet, U ångrar senaste innan det skickats.
+// X öppnar motiveringsfältet, U ångrar senaste innan det skickats,
+// V fäller ut Varför-panelen (WP40).
 // Själva maskinen är ren och testad (attest-tangentbord.ts).
 function AttestSektion({
   ko,
@@ -279,6 +489,9 @@ function AttestSektion({
   const [fragar, setFragar] = useState(false);
   const [fragaText, setFragaText] = useState("");
   const [fragaBekraftelse, setFragaBekraftelse] = useState("");
+  // Varför-panelen (WP40): öppen-läget överlever radbyte — konsulten som
+  // förhör kön rad för rad slipper trycka V för varje förslag.
+  const [varforOppen, setVarforOppen] = useState(false);
   const detaljRef = useRef<HTMLDivElement>(null);
   const motiveringRef = useRef<HTMLInputElement>(null);
 
@@ -426,6 +639,9 @@ function AttestSektion({
         } else if (k === "u") {
           e.preventDefault();
           dispatch({ typ: "angra" });
+        } else if (k === "v") {
+          e.preventDefault();
+          setVarforOppen((o) => !o);
         }
       }
     }
@@ -605,6 +821,17 @@ function AttestSektion({
                   </div>
                 )}
 
+                <div className="varfor">
+                  <button
+                    className="varfor-knapp"
+                    aria-expanded={varforOppen}
+                    onClick={() => setVarforOppen((o) => !o)}
+                  >
+                    {varforOppen ? "Dölj varför (V)" : "Varför? (V)"}
+                  </button>
+                  {varforOppen && <VarforPanel rad={vald} />}
+                </div>
+
                 <div style={{ marginTop: "var(--sp-3)" }}>
                   {fragar ? (
                     <div className="avvisa-rad">
@@ -686,7 +913,7 @@ function AttestSektion({
       )}
 
       <p className="kortkommandon tyst" aria-hidden="true">
-        ↑↓ välj · Enter detalj · A attestera · X avvisa · U ångra · ⌘K kommandon
+        ↑↓ välj · Enter detalj · A attestera · X avvisa · U ångra · V varför · ⌘K kommandon
       </p>
 
       {fel && <p className="fel">{fel}</p>}
