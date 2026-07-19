@@ -183,6 +183,52 @@ body:has(main.operator) {
   }
 }
 
+/* Fliknavigeringen (poleringspasset) — samma rum-mönster som /byra:
+   understruken aktiv flik, skrollbar i mobil. Sektionerna döljs med
+   hidden-attributet; bältet+hängslen-regeln säkrar att ingen framtida
+   display-regel på .steg slår ut det. */
+.operator .flikar {
+  display: flex;
+  gap: var(--sp-1);
+  border-bottom: 1px solid var(--border);
+  margin-bottom: var(--sp-6);
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+.operator .flik {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--fg-muted);
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  padding: var(--sp-2) var(--sp-3) var(--sp-3);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.operator .flik:hover:not(:disabled) { color: var(--fg); background: none; border-color: var(--border-strong); }
+.operator .flik[data-aktiv="true"] { color: var(--fg); border-bottom-color: var(--accent); }
+.operator .flik:focus-visible {
+  outline: 2px solid var(--bla);
+  outline-offset: -2px;
+}
+.operator .steg[hidden] { display: none; }
+@media (max-width: 600px) {
+  .operator .flikar { margin-inline: calc(-1 * var(--sp-5)); padding-inline: var(--sp-5); }
+}
+
+/* Dev-chippet efter agentnamnet behöver luft mot namnknappen. */
+.operator td .valj-rad + .chip { margin-left: var(--sp-2); }
+
+/* Rollkolumnen (ADR-0005): roll + paketchips på samma rad. */
+.operator .roll-etikett {
+  display: inline-flex;
+  gap: var(--sp-1);
+  align-items: baseline;
+  flex-wrap: wrap;
+}
+
 /* Flottan (WP13): filter, varningschips och detaljpanelen. */
 .operator .filter-rad {
   display: flex;
