@@ -39,6 +39,12 @@ export type IntakeUtfall = {
   notis: string | null;
 };
 
+// MEDVETEN AVVIKELSE från kickoffens "presignerad uppladdning till
+// storage": lokalt ÄR documents-tabellen storagen (workern löser redan
+// "document:<uuid>" ur den), så filen tas emot som base64 och lagras
+// som data-URI i documents.raw. Vid deploy (S4) byts detta mot
+// presignerad Supabase Storage-URL bakom SAMMA port — payload_ref är
+// redan en storage-URI-abstraktion, så bytet rör inte kedjan.
 function normaliseraInnehall(innehall: IntakeInnehall): {
   raw: string;
   dokumentTyp: string;
@@ -112,12 +118,12 @@ export async function taEmotUnderlag(
   const agentId = agent.rows[0]?.id ?? null;
 
   type TxUtfall =
-    | { dubblett: true; underlagId: string }
+    | { dubblett: true; underlagId: string; documentId: string }
     | { dubblett: false; underlagId: string; documentId: string };
 
   const utfall = await withTenant(db, input.tenantId, async (tx): Promise<TxUtfall> => {
-    const befintlig = await tx.query<{ id: string }>(
-      `SELECT id FROM underlag WHERE content_hash = $1`,
+    const befintlig = await tx.query<{ id: string; document_id: string }>(
+      `SELECT id, document_id FROM underlag WHERE content_hash = $1`,
       [contentHash],
     );
     if (befintlig.rows[0]) {
@@ -126,7 +132,11 @@ export async function taEmotUnderlag(
         kalla: input.kalla,
         inlamnadAv: input.inlamnadAv,
       });
-      return { dubblett: true, underlagId: befintlig.rows[0].id };
+      return {
+        dubblett: true,
+        underlagId: befintlig.rows[0].id,
+        documentId: befintlig.rows[0].document_id,
+      };
     }
 
     const dok = await tx.query<{ id: string }>(
@@ -154,24 +164,76 @@ export async function taEmotUnderlag(
     // innehåll — förloraren läser om och svarar dubblett.
     if (err instanceof Error && /underlag_tenant_hash_idx/.test(err.message)) {
       const igen = await withTenant(db, input.tenantId, (tx) =>
-        tx.query<{ id: string }>(`SELECT id FROM underlag WHERE content_hash = $1`, [
-          contentHash,
-        ]),
+        tx.query<{ id: string; document_id: string }>(
+          `SELECT id, document_id FROM underlag WHERE content_hash = $1`,
+          [contentHash],
+        ),
       );
       if (igen.rows[0]) {
-        return { dubblett: true, underlagId: igen.rows[0].id } as const;
+        return {
+          dubblett: true,
+          underlagId: igen.rows[0].id,
+          documentId: igen.rows[0].document_id,
+        } as const;
       }
     }
     throw err;
   });
 
   if (utfall.dubblett) {
+    // Läkningsvägen (granskningsfynd): ett strandat underlag — inget
+    // förslag och inget levande jobb (agenten saknades/var pausad vid
+    // uppladdningen, eller kön gav upp) — får ett NYTT jobb när samma
+    // innehåll skickas igen. Omköningen är idempotent hela vägen:
+    // deterministiskt job_id → uuid v5-proposal-id → duplicate i porten.
+    let jobbKoat = false;
+    let notis = "Samma underlag är redan inlämnat — det behandlas bara en gång.";
+    const harForslag = await withTenant(db, input.tenantId, (tx) =>
+      tx
+        .query(
+          `SELECT 1 FROM proposals p
+           WHERE p.payload->'provenance'->'input_refs' ? ('document:' || $1::text)
+           LIMIT 1`,
+          [utfall.documentId],
+        )
+        .then((r) => Boolean(r.rows[0])),
+    );
+    if (!harForslag) {
+      const levandeJobb = await db.query(
+        `SELECT 1 FROM agent_jobs
+         WHERE archived_at IS NULL AND message->>'job_id' = $1`,
+        [`intake:${utfall.underlagId}`],
+      );
+      if (levandeJobb.rows[0]) {
+        notis = "Samma underlag är redan inlämnat — tolkningen pågår.";
+      } else if (agentId) {
+        await new PgliteKo(db).send({
+          job_id: `intake:${utfall.underlagId}`,
+          tenant_id: input.tenantId,
+          agent_id: agentId,
+          module: "bokforing",
+          trigger: `intake:${input.kalla}:omforsok`,
+          payload_ref: `document:${utfall.documentId}`,
+        });
+        await withTenant(db, input.tenantId, (tx) =>
+          auditera(tx, input.tenantId, "underlag_omkoat", {
+            underlagId: utfall.underlagId,
+            kalla: input.kalla,
+            inlamnadAv: input.inlamnadAv,
+          }),
+        );
+        jobbKoat = true;
+        notis = "Samma underlag är redan inlämnat — vi har startat om hanteringen.";
+      } else {
+        notis = "Mottaget sedan tidigare. Tolkningen startar när er byrå aktiverat bokföringen.";
+      }
+    }
     return {
       underlag_id: utfall.underlagId,
       status: "mottaget",
       dubblett: true,
-      jobb_koat: false,
-      notis: "Samma underlag är redan inlämnat — det behandlas bara en gång.",
+      jobb_koat: jobbKoat,
+      notis,
     };
   }
 
@@ -204,7 +266,12 @@ export async function taEmotUnderlag(
 
 // ------------------------------------------------------- statusresan
 
-export type UnderlagStatus = "mottaget" | "tolkat" | "bokfort";
+// "hanterad" (granskningsfynd): byrån har avgjort förslaget utan
+// ledger-effekt — avvisat, eller kvitterat en eskalering (advisory).
+// Utan det fjärde läget ljuger resan dubbelt: ett avvisat underlag ser
+// ut att vänta för evigt, och en attesterad eskalering stämplas
+// "Bokfört" fast ingenting finns i huvudboken.
+export type UnderlagStatus = "mottaget" | "tolkat" | "bokfort" | "hanterad";
 
 export type UnderlagRad = {
   id: string;
@@ -272,15 +339,21 @@ const UNDERLAG_SQL = `
 `;
 
 function tillUnderlagRad(row: UnderlagDbRad): UnderlagRad {
-  const bokford =
-    row.verifikationsnummer !== null ||
-    row.proposal_status === "approved" ||
-    row.proposal_status === "auto_approved";
+  // Bokfört kräver en VERKLIG verifikation — ett beslut utan
+  // ledger-effekt (avvisning, kvitterad eskalering) är "hanterad".
+  const bokford = row.verifikationsnummer !== null;
+  const hanterad =
+    !bokford &&
+    (row.proposal_status === "rejected" ||
+      row.proposal_status === "approved" ||
+      row.proposal_status === "auto_approved");
   const status: UnderlagStatus = bokford
     ? "bokfort"
-    : row.proposal_id
-      ? "tolkat"
-      : "mottaget";
+    : hanterad
+      ? "hanterad"
+      : row.proposal_id
+        ? "tolkat"
+        : "mottaget";
   return {
     id: row.id,
     kalla: row.kalla,
@@ -327,6 +400,80 @@ export async function hamtaUnderlagDetalj(
   return withTenant(db, tenantId, async (tx) => {
     const r = await tx.query<UnderlagDbRad>(`${UNDERLAG_SQL} WHERE u.id = $1`, [underlagId]);
     return r.rows[0] ? tillUnderlagRad(r.rows[0]) : null;
+  });
+}
+
+// ------------------------------------------------------- läget (WP22)
+
+export type LagesSiffror = {
+  inlamnat_manad: number;
+  /** mottaget + tolkat — INTE hanterade/avvisade: de väntar på inget. */
+  vantar: number;
+  senast_bokfort: {
+    summary: string | null;
+    motpart: string | null;
+    bokfort_at: string | null;
+    verifikationsnummer: number | null;
+  } | null;
+};
+
+/** Kundappens hemsiffror, räknade i SQL över ALLA underlag (aldrig ett
+ *  list-tak) — obestridliga eller inte alls. */
+export async function lagesSiffror(db: PGlite, tenantId: string): Promise<LagesSiffror> {
+  return withTenant(db, tenantId, async (tx) => {
+    const r = await tx.query<{ inlamnat_manad: string; vantar: string }>(
+      `SELECT
+         count(*) FILTER (WHERE u.skapad >= date_trunc('month', now())) AS inlamnat_manad,
+         count(*) FILTER (
+           WHERE v.nummer IS NULL
+             AND (p.status IS NULL OR p.status = 'pending')
+         ) AS vantar
+       FROM underlag u
+       LEFT JOIN LATERAL (
+         SELECT p.status, p.id FROM proposals p
+         WHERE p.payload->'provenance'->'input_refs' ? ('document:' || u.document_id::text)
+         ORDER BY p.created_at DESC LIMIT 1
+       ) p ON true
+       LEFT JOIN LATERAL (
+         SELECT v.nummer FROM verifications v WHERE v.proposal_id = p.id LIMIT 1
+       ) v ON true`,
+    );
+    const senast = await tx.query<{
+      summary: string | null;
+      motpart: string | null;
+      bokfort_at: Date | string | null;
+      nummer: number | null;
+    }>(
+      `SELECT p.summary, p.payload->>'motpart' AS motpart,
+              d.decided_at AS bokfort_at, v.nummer
+       FROM underlag u
+       JOIN LATERAL (
+         SELECT p.* FROM proposals p
+         WHERE p.payload->'provenance'->'input_refs' ? ('document:' || u.document_id::text)
+         ORDER BY p.created_at DESC LIMIT 1
+       ) p ON true
+       JOIN verifications v ON v.proposal_id = p.id
+       LEFT JOIN LATERAL (
+         SELECT d.decided_at FROM decisions d
+         WHERE d.proposal_id = p.id AND d.outcome IN ('approved', 'auto_approved')
+         ORDER BY d.decided_at DESC LIMIT 1
+       ) d ON true
+       ORDER BY d.decided_at DESC NULLS LAST
+       LIMIT 1`,
+    );
+    const s = senast.rows[0];
+    return {
+      inlamnat_manad: Number(r.rows[0]?.inlamnat_manad ?? 0),
+      vantar: Number(r.rows[0]?.vantar ?? 0),
+      senast_bokfort: s
+        ? {
+            summary: s.summary,
+            motpart: s.motpart,
+            bokfort_at: tillIso(s.bokfort_at),
+            verifikationsnummer: s.nummer === null ? null : Number(s.nummer),
+          }
+        : null,
+    };
   });
 }
 

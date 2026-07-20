@@ -110,30 +110,46 @@ async function svaraInner(
     // 2) Statusfrågor: läget i intake-kedjan, ur samma härledning som
     //    historiklistan (proposal/decision — ingen egen statemaskin).
     if (STATUS_RE.test(fraga)) {
-      const r = await tx.query<{ mottagna: string; tolkade: string; bokforda: string }>(
+      // Samma härledning som historiklistan (intake.ts): bokfört kräver
+      // verifikation; avvisat/kvitterat utan ledger-effekt är "hanterat"
+      // — det räknas ALDRIG som väntande (granskningsfynd).
+      const r = await tx.query<{
+        mottagna: string;
+        tolkade: string;
+        bokforda: string;
+        hanterade: string;
+      }>(
         `SELECT
            count(*) FILTER (WHERE p.id IS NULL) AS mottagna,
-           count(*) FILTER (WHERE p.id IS NOT NULL
-             AND p.status NOT IN ('approved', 'auto_approved')) AS tolkade,
-           count(*) FILTER (WHERE p.status IN ('approved', 'auto_approved')) AS bokforda
+           count(*) FILTER (WHERE p.status = 'pending') AS tolkade,
+           count(*) FILTER (WHERE v.nummer IS NOT NULL) AS bokforda,
+           count(*) FILTER (WHERE v.nummer IS NULL
+             AND p.status IN ('approved', 'auto_approved', 'rejected')) AS hanterade
          FROM underlag u
          LEFT JOIN LATERAL (
            SELECT p.id, p.status FROM proposals p
            WHERE p.payload->'provenance'->'input_refs' ? ('document:' || u.document_id::text)
            ORDER BY p.created_at DESC LIMIT 1
-         ) p ON true`,
+         ) p ON true
+         LEFT JOIN LATERAL (
+           SELECT v.nummer FROM verifications v WHERE v.proposal_id = p.id LIMIT 1
+         ) v ON true`,
       );
       const rad = r.rows[0];
       const mottagna = Number(rad?.mottagna ?? 0);
       const tolkade = Number(rad?.tolkade ?? 0);
       const bokforda = Number(rad?.bokforda ?? 0);
-      const totalt = mottagna + tolkade + bokforda;
+      const hanterade = Number(rad?.hanterade ?? 0);
+      const totalt = mottagna + tolkade + bokforda + hanterade;
       return {
         svar:
           totalt === 0
             ? "Ni har inte lämnat in något underlag ännu — fota ett kvitto under Skicka in så syns det här direkt."
             : `Ni har lämnat in ${totalt} underlag totalt: ${bokforda} bokförda, ` +
-              `${tolkade} tolkade som väntar hos byrån och ${mottagna} mottagna som väntar på tolkning.`,
+              `${tolkade} tolkade som väntar hos byrån och ${mottagna} mottagna som väntar på tolkning.` +
+              (hanterade > 0
+                ? ` ${hanterade} har byrån hanterat utan bokföring — hör av dig om du undrar varför.`
+                : ""),
         typ: "status",
         erbjud_eskalering: false,
         underlag_id: null,
@@ -224,12 +240,14 @@ async function svaraInner(
         const datum = (rad.datum instanceof Date ? rad.datum : new Date(rad.datum))
           .toISOString()
           .slice(0, 10);
+        // Bokförd kräver verifikation; approved advisory (kvitterad
+        // eskalering) och rejected är båda "hanterad av byrån".
         const lage =
           rad.nummer !== null
             ? `bokförd som verifikation ${rad.nummer}`
-            : rad.status === "rejected"
-              ? "hanterad av byrån"
-              : "hos byrån för attest";
+            : rad.status === "pending"
+              ? "hos byrån för attest"
+              : "hanterad av byrån";
         return {
           svar:
             `${traff}, ${datum}: ${rad.summary} — ${formateraOre(Number(rad.belopp))}, ${lage}.` +

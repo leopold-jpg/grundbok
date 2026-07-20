@@ -7,8 +7,9 @@ import { NextResponse, type NextRequest } from "next/server";
 // inte nå databasen.
 export function middleware(req: NextRequest) {
   // Inbjudningssidan (WP20) är kundappens enda osessionerade yta —
-  // det är där kunden FÅR sin session.
-  if (req.nextUrl.pathname.startsWith("/app/inbjudan")) {
+  // det är där kunden FÅR sin session. Exakt segment, inte prefix.
+  const { pathname } = req.nextUrl;
+  if (pathname === "/app/inbjudan" || pathname.startsWith("/app/inbjudan/")) {
     return NextResponse.next();
   }
   const harCookie = Boolean(req.cookies.get("grundbok_session")?.value);

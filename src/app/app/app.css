@@ -97,7 +97,7 @@ body:has(main.app) {
   padding: 0 var(--sp-1);
   border-radius: var(--r-pill);
   background: var(--bla);
-  color: #fff;
+  color: var(--brand-fg);
 }
 
 /* Kort — samma recept som övriga ytor: vit yta, hårfin kant. */
@@ -157,7 +157,7 @@ body:has(main.app) {
   min-height: 128px;
   font-size: 18px;
   font-weight: 600;
-  color: #fff;
+  color: var(--brand-fg);
   background: var(--bla);
   border: none;
   border-radius: var(--r-xl);
@@ -182,7 +182,7 @@ body:has(main.app) {
 .app .kvittens {
   border: 1px solid var(--gron);
   border-radius: var(--r-md);
-  background: #fff;
+  background: var(--kort);
   color: var(--gron);
   font-weight: 600;
   padding: var(--sp-3);
@@ -245,12 +245,20 @@ body:has(main.app) {
   border-color: var(--gron);
   color: var(--gron);
 }
+/* "Hanterad av byrån": avgjort utan bokföring — bläck, inte grönt. */
+.app .stampel[data-nadd="true"].hanterad {
+  border-color: var(--ink-mjuk);
+  color: var(--ink-mjuk);
+}
 .app .stampel[data-senast="true"] {
   transform: rotate(-2deg);
 }
+/* Onådda steg är "disabled"-tillstånd — fg-disabled är kanons enda
+   tillåtna under-AA-nivå; ingen extra opacity ovanpå. */
 .app .stampel[data-nadd="false"] {
   border-style: dashed;
-  opacity: 0.55;
+  border-color: var(--linje);
+  color: var(--fg-disabled);
 }
 .app .stampel-pil { color: var(--linje-stark); font-size: 11px; }
 
@@ -275,9 +283,11 @@ body:has(main.app) {
   padding: var(--sp-2);
 }
 
-/* Mejla in — klientens registrerade avsändare. Adressen är ett värde. */
+/* Mejla in — klientens registrerade avsändare. Adressen sätts i sans:
+   kanon §3 avgör gränsfall åt sans-hållet (mono är ENDAST siffror,
+   konton, hash och reg-id). */
 .app .mejladress {
-  font-family: var(--font-mono);
+  font-family: var(--font-sans);
   font-size: 14px;
   word-break: break-all;
   background: var(--yta-is);
@@ -340,7 +350,7 @@ body:has(main.app) {
   margin-top: var(--sp-2);
   font-size: 14px;
   font-weight: 600;
-  color: #fff;
+  color: var(--brand-fg);
   background: var(--bla);
   border: none;
   border-radius: var(--r-md);
@@ -375,7 +385,7 @@ body:has(main.app) {
 .app button.primar {
   font-size: 16px;
   font-weight: 600;
-  color: #fff;
+  color: var(--brand-fg);
   background: var(--bla);
   border: none;
   border-radius: var(--r-md);

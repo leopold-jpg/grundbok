@@ -77,13 +77,30 @@ export function parsePostmarkInbound(raw: unknown): InboundMejl | null {
   };
 }
 
-/** kvitto+<tenant>@… ur mottagarlistan → tenant-id (första träffen). */
+/** kvitto+<tenant>@… ur mottagarlistan → tenant-id (första träffen).
+ *  Är INBOUND_DOMAN satt (deploy-läget) krävs exakt den domänen —
+ *  kvitto+kund_a@angripare.example ska inte lösa till någon tenant. */
 export function tenantUrAdress(till: string[]): string | null {
+  const kravdDoman = process.env.INBOUND_DOMAN?.trim().toLowerCase() || null;
   for (const adress of till) {
-    const m = adress.trim().toLowerCase().match(/^kvitto\+([a-z][a-z0-9_]{1,62})@/);
-    if (m) return m[1];
+    const m = adress
+      .trim()
+      .toLowerCase()
+      .match(/^kvitto\+([a-z][a-z0-9_]{1,62})@(\S+)$/);
+    if (!m) continue;
+    if (kravdDoman && m[2] !== kravdDoman) continue;
+    return m[1];
   }
   return null;
+}
+
+/** Webhook-vakten: hemligheten är OBLIGATORISK i produktion (fail-
+ *  closed) — utan konfigurerad INBOUND_MAIL_SECRET avvisas allt där.
+ *  Lokal dev utan hemlighet släpps igenom (inspelad payload-testning). */
+export function webhookHemlighetOk(angiven: string | null): boolean {
+  const hemlighet = process.env.INBOUND_MAIL_SECRET;
+  if (hemlighet) return angiven === hemlighet;
+  return process.env.NODE_ENV !== "production";
 }
 
 export type MailIntakeUtfall =
@@ -152,9 +169,18 @@ export async function taEmotInboundMejl(
           }),
         );
       } catch (err) {
-        // Ostödd filtyp/trasig bilaga: hoppa, stoppa inte de övriga.
-        hoppade.push(
-          `${bilaga.filnamn}: ${err instanceof Error ? err.message : String(err)}`,
+        // Ostödd filtyp/trasig bilaga: hoppa, stoppa inte de övriga —
+        // men lämna ALDRIG saken spårlös (granskningsfynd): varje
+        // hoppad bilaga auditeras så byrån kan se vad som föll bort.
+        const skal = err instanceof Error ? err.message : String(err);
+        hoppade.push(`${bilaga.filnamn}: ${skal}`);
+        await withTenant(db, tenantId, (tx) =>
+          auditera(tx, tenantId, "mejl_bilaga_hoppad", {
+            fran: mejl.fran,
+            filnamn: bilaga.filnamn,
+            mime: bilaga.mime,
+            skal,
+          }),
         );
       }
     }
@@ -175,6 +201,18 @@ export async function taEmotInboundMejl(
     } catch (err) {
       hoppade.push(`textkropp: ${err instanceof Error ? err.message : String(err)}`);
     }
+  }
+
+  // Ett registrerat mejl som inte gav ETT enda underlag får inte
+  // försvinna tyst — audit-spåret är byråns felsökningsväg.
+  if (underlag.length === 0) {
+    await withTenant(db, tenantId, (tx) =>
+      auditera(tx, tenantId, "mejl_utan_underlag", {
+        fran: mejl.fran,
+        antalBilagor: mejl.bilagor.length,
+        hoppade,
+      }),
+    );
   }
 
   return { status: "mottaget", tenant_id: tenantId, underlag, hoppade_bilagor: hoppade };

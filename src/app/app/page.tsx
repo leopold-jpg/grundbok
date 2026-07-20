@@ -18,7 +18,7 @@ type Underlag = {
   kalla: string;
   filnamn: string | null;
   skapad: string;
-  status: "mottaget" | "tolkat" | "bokfort";
+  status: "mottaget" | "tolkat" | "bokfort" | "hanterad";
   tolkat_at: string | null;
   bokfort_at: string | null;
   motpart: string | null;
@@ -102,12 +102,17 @@ const kr = (ore: number) =>
 // ------------------------------------------------------------ stämplar
 
 /** Resan som stämplar: nådda steg fyllda, senaste lätt roterad, onådda
- *  streckade. Bokfört är grönt — grönt är ENDAST status. */
+ *  streckade. Bokfört är grönt — grönt är ENDAST status. "Hanterad":
+ *  byrån avgjorde utan bokföring — resan slutar ärligt där, aldrig med
+ *  en falsk Bokfört-stämpel eller en evig väntan. */
 function Stamplar({ rad }: { rad: Underlag }) {
+  const hanterad = rad.status === "hanterad";
   const steg = [
     { namn: "Mottaget", nadd: true, klass: "" },
     { namn: "Tolkat", nadd: rad.status !== "mottaget", klass: "" },
-    { namn: "Bokfört", nadd: rad.status === "bokfort", klass: "bokford" },
+    ...(hanterad
+      ? [{ namn: "Hanterad av byrån", nadd: true, klass: "hanterad" }]
+      : [{ namn: "Bokfört", nadd: rad.status === "bokfort", klass: "bokford" }]),
   ];
   const senast = steg.reduce((s, x, i) => (x.nadd ? i : s), 0);
   return (
@@ -265,13 +270,17 @@ function SkickaYta({
     setSkickar(true);
     try {
       const beredd = await beredFil(fil);
-      const svar = await post<{ dubblett: boolean; notis: string | null }>("/api/intake", {
-        fil: beredd,
-      });
+      const svar = await post<{ dubblett: boolean; jobb_koat: boolean; notis: string | null }>(
+        "/api/intake",
+        { fil: beredd },
+      );
+      // Kvittensen följer verkligheten (granskningsfynd): serverns notis
+      // vinner — "ligger hos din byrå" sägs bara när jobbet faktiskt köats.
       setKvittens(
-        svar.dubblett
-          ? (svar.notis ?? "Samma underlag är redan inlämnat.")
-          : "Mottaget! Underlaget ligger nu hos din byrå — följ resan nedan.",
+        svar.notis ??
+          (svar.jobb_koat
+            ? "Mottaget! Underlaget ligger nu hos din byrå — följ resan nedan."
+            : "Mottaget! Underlaget är sparat — följ resan nedan."),
       );
       await onNytt();
     } catch (e) {
@@ -546,7 +555,7 @@ function FragaYta({
           Jag svarar om era egna underlag och verifikat — aldrig med råd. Rådfrågor
           skickar jag vidare till din revisor.
         </p>
-        <div className="chatt-historik">
+        <div className="chatt-historik" aria-live="polite">
           {historik.map((m, i) => (
             <div key={i} className={`bubbla ${m.roll}`}>
               {m.text}
@@ -691,6 +700,7 @@ export default function KundApp() {
             key={f.id}
             className="app-flik"
             data-aktiv={flik === f.id}
+            aria-current={flik === f.id ? "page" : undefined}
             onClick={() => setFlik(f.id)}
           >
             {f.namn}

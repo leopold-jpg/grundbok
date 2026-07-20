@@ -1728,7 +1728,7 @@ function KanalSektion({ klient }: { klient: Klient }) {
                 readOnly
                 value={lank}
                 aria-label="Inbjudningslänk"
-                style={{ width: "100%", marginTop: "var(--sp-1)", fontSize: 14 }}
+                style={{ width: "100%", marginTop: "var(--sp-1)", fontSize: 16 }}
                 onFocus={(e) => e.target.select()}
               />
             </div>

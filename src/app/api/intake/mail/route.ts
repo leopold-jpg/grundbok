@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
 import { getDb } from "@/lib/db/client";
-import { parsePostmarkInbound, taEmotInboundMejl } from "@/lib/mejl/inbound";
+import {
+  parsePostmarkInbound,
+  taEmotInboundMejl,
+  webhookHemlighetOk,
+} from "@/lib/mejl/inbound";
 
 export const runtime = "nodejs";
 
@@ -11,17 +15,15 @@ export const runtime = "nodejs";
 // igenkänd struktur — leverantören ska aldrig retry-storma; utfallet
 // (mottaget/karantän/ignorerad) står i kroppen och i audit-loggen.
 export async function POST(req: Request) {
-  // Delad webhook-hemlighet: obligatorisk när INBOUND_MAIL_SECRET är
-  // satt (deploy-läget). Utan env-nyckel (lokal dev) släpps anropet
-  // igenom — miljövillkoret står på deploy-checklistan.
-  const hemlighet = process.env.INBOUND_MAIL_SECRET;
-  if (hemlighet) {
-    const angiven =
-      req.headers.get("x-grundbok-secret") ??
-      new URL(req.url).searchParams.get("secret");
-    if (angiven !== hemlighet) {
-      return NextResponse.json({ fel: "ogiltig webhook-hemlighet" }, { status: 401 });
-    }
+  // Fail-closed (granskningsfynd): i produktion krävs ALLTID
+  // INBOUND_MAIL_SECRET — en deploy utan hemligheten avvisar allt i
+  // stället för att stå vidöppen. Lokal dev utan hemlighet släpps
+  // igenom för inspelad payload-testning.
+  const angiven =
+    req.headers.get("x-grundbok-secret") ??
+    new URL(req.url).searchParams.get("secret");
+  if (!webhookHemlighetOk(angiven)) {
+    return NextResponse.json({ fel: "ogiltig webhook-hemlighet" }, { status: 401 });
   }
 
   const raw = await req.json().catch(() => null);
