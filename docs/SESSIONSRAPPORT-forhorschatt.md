@@ -147,7 +147,17 @@ Nya testfiler (20 nya tester totalt i passet):
 Sex parallella granskare (logik, säkerhet/RLS, telemetri/maskering,
 kontrakt/port, React/UI, kravtäckning/revir) över hela diffen mot main;
 varje råfynd prövades av tre oberoende skeptiker med uppdraget att
-motbevisa. 11 råfynd → 2 bekräftade, båda åtgärdade:
+motbevisa. 11 råfynd → 3 bekräftade (det tredje landade i
+verifieringens slutresultat efter att PR:en öppnats), alla åtgärdade:
+
+0. **Extern dokumentreferens fällde förhöret** (medium, reproducerat av
+   alla tre skeptiker): kontraktet tillåter godtyckliga strängar i
+   `input_refs` (externa storage-URI:er är avsett bruk) — en icke-uuid
+   `document:`-referens skickades ovaliderat till uuid-kolumnen,
+   Postgres kastade 22P02 FÖRE motorvalet och chatten dog med 422 för
+   det förslaget, trots att fallbacken inte ens behöver dokumentet.
+   Fixat: uuid-vakt före uppslaget (samma mönster som
+   `dokumentHorTillKlient`) + regressionstest.
 
 1. **Chattrådens inläggsmatchning** (medium): uppdatering/borttagning av
    inlägg matchade på index + frågetext — skört vid radbyte mitt under

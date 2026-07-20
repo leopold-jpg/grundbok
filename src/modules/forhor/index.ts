@@ -135,6 +135,8 @@ export type ForhorsChattSvar = {
 const RADGIVNING_RE =
   /bolagsform|skatteplaner|skatteupplägg|skatteupplagg|borde\s+(vi|jag|ni)|rekommenderar\s+du|nästa\s+(år|ar|kvartal)|framöver|framover|prognos|investera/i;
 
+const DOKUMENT_UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 /**
  * Besvarar konsultens fråga om ett specifikt förslag. null = förslaget
  * finns inte hos tenanten (RLS) — routen svarar 404.
@@ -238,11 +240,16 @@ async function forhorFragaInner(
         );
         const payload = p.rows[0]?.payload;
         const dokRef = payload?.provenance.input_refs.find((r) => r.startsWith("document:"));
+        // Kontraktet tillåter godtyckliga strängar i input_refs (externa
+        // storage-URI:er är avsett bruk) — bara riktiga uuid:er slås upp,
+        // annars kastar uuid-kolumnen och förhöret dör före fallbacken
+        // (granskningsfynd; samma vakt som dokumentHorTillKlient).
+        const dokId = dokRef?.slice("document:".length);
         let raw: string | null = null;
-        if (dokRef) {
+        if (dokId && DOKUMENT_UUID_RE.test(dokId)) {
           const d = await tx.query<{ raw: string }>(
             `SELECT raw FROM documents WHERE id = $1`,
-            [dokRef.slice("document:".length)],
+            [dokId],
           );
           raw = d.rows[0]?.raw ?? null;
         }

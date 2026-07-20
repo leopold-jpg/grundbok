@@ -277,6 +277,33 @@ test("forhorFraga: fråga + svar fästs vid förslaget i audit-kedjan och svaret
   assert.ok(svarsRad.rows[0].payload.provenance.input_refs.includes(`proposal:${p.id}`));
 });
 
+test("forhorFraga: extern dokumentreferens (icke-uuid) fäller aldrig förhöret", async () => {
+  // Kontraktet tillåter godtyckliga input_refs — en extern agents
+  // storage-URI får inte krascha dokumentuppslaget (granskningsfynd:
+  // ovaliderad uuid-parameter kastade 22P02 före fallbacken).
+  const p = exempelProposal({
+    id: randomUUID(),
+    provenance: {
+      model: "claude-opus-4-8",
+      prompt_hash: "a".repeat(64),
+      module_version: "0.2.0",
+      input_refs: ["document:extern-storage/faktura-42.pdf"],
+      injection_screened: true,
+    },
+  });
+  assert.equal((await handleProposal(db, principalA, p)).status, "pending");
+
+  const svar = await forhorFraga(db, {
+    tenantId: "kund_a",
+    proposalId: p.id,
+    fraga: "Varför konto 4010?",
+    stalldAv: "konsult-test",
+  });
+  assert.ok(svar, "förhöret ska svara trots extern dokumentreferens");
+  assert.equal(svar!.motor, "fallback");
+  assert.ok(svar!.kallor.length > 0);
+});
+
 // ------------------------------------------------ WP42: polish + gränser
 
 test("forhorChattAktiv: på som förval, av med 0/false/av/off", () => {
