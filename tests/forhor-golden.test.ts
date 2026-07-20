@@ -17,7 +17,8 @@ import { skapaAgentNyckel } from "../src/lib/agent-auth";
 import { körJobb } from "../src/workers/run-agent";
 import type { AgentJobb } from "../src/lib/queue";
 import { PgliteAuth } from "../src/auth/pglite-auth";
-import { attestKo, beslutsLogg } from "../src/ytor/byra";
+import { attestKo, beslutsLogg, kundfragorForByra } from "../src/ytor/byra";
+import { eskaleraKundfraga } from "../src/modules/kundassistent";
 import { forhorsUnderlag } from "../src/ytor/forhor";
 import { forhorFraga } from "../src/modules/forhor";
 import { FALL_1_FEL_MOTTAGARE, FALL_2_ATA_AVVIKELSE } from "./golden-underlag";
@@ -173,6 +174,57 @@ test("E2E: öppna förslag → V → ställ fråga → svar med källa → syns 
   assert.ok(svarsRad, "förhörssvaret ska synas i beslutsloggen");
   assert.equal(svarsRad!.kind, "advisory_answer");
   assert.equal(svarsRad!.policy_beslut, true);
+});
+
+// ======================================= samexistens med Frågor (WP24)
+
+test("detaljpanelens förhör och fliken Frågor samexisterar — skilda kanaler, samma session", async () => {
+  // Intaget (WP24) la en Frågor-flik intill attestkön: kundens
+  // eskalerade frågor ur appen. Förhöret är konsultens fråga till
+  // AGENTEN om ett förslag. Kanalerna får aldrig blandas ihop — det
+  // ena ärendet ska inte dyka upp i den andras kö.
+  const inloggning = await auth.login("konsult.ett@byran-exempel.se", "grundbok-dev");
+  const session = (await auth.session(inloggning!.token))!;
+
+  const kundensFraga = "Kan jag dra av min nya kaffemaskin?";
+  await eskaleraKundfraga(db, {
+    tenantId: "kund_a",
+    fraga: kundensFraga,
+    stalldAv: "klient:samexistens-test",
+  });
+
+  const proposalId = await körFall("kund_a", FALL_1_FEL_MOTTAGARE, "forhor-golden-samexistens");
+  const forhorsFraga = "Varför konterades den här fakturan inte?";
+  const svar = await forhorFraga(db, {
+    tenantId: "kund_a",
+    proposalId,
+    fraga: forhorsFraga,
+    stalldAv: session.user.id,
+  });
+  assert.ok(svar);
+
+  // Frågor-fliken ser kundens fråga — aldrig konsultens förhör.
+  const fragor = await kundfragorForByra(db, session, "kund_a");
+  assert.ok(fragor.some((f) => f.fraga === kundensFraga));
+  assert.ok(
+    !fragor.some((f) => f.fraga === forhorsFraga),
+    "förhörsfrågan får aldrig hamna i kundens frågekö",
+  );
+
+  // Förhöret ligger kvar i sin egen kanal (audit-kedjan på förslaget).
+  const audit = await withTenant(db, "kund_a", (tx) =>
+    tx.query<{ payload: { fraga: string } }>(
+      `SELECT payload FROM audit_log WHERE event_type = 'forhor'
+       AND payload->>'proposalId' = $1`,
+      [proposalId],
+    ),
+  );
+  assert.equal(audit.rows.length, 1);
+  assert.equal(audit.rows[0].payload.fraga, forhorsFraga);
+
+  // Och attestkön (detaljpanelens hemvist) är opåverkad av kundfrågan.
+  const ko = await attestKo(db, session, "kund_a");
+  assert.ok(ko.some((r) => r.id === proposalId));
 });
 
 // ==================================================== RLS över svaret
