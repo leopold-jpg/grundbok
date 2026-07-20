@@ -26,9 +26,11 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@types/jsdom": "^28.0.3",
     "@types/node": "^24",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "jsdom": "^29.1.1",
     "tsx": "^4.20.0",
     "typescript": "^5.9.0"
   }
