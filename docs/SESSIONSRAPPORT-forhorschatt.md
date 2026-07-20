@@ -178,6 +178,30 @@ samma beteende som A/X/U), hänvisningssvarets konfidens 0.9 → syns i
 beslutsloggen (avsiktligt — även "det här kräver en människa" är ett
 dokumenterbart svar).
 
+## Rebas mot main efter intaget (PR #15)
+
+Grenen är rebasad ovanpå main sedan intaget mergats. En textkonflikt:
+båda grenarna la nya typer direkt efter `ChattInlagg` i
+`src/app/byra/page.tsx` (intagets `Kundfraga`/`KanalData` mot
+förhörets `ForhorsUnderlag`) — lösta genom att behålla båda.
+
+Intagets övriga ändringar ligger i regioner förhöret inte rör
+(`FragorSektion`, `KanalSektion`, `ByraSida`s hämtningar) och dess
+ändringar i `decisions.ts`/`contracts/schema.ts` är additiva
+(`intake:write`-scopet) — förhörets principal (`proposals:write`,
+`documents:read`) är opåverkad.
+
+**Samexistensen är låst av test**, inte antagen: fliken Frågor
+(kundens eskalerade frågor ur appen, WP24) och detaljpanelens förhör
+(konsultens fråga till agenten om ett förslag) är skilda kanaler —
+testet verifierar att förhörsfrågan aldrig hamnar i kundens frågekö,
+att kundfrågan aldrig hamnar i förslagets audit-kedja och att
+attestkön är opåverkad. V-tangenten kan inte krocka med Frågor-flikens
+fält: `AttestSektion` (som äger lyssnaren) monteras bara på
+attestfliken.
+
+Efter rebas: **289/289 tester gröna**, `tsc` och `next build` gröna.
+
 ## Inget blockerat
 
 Alla fyra WP:n genomförda utan blockeringar. Öppna frågor ur
