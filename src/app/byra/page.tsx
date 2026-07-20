@@ -195,6 +195,79 @@ type KanalData = {
   }[];
 };
 
+// Varför-panelens underlag (WP40) — speglar ForhorsUnderlag i
+// src/ytor/forhor.ts (serverns typ är sanningen).
+type ForhorsUnderlag = {
+  proposal: {
+    id: string;
+    summary: string;
+    module: string;
+    kind: string;
+    status: string;
+    confidence: number;
+    motpart: string | null;
+    affarshandelsedatum: string;
+    created_at: string;
+    flaggor: Flagga[];
+    legal: Lagrum[];
+    provenance: {
+      model: string;
+      mall: string | null;
+      agent_runtime: string | null;
+      injection_screened: boolean;
+    };
+  };
+  policyutfall: {
+    missade_villkor: string[];
+    policy: {
+      max_belopp_ore: number;
+      min_confidence: number;
+      kanda_motparter_endast: boolean;
+      tillatna_kinds: string[];
+    } | null;
+  };
+  paket: {
+    id: string;
+    displayName: string;
+    version: string;
+    regler: { id: string; beskrivning: string; lagrum?: string }[];
+  }[];
+  historik: {
+    typ: "verifikation" | "forslag";
+    datum: string;
+    beskrivning: string;
+    belopp_ore: number;
+    konto: string | null;
+    utfall: string;
+    verifikationsnummer: number | null;
+  }[];
+  /** Chattläget (WP42): flagga + kostnadsvakt — panelen renderar rätt
+   *  läge direkt. enabled false → endast lager 1 syns. */
+  chat: { enabled: boolean; tak: number; anvanda_idag: number };
+};
+
+// Förhörssvaret (WP41) — speglar ForhorsChattSvar i src/modules/forhor.
+type ForhorsChattSvar = {
+  svar: string;
+  kallor: { typ: string; ref: string }[];
+  konfidens: number;
+  hanvisa_till_manniska: boolean;
+  svar_proposal_id: string;
+  motor: string;
+};
+
+type ForhorsChattInlagg = {
+  /** Klientlokalt id — uppdatering/borttagning matchar på id, aldrig
+   *  på index eller frågetext (granskningsfynd: skört vid radbyten). */
+  id: number;
+  fraga: string;
+  svar?: string;
+  kallor?: { typ: string; ref: string }[];
+  konfidens?: number;
+  hanvisa?: boolean;
+  motor?: string;
+};
+
 const kr = (ore: number) =>
   (ore / 100).toLocaleString("sv-SE", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
@@ -252,10 +325,360 @@ type FlikId = (typeof FLIKAR)[number]["id"];
  *  fönstret löper ut eller när vyn lämnas — U innan dess återställer. */
 const ANGRA_FONSTER_MS = 6000;
 
+// Varför-panelen (WP40): förhörets lager 1 — utfällbar sektion i
+// detaljpanelen som visar det som redan finns om förslaget: agentens
+// motivering + flaggor, aktiva branschpaketsregler (regel-id + namn),
+// konfidens + policyutfall (omräknat mot gällande policy) och motpartens
+// 3 senaste verifikat/förslag hos tenanten. Deterministisk läsning —
+// ingen LLM-runda. V öppnar/stänger (tangenten hanteras i AttestSektion).
+// Lager 2 (WP41): frågefältet under panelen förhör agenten om DETTA
+// förslag — svaret bär källa per påstående och loggas på förslaget.
+function VarforPanel({ rad }: { rad: KoRad }) {
+  const [underlag, setUnderlag] = useState<ForhorsUnderlag | null>(null);
+  const [fel, setFel] = useState(false);
+  // Förhöret (WP41): tråden hör till ETT förslag — radbyte nollställer.
+  // Serversidan bär minnet (audit-loggen); klienttråden är arbetsyta.
+  const [chatt, setChatt] = useState<ForhorsChattInlagg[]>([]);
+  const [chattFraga, setChattFraga] = useState("");
+  const [svarar, setSvarar] = useState(false);
+  const [chattFel, setChattFel] = useState("");
+  // WP42: lokalt räknade frågor denna session (utöver serverns dygnsräkning)
+  // + laddstadiet för den tydliga indikatorn (~8s-känslan).
+  const [anvandaExtra, setAnvandaExtra] = useState(0);
+  const [takNatt, setTakNatt] = useState(false);
+  const [laddSteg, setLaddSteg] = useState(0);
+  const radIdRef = useRef(rad.id);
+  radIdRef.current = rad.id;
+  const inlaggIdRef = useRef(0);
+
+  // Tydlig laddindikator (WP42): tre stadier så väntan aldrig känns död.
+  useEffect(() => {
+    if (!svarar) {
+      setLaddSteg(0);
+      return;
+    }
+    const t1 = setTimeout(() => setLaddSteg(1), 2500);
+    const t2 = setTimeout(() => setLaddSteg(2), 7000);
+    return () => {
+      clearTimeout(t1);
+      clearTimeout(t2);
+    };
+  }, [svarar]);
+
+  // Hämtas per förslag: radbyte med öppen panel laddar nya radens
+  // underlag; ett sent svar för en lämnad rad kastas (aktiv-vakten).
+  useEffect(() => {
+    let aktiv = true;
+    setUnderlag(null);
+    setFel(false);
+    setChatt([]);
+    setChattFraga("");
+    setChattFel("");
+    setAnvandaExtra(0);
+    setTakNatt(false);
+    // Radbyte mitt under ett svar: pågående anrop hör till förra raden
+    // (radIdRef-vakten släpper aldrig in det) — lås inte nya radens fält.
+    setSvarar(false);
+    hamta<ForhorsUnderlag>(
+      `/api/byra/forhor?klient=${encodeURIComponent(rad.tenant_id)}` +
+        `&proposal=${encodeURIComponent(rad.id)}`,
+    ).then((u) => {
+      if (!aktiv) return;
+      if (u) setUnderlag(u);
+      else setFel(true);
+    });
+    return () => {
+      aktiv = false;
+    };
+  }, [rad.id, rad.tenant_id]);
+
+  async function stallFraga() {
+    const q = chattFraga.trim();
+    if (!q || svarar) return;
+    const forId = rad.id;
+    const inlaggId = ++inlaggIdRef.current;
+    setChattFel("");
+    setChatt((c) => [...c, { id: inlaggId, fraga: q }]);
+    setChattFraga("");
+    setSvarar(true);
+    try {
+      // Direkt fetch (inte post()): statuskoden skiljer kostnadstaket
+      // (429, vänligt meddelande) från felläget (chatten vilar).
+      const r = await fetch("/api/byra/forhor", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ tenant_id: rad.tenant_id, proposal_id: forId, fraga: q }),
+      });
+      if (r.status === 401) {
+        window.location.href = "/login?next=/byra";
+        return;
+      }
+      const data = (await r.json().catch(() => ({}))) as Partial<ForhorsChattSvar> & {
+        fel?: string;
+      };
+      if (radIdRef.current !== forId) return; // raden lämnad — tråden är ny
+      if (r.status === 429) {
+        setTakNatt(true);
+        setChattFel(data.fel ?? "Dagens förhörsfrågor är använda — chatten öppnar igen i morgon.");
+        setChatt((c) => c.filter((m) => m.id !== inlaggId));
+        return;
+      }
+      if (!r.ok || data.svar === undefined) {
+        // Felläget (WP42): chatten vilar, lager 1-underlaget ovan gäller —
+        // aldrig en tom ruta. Frågan tas tillbaka så den kan ställas om.
+        setChattFel(
+          "Chatten vilar just nu — underlaget i panelen ovan gäller som vanligt. " +
+            "Försök igen om en stund.",
+        );
+        setChatt((c) => c.filter((m) => m.id !== inlaggId));
+        return;
+      }
+      setAnvandaExtra((n) => n + 1);
+      setChatt((c) =>
+        c.map((m) =>
+          m.id === inlaggId
+            ? {
+                id: inlaggId,
+                fraga: q,
+                svar: data.svar!,
+                kallor: data.kallor,
+                konfidens: data.konfidens,
+                hanvisa: data.hanvisa_till_manniska,
+                motor: data.motor,
+              }
+            : m,
+        ),
+      );
+    } catch {
+      if (radIdRef.current === forId) {
+        setChattFel(
+          "Chatten vilar just nu — underlaget i panelen ovan gäller som vanligt. " +
+            "Försök igen om en stund.",
+        );
+        setChatt((c) => c.filter((m) => m.id !== inlaggId));
+      }
+    } finally {
+      if (radIdRef.current === forId) setSvarar(false);
+    }
+  }
+
+  if (fel) {
+    return (
+      <div className="varfor-panel" role="region" aria-label="Varför-panelen">
+        <p className="fel">
+          Underlaget kunde inte hämtas just nu — förslaget och flaggorna ovan
+          gäller fortfarande.
+        </p>
+      </div>
+    );
+  }
+  if (!underlag) {
+    return (
+      <div className="varfor-panel" role="region" aria-label="Varför-panelen">
+        <p className="laddar">hämtar underlaget …</p>
+      </div>
+    );
+  }
+
+  const u = underlag;
+  const policy = u.policyutfall.policy;
+  return (
+    <div className="varfor-panel" role="region" aria-label="Varför-panelen">
+      <div className="diff-rubrik">Agentens motivering</div>
+      <p className="varfor-text">{u.proposal.summary}</p>
+      {u.proposal.flaggor.length > 0 && (
+        <ul className="varfor-regler">
+          {u.proposal.flaggor.map((f) => (
+            <li key={f.id}>
+              <code className="varfor-regel-id">{f.id}</code> {f.text}
+            </li>
+          ))}
+        </ul>
+      )}
+      {u.proposal.legal.length > 0 && (
+        <ul className="lagrum-lista">
+          {u.proposal.legal.map((l, i) => (
+            <li key={i}>
+              {l.lagrum} <span className="tyst">· {l.ruleset}</span>
+              {l.note ? ` — ${l.note}` : ""}
+            </li>
+          ))}
+        </ul>
+      )}
+
+      <div className="diff-rubrik">Aktiva branschpaketsregler</div>
+      {u.paket.length === 0 ? (
+        <p className="tyst varfor-text">
+          Inga branschpaket aktiva — klientens bransch aktiverar inget paket.
+        </p>
+      ) : (
+        u.paket.map((p) => (
+          <div key={p.id} className="varfor-paket">
+            <span className="varfor-paket-namn">
+              {p.displayName} <span className="tyst">({p.id}@{p.version})</span>
+            </span>
+            <ul className="varfor-regler">
+              {p.regler.map((r) => (
+                <li key={r.id}>
+                  <code className="varfor-regel-id">{r.id}</code> {r.beskrivning}
+                  {r.lagrum && <span className="tyst"> — {r.lagrum}</span>}
+                </li>
+              ))}
+            </ul>
+          </div>
+        ))
+      )}
+
+      <div className="diff-rubrik">Konfidens och policyutfall</div>
+      <div className="metarad" style={{ marginTop: 0 }}>
+        <Chip>konfidens {Math.round(u.proposal.confidence * 100)} %</Chip>
+        {policy && <Chip tal>er gräns {kr(policy.max_belopp_ore)} kr</Chip>}
+        {policy && <Chip>minst {Math.round(policy.min_confidence * 100)} % konfidens</Chip>}
+        {policy?.kanda_motparter_endast && <Chip>endast kända motparter</Chip>}
+      </div>
+      {u.policyutfall.missade_villkor.length === 0 ? (
+        <p className="diff-ok">Inom er policy — beslutet är ändå ert.</p>
+      ) : (
+        <ul className="diff-lista">
+          {u.policyutfall.missade_villkor.map((v, i) => (
+            <li key={i}>{v}</li>
+          ))}
+        </ul>
+      )}
+
+      <div className="diff-rubrik">Samma motpart senast</div>
+      {u.proposal.motpart === null ? (
+        <p className="tyst varfor-text">Förslaget saknar motpart — ingen historik att visa.</p>
+      ) : u.historik.length === 0 ? (
+        <p className="tyst varfor-text">
+          Inga tidigare verifikat eller förslag från {u.proposal.motpart}.
+        </p>
+      ) : (
+        <table className="rader">
+          <thead>
+            <tr>
+              <th>Datum</th>
+              <th>Underlag</th>
+              <th className="tal">Konto</th>
+              <th className="tal">Belopp</th>
+              <th>Utfall</th>
+            </tr>
+          </thead>
+          <tbody>
+            {u.historik.map((h, i) => (
+              <tr key={i}>
+                <td className="tal">{h.datum}</td>
+                <td>
+                  {h.beskrivning}
+                  {h.verifikationsnummer !== null && (
+                    <span className="tyst"> · V{h.verifikationsnummer}</span>
+                  )}
+                </td>
+                <td className="tal">{h.konto ?? "—"}</td>
+                <td className="tal">{h.belopp_ore > 0 ? `${kr(h.belopp_ore)} kr` : "—"}</td>
+                <td>{h.utfall}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+
+      <p className="varfor-provenans tyst">
+        modell {u.proposal.provenance.model}
+        {u.proposal.provenance.mall && <> · mall {u.proposal.provenance.mall}</>}
+        {u.proposal.provenance.agent_runtime && <> · {u.proposal.provenance.agent_runtime}</>}
+        {" · "}
+        injection-screening: {u.proposal.provenance.injection_screened ? "ja" : "nej"}
+      </p>
+
+      {u.chat.enabled && (
+        <>
+          <div className="diff-rubrik">Förhör agenten</div>
+          {chatt.length > 0 && (
+            <div className="chatt-historik" style={{ marginBottom: "var(--sp-3)" }}>
+              {chatt.map((m) => (
+                <div key={m.id} style={{ display: "contents" }}>
+                  <div className="bubbla konsult">{m.fraga}</div>
+                  {m.svar !== undefined && (
+                    <div className="bubbla agent">
+                      {m.svar}
+                      <div className="bubbla-meta">
+                        {m.kallor?.map((k, j) => (
+                          <Chip key={j}>
+                            {k.typ}: {k.ref}
+                          </Chip>
+                        ))}
+                        {m.hanvisa && <Chip varning>hänvisar till människa</Chip>}
+                        {m.konfidens !== undefined && (
+                          <Chip>konfidens {Math.round(m.konfidens * 100)} %</Chip>
+                        )}
+                        {m.motor === "fallback" && <Chip>deterministisk fallback</Chip>}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+          {svarar && (
+            <p className="laddar" role="status">
+              {laddSteg === 0 && "agenten läser underlaget …"}
+              {laddSteg === 1 && "formulerar svar med källhänvisningar …"}
+              {laddSteg === 2 && "tar längre än vanligt — svaret kommer strax …"}
+            </p>
+          )}
+          {(() => {
+            const kvar = Math.max(0, u.chat.tak - u.chat.anvanda_idag - anvandaExtra);
+            if (takNatt || kvar === 0) {
+              return (
+                <p className="tyst varfor-text">
+                  {chattFel ||
+                    `Dagens ${u.chat.tak} förhörsfrågor är använda för den här klienten — ` +
+                      "chatten öppnar igen i morgon. Underlaget ovan gäller som vanligt."}
+                </p>
+              );
+            }
+            return (
+              <>
+                <div className="chatt-rad">
+                  <input
+                    type="text"
+                    value={chattFraga}
+                    onChange={(e) => setChattFraga(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && !svarar) {
+                        e.preventDefault();
+                        void stallFraga();
+                      }
+                    }}
+                    placeholder="Fråga om detta förslag — t.ex. ”varför 4010 och inte 5460?” …"
+                    aria-label="Fråga agenten om förslaget"
+                    disabled={svarar}
+                  />
+                  <button onClick={() => void stallFraga()} disabled={svarar || !chattFraga.trim()}>
+                    Förhör
+                  </button>
+                </div>
+                <p className="tyst varfor-provenans">
+                  Svaren bygger enbart på klientens eget underlag och loggas på förslaget.
+                  Chatten kan förklara men aldrig ändra — beslut fattas med Attestera/Avvisa.
+                  {kvar <= 5 && ` ${kvar} ${kvar === 1 ? "fråga" : "frågor"} kvar i dag.`}
+                </p>
+                {chattFel && <p className="fel">{chattFel}</p>}
+              </>
+            );
+          })()}
+        </>
+      )}
+    </div>
+  );
+}
+
 // WP26: radlista + detaljpanel i sidled (aldrig modal — kön förblir
 // synlig och nästa förslag är redan laddat i klienten). Tangentbordet
 // bär flödet: ↑↓ väljer, Enter fokuserar detaljen, A attesterar,
-// X öppnar motiveringsfältet, U ångrar senaste innan det skickats.
+// X öppnar motiveringsfältet, U ångrar senaste innan det skickats,
+// V fäller ut Varför-panelen (WP40).
 // Själva maskinen är ren och testad (attest-tangentbord.ts).
 function AttestSektion({
   ko,
@@ -279,6 +702,9 @@ function AttestSektion({
   const [fragar, setFragar] = useState(false);
   const [fragaText, setFragaText] = useState("");
   const [fragaBekraftelse, setFragaBekraftelse] = useState("");
+  // Varför-panelen (WP40): öppen-läget överlever radbyte — konsulten som
+  // förhör kön rad för rad slipper trycka V för varje förslag.
+  const [varforOppen, setVarforOppen] = useState(false);
   const detaljRef = useRef<HTMLDivElement>(null);
   const motiveringRef = useRef<HTMLInputElement>(null);
 
@@ -426,6 +852,9 @@ function AttestSektion({
         } else if (k === "u") {
           e.preventDefault();
           dispatch({ typ: "angra" });
+        } else if (k === "v") {
+          e.preventDefault();
+          setVarforOppen((o) => !o);
         }
       }
     }
@@ -605,6 +1034,17 @@ function AttestSektion({
                   </div>
                 )}
 
+                <div className="varfor">
+                  <button
+                    className="varfor-knapp"
+                    aria-expanded={varforOppen}
+                    onClick={() => setVarforOppen((o) => !o)}
+                  >
+                    {varforOppen ? "Dölj varför (V)" : "Varför? (V)"}
+                  </button>
+                  {varforOppen && <VarforPanel rad={vald} />}
+                </div>
+
                 <div style={{ marginTop: "var(--sp-3)" }}>
                   {fragar ? (
                     <div className="avvisa-rad">
@@ -686,7 +1126,7 @@ function AttestSektion({
       )}
 
       <p className="kortkommandon tyst" aria-hidden="true">
-        ↑↓ välj · Enter detalj · A attestera · X avvisa · U ångra · ⌘K kommandon
+        ↑↓ välj · Enter detalj · A attestera · X avvisa · U ångra · V varför · ⌘K kommandon
       </p>
 
       {fel && <p className="fel">{fel}</p>}
