@@ -33,7 +33,9 @@ function LoginForm() {
       if (!r.ok) throw new Error(data.fel ?? `HTTP ${r.status}`);
       // Endast interna paths följs (open redirect, Bugbot PR #2).
       const next = sakerNext(params.get("next"));
-      router.push(next ?? (data.operator ? "/operator" : "/byra"));
+      router.push(
+        next ?? (data.operator ? "/operator" : data.klient ? "/app" : "/byra"),
+      );
     } catch (err) {
       setFel(err instanceof Error ? err.message : String(err));
       setLoggarIn(false);

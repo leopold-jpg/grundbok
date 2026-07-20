@@ -16,7 +16,11 @@ import type { Flagga } from "./kontering";
 // aldrig en egenskap hos agenten. Allt som inte matchar policyn hamnar i
 // godkännandekön och väntar på ett hash-bundet mänskligt beslut.
 
-export type Scope = "proposals:write" | "ledger:read" | "documents:read";
+// intake:write (WP21): kurir-scopet — får lämna underlag till intake-
+// porten, inget mer. En läckt intake-nyckel kan aldrig POST:a förslag,
+// läsa saldon eller nå dokument. Additivt tillägg; befintliga scopes
+// och deras semantik är oförändrade.
+export type Scope = "proposals:write" | "ledger:read" | "documents:read" | "intake:write";
 
 /** Vem som anropar: intern UI-route eller extern agent via API-nyckel. */
 export type Principal = {

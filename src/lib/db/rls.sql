@@ -44,6 +44,18 @@ GRANT SELECT ON agent_telemetry TO grundbok_app;
 -- uppdateras, raderas aldrig (spårbarheten mot förslaget ska bestå).
 GRANT SELECT, INSERT ON kompletteringar TO grundbok_app;
 GRANT UPDATE (status, svar, senast_paminnd) ON kompletteringar TO grundbok_app;
+-- underlag (WP21): kvittensrader — append-only arbetsdata; status
+-- härleds ur proposal/decision och kräver ingen UPDATE.
+GRANT SELECT, INSERT ON underlag TO grundbok_app;
+-- mejlkanalen (WP23): avsändare är klientens arbetsdata (får tas bort);
+-- karantän och utgående mejl är spårrader (append-only).
+GRANT SELECT, INSERT, DELETE ON klient_avsandare TO grundbok_app;
+GRANT SELECT, INSERT ON mejl_karantan TO grundbok_app;
+GRANT SELECT, INSERT ON utgaende_mejl TO grundbok_app;
+-- kundfragor (WP22): eskalerade ärenden — byråns svar uppdaterar raden,
+-- raderas aldrig (fråga→svar-kedjan består).
+GRANT SELECT, INSERT ON kundfragor TO grundbok_app;
+GRANT UPDATE (status, svar, besvarad_av, besvarad) ON kundfragor TO grundbok_app;
 
 -- RLS på varje kunddatabärande tabell: rad synlig/skrivbar ⇔ rätt tenant_id.
 -- current_setting(..., true) returnerar NULL om osatt → policyn nekar allt.
@@ -53,7 +65,8 @@ BEGIN
   FOREACH t IN ARRAY ARRAY[
     'documents', 'verifications', 'verification_rows', 'audit_log',
     'proposals', 'decisions', 'autonomy_policies', 'agents',
-    'kompletteringar'
+    'kompletteringar', 'underlag',
+    'klient_avsandare', 'mejl_karantan', 'utgaende_mejl', 'kundfragor'
   ] LOOP
     EXECUTE format('ALTER TABLE %I ENABLE ROW LEVEL SECURITY', t);
     EXECUTE format('ALTER TABLE %I FORCE ROW LEVEL SECURITY', t);

@@ -49,6 +49,7 @@ type Halsa = {
   omforsok_24h: number;
   aldsta_vantande: string | null;
   per_modul: { module: string; ko_djup: number; omforsok_24h: number }[];
+  intag_per_vecka: { vecka: string; kalla: string; antal: number }[];
 };
 
 // Speglar FlottRad/AgentDetalj i src/ytor/operator.ts: aggregat och
@@ -1155,6 +1156,30 @@ export default function OperatorSida() {
                       </td>
                       <td className="tal">{m.ko_djup}</td>
                       <td className="tal">{m.omforsok_24h}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+            {/* Intagskanalen (WP24): underlag per vecka och källa —
+                aggregat över flottan, aldrig en rad kundinnehåll. */}
+            {halsa.intag_per_vecka.length > 0 && (
+              <table className="rader">
+                <thead>
+                  <tr>
+                    <th>Vecka</th>
+                    <th>Kanal</th>
+                    <th className="tal">Underlag</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {halsa.intag_per_vecka.map((rad) => (
+                    <tr key={`${rad.vecka}-${rad.kalla}`} className="ej-klickbar">
+                      <td className="tal">{rad.vecka}</td>
+                      <td>
+                        <Chip>{rad.kalla}</Chip>
+                      </td>
+                      <td className="tal">{rad.antal}</td>
                     </tr>
                   ))}
                 </tbody>

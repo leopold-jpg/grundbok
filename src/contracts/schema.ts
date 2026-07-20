@@ -26,7 +26,14 @@ export const PROPOSAL_KINDS = [
   "advisory_answer",
 ] as const;
 
-export const SCOPES = ["proposals:write", "ledger:read", "documents:read"] as const;
+// intake:write (WP21, additivt): kurir-scopet för intake-porten —
+// får lämna underlag, aldrig föreslå eller läsa.
+export const SCOPES = [
+  "proposals:write",
+  "ledger:read",
+  "documents:read",
+  "intake:write",
+] as const;
 
 export const ProposalLineSchema = z.object({
   konto: z.string().regex(/^[1-8]\d{3}$/, "BAS-konto: fyra siffror, klass 1–8"),

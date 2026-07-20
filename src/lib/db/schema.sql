@@ -306,6 +306,117 @@ CREATE TABLE IF NOT EXISTS kompletteringar (
   senast_paminnd timestamptz
 );
 
+-- ============================================================ S3 ====
+-- Intag + kundkanal (KICKOFF-INTAG, WP20–WP25). Kundappens klient-
+-- användare, intake-porten och mejladaptern. Databastillägg enligt
+-- WP11-undantaget — kärnans befintliga tabeller och flöden ändras inte.
+
+-- WP20: klientrollen. En klientanvändare är en users-rad med ett
+-- membership role='klient' som pekar på EN tenant (klientbolaget).
+-- byra_id är tenantens byrå — men sessionen ger ALDRIG klienten
+-- byrå-kontext (src/auth/pglite-auth.ts): klienten når aldrig /byra.
+ALTER TABLE memberships ADD COLUMN IF NOT EXISTS tenant_id text REFERENCES tenants(id);
+
+-- WP22: resultatflaggan — kundappen visar ENDAST obestridliga siffror i
+-- v1; resultat/saldon är en per-klient-flagga byrån slår på senare.
+-- Flaggan byggs nu, default av.
+ALTER TABLE tenants ADD COLUMN IF NOT EXISTS visa_resultat boolean NOT NULL DEFAULT false;
+ALTER TABLE memberships DROP CONSTRAINT IF EXISTS memberships_role_check;
+ALTER TABLE memberships ADD CONSTRAINT memberships_role_check
+  CHECK (role IN ('konsult', 'klient') AND (role <> 'klient' OR tenant_id IS NOT NULL));
+
+-- Inbjudningar (WP20): konsulten bjuder in klientanvändaren från
+-- klientvyn. Engångstoken lagras enbart som sha256-hash (samma princip
+-- som agentnycklar och sessioner); used_at gör den död efter inlösen.
+-- Service-vägens plan (som users/sessions): uppslaget sker innan någon
+-- session finns.
+CREATE TABLE IF NOT EXISTS klient_inbjudningar (
+  id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id   text NOT NULL REFERENCES tenants(id),
+  email       text NOT NULL,
+  token_hash  text NOT NULL UNIQUE,
+  skapad_av   text NOT NULL,
+  created_at  timestamptz NOT NULL DEFAULT now(),
+  expires_at  timestamptz NOT NULL,
+  used_at     timestamptz
+);
+
+-- WP21: intake-porten. Ett underlag är kvittensraden för allt som
+-- kommer in via kanalerna (app/mejl/api — källfältet rymmer 'telegram'
+-- för en ev. framtida brygga, medvetet utan mer design än så).
+-- INGEN egen statemaskin: mottaget → tolkat → bokfort härleds ur
+-- proposal/decision (src/lib/intake.ts), aldrig ur en lagrad status.
+-- content_hash ger idempotens: samma fil två gånger = EN rad, aldrig
+-- dubbla förslag. Kunddatabärande: tenant_id + RLS som övriga.
+CREATE TABLE IF NOT EXISTS underlag (
+  id           uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id    text NOT NULL REFERENCES tenants(id),
+  document_id  uuid NOT NULL REFERENCES documents(id),
+  kalla        text NOT NULL CHECK (kalla IN ('app', 'mejl', 'api', 'telegram')),
+  content_hash text NOT NULL,
+  filnamn      text,
+  mime_typ     text,
+  inlamnad_av  text NOT NULL,
+  skapad       timestamptz NOT NULL DEFAULT now()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS underlag_tenant_hash_idx
+  ON underlag (tenant_id, content_hash);
+
+-- WP23: mejladaptern. Adress per klient (kvitto+<tenant>@inbound.<domän>)
+-- → samma intake-flöde, källa 'mejl'. Endast registrerade avsändare
+-- släpps in; övriga hamnar i karantänlistan i byråns klientvy.
+-- Alla tre tabellerna är kunddatabärande: tenant_id + RLS.
+CREATE TABLE IF NOT EXISTS klient_avsandare (
+  id             uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id      text NOT NULL REFERENCES tenants(id),
+  email          text NOT NULL,
+  registrerad_av text NOT NULL,
+  created_at     timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (tenant_id, email)
+);
+
+-- Karantänen lagrar avsändare/ämne/antal — ALDRIG innehållet: ett brev
+-- från en overifierad avsändare får inte in sin payload i systemet.
+-- Kunden registrerar adressen och skickar om.
+CREATE TABLE IF NOT EXISTS mejl_karantan (
+  id            uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id     text NOT NULL REFERENCES tenants(id),
+  fran          text NOT NULL,
+  amne          text,
+  antal_bilagor integer NOT NULL DEFAULT 0,
+  mottaget      timestamptz NOT NULL DEFAULT now()
+);
+
+-- Utgående mejl (Påminn m.fl.): spårraden för vad som skickats, oavsett
+-- transport (postmark i drift, logg-adaptern lokalt). Innehållet är
+-- kunddata → tenant-scopat med RLS som allt annat.
+CREATE TABLE IF NOT EXISTS utgaende_mejl (
+  id        uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id text NOT NULL REFERENCES tenants(id),
+  till      jsonb NOT NULL,
+  amne      text NOT NULL,
+  brodtext  text NOT NULL,
+  adapter   text NOT NULL,
+  skickat   timestamptz NOT NULL DEFAULT now()
+);
+
+-- WP22: kundassistentens eskaleringar. Rådgivningsfrågor besvaras
+-- ALDRIG i appen — de blir ärenden i byråns kö med underlaget länkat.
+-- Kunddatabärande: tenant_id + RLS. Arbetsdata: byråns svar uppdaterar
+-- raden (aldrig delete — fråga→svar-kedjan ska bestå).
+CREATE TABLE IF NOT EXISTS kundfragor (
+  id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id   text NOT NULL REFERENCES tenants(id),
+  fraga       text NOT NULL,
+  underlag_id uuid REFERENCES underlag(id),
+  stalld_av   text NOT NULL,
+  status      text NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'besvarad')),
+  svar        text,
+  besvarad_av text,
+  skapad      timestamptz NOT NULL DEFAULT now(),
+  besvarad    timestamptz
+);
+
 -- Operatörskonsolen (WP14): namngivna policymallar som väljs vid
 -- provisionering och KOPIERAS till tenantens autonomy_policies — mallen
 -- är operatörens data (service-vägens plan, inga app-grants), tenantens

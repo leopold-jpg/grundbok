@@ -26,6 +26,7 @@ export async function POST(req: Request) {
     ok: true,
     operator: session?.user.is_operator ?? false,
     byra: session?.byra?.namn ?? null,
+    klient: Boolean(session?.klient),
   });
   svar.cookies.set(SESSION_COOKIE, inloggning.token, {
     httpOnly: true,

@@ -3,6 +3,7 @@ import type { Transaction } from "@electric-sql/pglite";
 import { withTenant } from "./db/tenant";
 import { auditera } from "./ledger";
 import { fmtKr } from "./kontering";
+import { hamtaMejlAdapter } from "./mejl/adapter";
 
 // Underlagsjakten (WP33) — kompletteringskön: det klienten är skyldig
 // byrån. Rader skapas automatiskt ur missing_receipt-flaggade förslag
@@ -122,9 +123,8 @@ export async function skapaFraga(
   });
 }
 
-/** Påminnelse: status → paminnd + tidsstämpel. Mejlutkastet byggs av
- *  byggPaminnelseUtkast — mailto: räcker i natt, mejladaptern kommer i
- *  intag-passet. */
+/** Påminnelse: status → paminnd + tidsstämpel. Mejlet skickas av
+ *  paminnMedMejl (WP23) — den här funktionen är enbart markeringen. */
 export async function markeraPamind(
   db: PGlite,
   input: { tenantId: string; kompletteringId: string; paminddAv: string },
@@ -219,9 +219,56 @@ export async function manadsStatus(db: PGlite, tenantId: string): Promise<Manads
   });
 }
 
+/** "Påminn"-knappens hela flöde (WP23, ersätter mailto): det färdiga
+ *  utkastet mejlas via mejladaptern till klientbolagets klientanvändare,
+ *  och först efter lyckad sändning markeras raderna påminda. Ingen
+ *  klientanvändare → fel med tydlig väg framåt (bjud in i klientvyn) —
+ *  raderna lämnas orörda så att påminnelsen inte ser gjord ut. */
+export async function paminnMedMejl(
+  db: PGlite,
+  input: { tenantId: string; paminddAv: string },
+): Promise<{ antal: number; till: string[]; adapter: string }> {
+  const { rader } = await withTenant(db, input.tenantId, async (tx) => ({
+    rader: await hamtaKompletteringarTx(tx),
+  }));
+  const oppna = rader.filter((r) => r.status !== "klar");
+  if (oppna.length === 0) return { antal: 0, till: [], adapter: "ingen" };
+
+  // Mottagare: tenantens klientanvändare (WP20). Uppslag på service-
+  // vägen — memberships/users är auth-planet, inte tenant-data.
+  const mottagare = await db.query<{ email: string }>(
+    `SELECT u.email FROM memberships m
+     JOIN users u ON u.id = m.user_id
+     WHERE m.role = 'klient' AND m.tenant_id = $1
+     ORDER BY u.email`,
+    [input.tenantId],
+  );
+  const till = mottagare.rows.map((r) => r.email);
+  if (till.length === 0) {
+    throw new Error(
+      "Ingen klientanvändare att mejla — bjud in klienten i klientvyn först",
+    );
+  }
+
+  const tenant = await db.query<{ namn: string }>(`SELECT namn FROM tenants WHERE id = $1`, [
+    input.tenantId,
+  ]);
+  const utkast = byggPaminnelseUtkast(tenant.rows[0]?.namn ?? input.tenantId, oppna);
+
+  const adapter = hamtaMejlAdapter();
+  await adapter.skicka(db, {
+    tenantId: input.tenantId,
+    till,
+    amne: utkast.subject,
+    text: utkast.body,
+  });
+
+  const antal = await paminnAllaOppna(db, input);
+  return { antal, till, adapter: adapter.namn };
+}
+
 /** Det färdiga, vänliga mejlutkastet för "Påminn" — konsulten ska aldrig
- *  formulera jakten själv. Returnerar subject + body för en mailto-länk
- *  (mejladressen fylls i av konsulten tills mejladaptern finns). */
+ *  formulera jakten själv. Mejlas av paminnMedMejl via mejladaptern. */
 export function byggPaminnelseUtkast(
   klientNamn: string,
   rader: Pick<Komplettering, "typ" | "beskrivning" | "belopp_ore" | "proposal_summary">[],

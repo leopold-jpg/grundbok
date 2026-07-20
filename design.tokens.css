@@ -334,7 +334,8 @@
 main.publik,
 main.login-sida,
 main.byra,
-main.operator {
+main.operator,
+main.app {
   --font-mono: var(--font-publik-mono), ui-monospace, "SF Mono", Menlo, monospace;
 }
 
@@ -347,8 +348,11 @@ main.operator {
    studio-skinnet tills dess eget pass. Mappningen bor i DENNA fil så
    tokenkällan förblir EN; ytorna dubbeldefinierar ingenting lokalt.
    ========================================================================= */
+/* Kundappen (WP22) mappas som arbetsytorna: samma grundbok-skinn
+   (ljusa papperspaletten), scopat per yta enligt publik-mönstret. */
 main.byra,
-main.operator {
+main.operator,
+main.app {
   /* Ytor */
   --bg: var(--yta);
   --bg-elev: var(--kort);
